@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body {
+    @apply bg-canvas text-ink font-sans antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+
+  body {
+    letter-spacing: -0.015em;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center bg-primary text-white font-medium text-sm rounded-md h-10 px-[18px] transition-colors;
+  }
+  .btn-primary:hover {
+    @apply bg-primary-active;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center bg-surface-card text-ink font-medium text-sm rounded-md h-10 px-[18px] border border-hairline-strong;
+  }
+  .btn-ink {
+    @apply inline-flex items-center justify-center bg-ink text-canvas font-medium text-sm rounded-md h-11 px-5;
+  }
+  .card {
+    @apply bg-surface-card border border-hairline rounded-lg;
+  }
+  .pill {
+    @apply inline-flex items-center bg-surface-strong text-ink text-[11px] font-semibold tracking-[0.08em] uppercase rounded-full px-[10px] py-1;
+  }
+}
