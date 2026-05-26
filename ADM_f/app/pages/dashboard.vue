@@ -22,7 +22,6 @@ const rangeLabel = computed(() => {
   return `${start}–${end}`
 })
 
-// Mock token state (will be replaced by real API in Phase 3)
 const mockMonthlyQuota = 30_000
 const mockUsed = 12_438
 const tokenPct = computed(() => Math.round((mockUsed / mockMonthlyQuota) * 100))
@@ -30,20 +29,18 @@ const tokenLow = computed(() => tokenPct.value >= 90)
 </script>
 
 <template>
-  <div>
-    <!-- Dashboard header -->
-    <div class="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-      <div>
-        <h1 class="text-[26px] font-normal tracking-[-0.0125em] text-ink">Dashboard</h1>
-        <p class="mt-1 text-[13px] text-body">
-          {{ rangeLabel }} / 全{{ audios.totalCount }}件
-          <span v-if="!auth.isActivated" class="ml-2 text-accent">
-            * アクティベートされていません。ダウンロードは不可。
-          </span>
-        </p>
-      </div>
+  <!-- h-full + flex-col: 一覧のみスクロール、ヘッダ・コントロールは固定 -->
+  <div class="mx-auto flex h-full max-w-[1200px] flex-col px-6">
 
-      <!-- Status: token gauge + role chip -->
+    <!-- ① Status row (h1 なし) -->
+    <div class="flex shrink-0 flex-wrap items-center justify-between gap-4 pt-5 pb-3">
+      <p class="text-[13px] text-body">
+        {{ rangeLabel }} / 全{{ audios.totalCount }}件
+        <span v-if="!auth.isActivated" class="ml-2 text-accent">
+          * アクティベートされていません。ダウンロードは不可。
+        </span>
+      </p>
+
       <div v-if="auth.isActivated" class="flex items-center gap-4">
         <div class="flex min-w-[200px] flex-col gap-1">
           <div class="flex justify-between font-mono text-[11px] text-muted">
@@ -64,15 +61,14 @@ const tokenLow = computed(() => tokenPct.value >= 90)
           {{ auth.role }}
         </span>
         <span class="text-[13px] text-body">{{ auth.displayName }}</span>
-        <button
-          class="text-[12px] text-muted hover:text-ink transition-colors"
-          @click="auth.deactivate()"
-        >解除</button>
+        <button class="text-[12px] text-muted transition-colors hover:text-ink" @click="auth.deactivate()">
+          解除
+        </button>
       </div>
     </div>
 
-    <!-- Controls -->
-    <div class="mb-4 flex flex-wrap items-center justify-between gap-4">
+    <!-- ② Controls: ソート / 件数 / ページネーション — スクロールしない -->
+    <div class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-hairline-soft py-2">
       <div class="flex flex-wrap items-center gap-4">
         <div class="flex items-center gap-2 text-[12px] text-muted">
           <span>表示順:</span>
@@ -112,9 +108,12 @@ const tokenLow = computed(() => tokenPct.value >= 90)
       </div>
     </div>
 
-    <!-- Card list -->
-    <div class="space-y-2">
-      <AudioCard v-for="t in audios.paged" :key="t.id" :track="t" />
+    <!-- ③ Card list: ここだけスクロール -->
+    <div class="flex-1 overflow-y-auto py-3">
+      <div class="space-y-2">
+        <AudioCard v-for="t in audios.paged" :key="t.id" :track="t" />
+      </div>
     </div>
+
   </div>
 </template>
