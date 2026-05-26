@@ -3,13 +3,18 @@
 @tailwind utilities;
 
 @layer base {
-  html,
-  body {
-    @apply bg-canvas text-ink font-sans antialiased;
-    font-feature-settings: 'cv11', 'ss01';
+  html {
+    background-color: #d4d3ce;
+    background-image: url('/background.png');
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-attachment: fixed;
   }
 
   body {
+    @apply text-ink font-sans antialiased;
+    font-feature-settings: 'cv11', 'ss01';
     letter-spacing: -0.015em;
   }
 }
@@ -28,7 +33,7 @@
     @apply inline-flex items-center justify-center bg-ink text-canvas font-medium text-sm rounded-md h-11 px-5;
   }
   .card {
-    @apply bg-surface-card border border-hairline rounded-lg;
+    @apply bg-white/[0.72] backdrop-blur-[8px] border border-hairline rounded-xl;
   }
   .pill {
     @apply inline-flex items-center bg-surface-strong text-ink text-[11px] font-semibold tracking-[0.08em] uppercase rounded-full px-[10px] py-1;

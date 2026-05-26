@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Pathfinder — Dashboard Design Mock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --turquoise: #40e0d0;
+    --turquoise-active: #2bb8aa;
+    --tomato: #ff6347;
+    --ink: #26251e;
+    --body: #5a5852;
+    --muted: #807d72;
+    --muted-soft: #a09c92;
+    --hairline: #cfcdc4;
+    --hairline-soft: #e6e5e0;
+    --success: #1f8a65;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    color: var(--ink);
+    letter-spacing: -0.005em;
+    background-color: #d4d3ce;
+    background-image: url('background.png');
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  /* ─── Header ─── 48px, no board — transparent over washi */
+  .top-nav {
+    height: 48px;
+    border-bottom: 1px solid rgba(207,205,196,0.5);
+    background: transparent;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .top-nav-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    height: 100%;
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    gap: 32px;
+  }
+  .brand {
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: -0.03em;
+    color: var(--ink);
+    text-decoration: none;
+    padding-right: 16px;
+    border-right: 1px solid var(--hairline);
+    height: 24px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .brand-mark {
+    width: 16px; height: 16px;
+    border: 1.5px solid var(--turquoise);
+    border-radius: 50%;
+    position: relative;
+  }
+  .brand-mark::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 5px; height: 5px;
+    background: var(--turquoise);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+  }
+  .top-nav-links { display: flex; gap: 20px; }
+  .nav-link {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink);
+    text-decoration: none;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    position: relative;
+    transition: color 200ms, opacity 200ms;
+    opacity: 0.55;
+  }
+  .nav-link:hover { opacity: 1; }
+  .nav-link.active { opacity: 1; color: var(--ink); }
+  .nav-link.active::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: -1px;
+    height: 2px;
+    background: var(--turquoise);
+    border-radius: 1px;
+  }
+
+  /* ─── Main ─── */
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 32px 24px 48px;
+  }
+
+  /* ─── Dashboard header band ─── */
+  .dash-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .dash-title h1 {
+    font-size: 26px;
+    font-weight: 400;
+    letter-spacing: -0.0125em;
+    color: var(--ink);
+  }
+  .dash-title p {
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--body);
+  }
+
+  .dash-status {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .token-gauge {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 220px;
+  }
+  .token-gauge-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    letter-spacing: 0.02em;
+  }
+  .token-gauge-bar {
+    height: 4px;
+    background: rgba(255,255,255,0.5);
+    border: 1px solid var(--hairline-soft);
+    border-radius: 9999px;
+    overflow: hidden;
+  }
+  .token-gauge-fill {
+    height: 100%;
+    width: 58%;
+    background: var(--turquoise);
+    border-radius: 9999px;
+  }
+  .role-chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    background: var(--ink);
+    color: #f7f7f4;
+    border-radius: 9999px;
+  }
+  .display-name {
+    font-size: 13px;
+    color: var(--body);
+  }
+
+  /* ─── Controls row ─── */
+  .controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+  }
+  .control-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .control-btn {
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--body);
+    font-size: 12px;
+    transition: all 200ms;
+  }
+  .control-btn:hover { color: var(--ink); }
+  .control-btn.active {
+    background: var(--ink);
+    color: #f7f7f4;
+  }
+  .pager {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .pager-arrow {
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--body);
+  }
+  .pager-arrow:hover { color: var(--ink); }
+
+  /* ─── Audio cards ─── */
+  .card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .audio-card {
+    display: grid;
+    grid-template-columns: 44px 200px 1fr auto;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 18px;
+    background: rgba(255,255,255,0.72);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    transition: transform 200ms, border-color 200ms;
+    cursor: pointer;
+  }
+  .audio-card:hover {
+    transform: translateY(-1px);
+    border-color: var(--turquoise);
+  }
+  .audio-card.playing { border-color: var(--turquoise); }
+  .audio-card.hover-demo {
+    transform: translateY(-1px);
+    border-color: var(--turquoise);
+  }
+
+  /* Play button (now LEFT) */
+  .play-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: #f7f7f4;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 200ms, transform 200ms;
+  }
+  .play-btn:hover { background: var(--turquoise-active); transform: scale(1.05); }
+  .audio-card.playing .play-btn { background: var(--turquoise); }
+
+  /* Waveform */
+  .waveform {
+    height: 48px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .wave-bar {
+    flex: 1;
+    background: var(--muted);
+    border-radius: 1px;
+    transition: background 200ms;
+  }
+  .audio-card.playing .wave-bar { background: var(--turquoise); }
+
+  /* Meta column */
+  .meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  .meta-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--ink);
+    letter-spacing: -0.005em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .badge-new {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #fff;
+    background: var(--tomato);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+  .meta-sub {
+    font-size: 12px;
+    color: var(--body);
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .meta-creator { color: var(--muted); }
+  .dot { width: 3px; height: 3px; background: var(--muted-soft); border-radius: 50%; flex: 0 0 auto; }
+
+  /* Tags */
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--body);
+    background: rgba(255,255,255,0.6);
+    border: 1px solid var(--hairline);
+    border-radius: 9999px;
+    letter-spacing: 0.04em;
+    transition: all 200ms;
+  }
+  .tag:hover {
+    color: var(--turquoise-active);
+    border-color: var(--turquoise);
+  }
+
+  /* Right column */
+  .right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    text-align: right;
+    min-width: 88px;
+  }
+  .duration {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .duration.playing { color: var(--turquoise-active); }
+  .tokens {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+  }
+
+  /* Heart button */
+  .heart-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.02em;
+    padding: 4px 0;
+    transition: color 200ms;
+  }
+  .heart-btn:hover { color: var(--tomato); }
+  .heart-btn svg { width: 14px; height: 14px; transition: fill 200ms; }
+  .heart-btn.fav { color: var(--tomato); }
+  .heart-btn.fav svg { fill: var(--tomato); stroke: var(--tomato); }
+
+  /* Demo callouts */
+  .callout {
+    margin-top: 32px;
+    padding: 16px 20px;
+    background: rgba(255,255,255,0.5);
+    backdrop-filter: blur(8px);
+    border: 1px dashed var(--hairline);
+    border-radius: 12px;
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1.7;
+  }
+  .callout strong { color: var(--ink); font-weight: 600; }
+  .callout .sw-turquoise { color: var(--turquoise-active); font-weight: 600; }
+  .callout .sw-tomato { color: var(--tomato); font-weight: 600; }
+
+  /* Footer */
+  footer {
+    margin-top: 64px;
+    border-top: 1px solid var(--turquoise);
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    font-size: 12px;
+    color: var(--body);
+    background: transparent;
+  }
+  footer .ver {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--muted);
+  }
+</style>
+</head>
+<body>
+
+<!-- Header: 48px minimal, brand = Pathfinder -->
+<header class="top-nav">
+  <div class="top-nav-inner">
+    <a class="brand" href="#"><span class="brand-mark"></span>Pathfinder</a>
+    <nav class="top-nav-links">
+      <a class="nav-link active" href="#">Dashboard</a>
+      <a class="nav-link" href="#">Activate</a>
+      <a class="nav-link" href="#">Uploads</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- Dashboard band -->
+  <div class="dash-head">
+    <div class="dash-title">
+      <h1>Dashboard</h1>
+      <p>1件 - 5件 / 全128件</p>
+    </div>
+    <div class="dash-status">
+      <div class="token-gauge">
+        <div class="token-gauge-label">
+          <span>TOKENS</span>
+          <span>17,562 / 30,000</span>
+        </div>
+        <div class="token-gauge-bar"><div class="token-gauge-fill"></div></div>
+      </div>
+      <span class="role-chip">creator</span>
+      <span class="display-name">Sa-saT</span>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="control-group">
+      <span>表示順:</span>
+      <button class="control-btn active">オススメ順</button>
+      <button class="control-btn">新着順</button>
+    </div>
+    <div class="control-group">
+      <span>表示件数:</span>
+      <button class="control-btn active">25</button>
+      <button class="control-btn">50</button>
+      <button class="control-btn">100</button>
+      <button class="control-btn">200</button>
+    </div>
+    <div class="pager">
+      <button class="pager-arrow">‹</button>
+      <span>1 / 6</span>
+      <button class="pager-arrow">›</button>
+    </div>
+  </div>
+
+  <!-- Cards: [play] [waveform] [meta + tags] [right + heart] -->
+  <div class="card-list">
+
+    <!-- Card 1: Playing, favorited -->
+    <div class="audio-card playing">
+      <button class="play-btn">⏸</button>
+      <div class="waveform" id="wf1"></div>
+      <div class="meta">
+        <div class="meta-title">Bansaka TD</div>
+        <div class="meta-sub">
+          <span class="meta-creator">Sa-saT</span>
+          <span class="dot"></span>
+          <span>44.1k / 24bit / stereo</span>
+        </div>
+        <div class="tags">
+          <span class="tag">warm</span>
+          <span class="tag">ambient</span>
+          <span class="tag">organic</span>
+        </div>
+      </div>
+      <div class="right">
+        <div class="duration playing">0:42 / 2:16</div>
+        <div class="tokens">136 tk</div>
+        <button class="heart-btn fav" title="お気に入り解除">
+          <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          <span>24</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Card 2: NEW -->
+    <div class="audio-card">
+      <button class="play-btn">▶</button>
+      <div class="waveform" id="wf2"></div>
+      <div class="meta">
+        <div class="meta-title">Forest Drip <span class="badge-new">NEW</span></div>
+        <div class="meta-sub">
+          <span class="meta-creator">Sa-saT</span>
+          <span class="dot"></span>
+          <span>48k / 24bit / stereo</span>
+        </div>
+        <div class="tags">
+          <span class="tag">nature</span>
+          <span class="tag">rain</span>
+          <span class="tag">lo-fi</span>
+        </div>
+      </div>
+      <div class="right">
+        <div class="duration">3:42</div>
+        <div class="tokens">222 tk</div>
+        <button class="heart-btn" title="お気に入り">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          <span>7</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Card 3: hover demo -->
+    <div class="audio-card hover-demo">
+      <button class="play-btn">▶</button>
+      <div class="waveform" id="wf3"></div>
+      <div class="meta">
+        <div class="meta-title">Midnight Reed</div>
+        <div class="meta-sub">
+          <span class="meta-creator">Komorebi Lab</span>
+          <span class="dot"></span>
+          <span>44.1k / 24bit / stereo</span>
+        </div>
+        <div class="tags">
+          <span class="tag">jazzy</span>
+          <span class="tag">mellow</span>
+          <span class="tag">late-night</span>
+        </div>
+      </div>
+      <div class="right">
+        <div class="duration">5:08</div>
+        <div class="tokens">308 tk</div>
+        <button class="heart-btn fav" title="お気に入り解除">
+          <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          <span>52</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Card 4: idle -->
+    <div class="audio-card">
+      <button class="play-btn">▶</button>
+      <div class="waveform" id="wf4"></div>
+      <div class="meta">
+        <div class="meta-title">Glass Garden</div>
+        <div class="meta-sub">
+          <span class="meta-creator">Aoi Sound</span>
+          <span class="dot"></span>
+          <span>48k / 24bit / stereo</span>
+        </div>
+        <div class="tags">
+          <span class="tag">crystal</span>
+          <span class="tag">bright</span>
+          <span class="tag">synth</span>
+        </div>
+      </div>
+      <div class="right">
+        <div class="duration">4:21</div>
+        <div class="tokens">261 tk</div>
+        <button class="heart-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          <span>3</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Card 5: idle -->
+    <div class="audio-card">
+      <button class="play-btn">▶</button>
+      <div class="waveform" id="wf5"></div>
+      <div class="meta">
+        <div class="meta-title">Kelp &amp; Static</div>
+        <div class="meta-sub">
+          <span class="meta-creator">Tsuru Audio</span>
+          <span class="dot"></span>
+          <span>44.1k / 16bit / stereo</span>
+        </div>
+        <div class="tags">
+          <span class="tag">aquatic</span>
+          <span class="tag">texture</span>
+          <span class="tag">drone</span>
+        </div>
+      </div>
+      <div class="right">
+        <div class="duration">2:58</div>
+        <div class="tokens">178 tk</div>
+        <button class="heart-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          <span>11</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout">
+    凡例 / DEMO ANNOTATION (creator view — お気に入り押下人数を可視化)<br>
+    <strong>Card 1</strong> Bansaka TD = <span class="sw-turquoise">再生中</span> + お気に入り済 <span class="sw-tomato">♥24</span><br>
+    <strong>Card 2</strong> Forest Drip = NEW <span class="sw-tomato">tomato</span> バッジ / 未お気に入り (♡7)<br>
+    <strong>Card 3</strong> Midnight Reed = hover 固定表示 + お気に入り済 <span class="sw-tomato">♥52</span><br>
+    <strong>Card 4, 5</strong> idle / 未お気に入り (♡数のみ表示)<br>
+    <strong>Tag pills</strong> = アップロード時にcreatorが選択するイメージタグ (warm / ambient / nature 等)
+  </div>
+</main>
+
+<footer>
+  <span>© 2026 Pathfinder</span>
+  <span class="ver">v0.3.0</span>
+</footer>
+
+<script>
+  function genWave(id, seed) {
+    const el = document.getElementById(id);
+    const N = 64;
+    let s = seed;
+    for (let i = 0; i < N; i++) {
+      s = (s * 9301 + 49297) % 233280;
+      const r = s / 233280;
+      const env = Math.sin((i / N) * Math.PI) * 0.7 + 0.3;
+      const h = Math.max(4, Math.floor(env * (10 + r * 38)));
+      const bar = document.createElement('div');
+      bar.className = 'wave-bar';
+      bar.style.height = h + 'px';
+      el.appendChild(bar);
+    }
+  }
+  genWave('wf1', 12345);
+  genWave('wf2', 67890);
+  genWave('wf3', 24680);
+  genWave('wf4', 13579);
+  genWave('wf5', 98765);
+</script>
+
+</body>
+</html>

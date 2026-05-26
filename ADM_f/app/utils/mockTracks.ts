@@ -13,6 +13,19 @@ const titles = [
   '疾走感あふれるドライブフュージョン',
 ]
 
+const tagSets: string[][] = [
+  ['rock', 'fusion', 'energetic'],
+  ['cute', 'techno', 'pop'],
+  ['tricky', 'syncopated', 'jazz'],
+  ['flute', 'tropical', 'organic'],
+  ['intense', 'emotional', 'cinematic'],
+  ['sports', 'upbeat', 'driving'],
+  ['guitar', 'stylish', 'lo-fi'],
+  ['electric', 'jingle', 'short'],
+  ['city', 'night', 'ambient'],
+  ['drive', 'fast', 'electronic'],
+]
+
 const creators = [
   'モくろろ',
   'Sapphire',
@@ -60,6 +73,8 @@ export function buildMockTracks(): AudioTrack[] {
       peaks: generatePeaks(i + 1),
       youtubeSafe: i % 3 !== 1,
       similarWorks: 100 + i * 7,
+      tags: tagSets[i] ?? [],
+      favoriteCount: [24, 7, 52, 3, 18, 11, 39, 2, 15, 6][i] ?? 0,
     }
   })
 }

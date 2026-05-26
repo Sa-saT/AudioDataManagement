@@ -30,10 +30,10 @@ onMounted(() => {
   if (!containerRef.value) return
   ws.value = WaveSurfer.create({
     container: containerRef.value,
-    height: 56,
-    waveColor: '#cfcdc4',
-    progressColor: '#26251e',
-    cursorColor: '#f54e00',
+    height: 48,
+    waveColor: '#807d72',
+    progressColor: '#40e0d0',
+    cursorColor: '#40e0d0',
     cursorWidth: 1,
     barWidth: 2,
     barGap: 1,
@@ -97,12 +97,15 @@ function stopMock(reset = false) {
 onBeforeUnmount(() => {
   if (mockTimer) clearInterval(mockTimer)
 })
+
+defineExpose({ isPlaying })
 </script>
 
 <template>
   <div class="flex items-center gap-3">
     <button
-      class="flex h-14 w-10 shrink-0 items-center justify-center rounded-md bg-ink text-canvas hover:bg-black"
+      class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors"
+      :class="isPlaying ? 'bg-primary text-white' : 'bg-ink text-canvas hover:bg-primary'"
       :aria-label="isPlaying ? 'Pause' : 'Play'"
       @click="toggle"
     >

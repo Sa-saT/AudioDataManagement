@@ -13,6 +13,10 @@ export interface AudioTrack {
   src?: string
   youtubeSafe?: boolean
   similarWorks?: number
+  /** Image/mood tags selected by creator at upload */
+  tags?: string[]
+  /** Number of users who favorited this track */
+  favoriteCount?: number
 }
 
 export type SortKey = 'recommended' | 'newest'

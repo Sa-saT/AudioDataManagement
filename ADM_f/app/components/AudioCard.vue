@@ -5,79 +5,96 @@ import { useAuthStore } from '~/stores/auth'
 const props = defineProps<{ track: AudioTrack }>()
 const auth = useAuthStore()
 
-const yenFmt = new Intl.NumberFormat('ja-JP')
-const price = computed(() => `¥${yenFmt.format(props.track.price)}`)
+const playerRef = ref<{ isPlaying: boolean } | null>(null)
+const isPlaying = computed(() => playerRef.value?.isPlaying ?? false)
+
+const isFav = ref(false)
+const toggleFav = () => { isFav.value = !isFav.value }
+
+const tokenCost = computed(() => props.track.durationSec)
+
+const isNew = computed(() => {
+  const pub = new Date(props.track.publishedAt).getTime()
+  return Date.now() - pub < 7 * 24 * 60 * 60 * 1000
+})
 
 const onDownload = () => {
   if (!auth.canDownload) {
     alert('音源をダウンロードするには /activate からアクティベートしてください。')
     return
   }
-  // mock — real backend will stream the file
   alert(`(mock) ダウンロード開始: ${props.track.title}`)
 }
 </script>
 
 <template>
-  <div class="card flex items-stretch gap-4 px-4 py-3">
-    <!-- Waveform + transport -->
-    <div class="min-w-0 flex-1">
-      <WaveformPlayer
-        :peaks="track.peaks"
-        :duration-sec="track.durationSec"
-        :src="track.src"
-      />
+  <div
+    class="card grid items-center gap-4 px-4 py-3 transition-all duration-200 hover:-translate-y-px"
+    :class="isPlaying ? 'border-primary' : 'hover:border-primary'"
+    style="grid-template-columns: 260px 1fr 88px"
+  >
+    <!-- WaveformPlayer (play btn + waveform + time) -->
+    <WaveformPlayer
+      ref="playerRef"
+      :peaks="track.peaks"
+      :duration-sec="track.durationSec"
+      :src="track.src"
+    />
+
+    <!-- Meta + tags -->
+    <div class="min-w-0">
+      <div class="flex items-center gap-2">
+        <span class="truncate text-[14px] font-medium text-ink">{{ track.title }}</span>
+        <span
+          v-if="isNew"
+          class="shrink-0 rounded-[3px] bg-accent px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-widest text-white"
+        >NEW</span>
+      </div>
+      <div class="mt-0.5 flex items-center gap-2 text-[12px] text-muted">
+        <span>{{ track.creatorName }}</span>
+        <span class="h-1 w-1 rounded-full bg-muted-soft" />
+        <span class="font-mono">{{ track.youtubeSafe ? 'YT安心' : 'YT要確認' }}</span>
+      </div>
+      <div v-if="track.tags?.length" class="mt-1.5 flex flex-wrap gap-1">
+        <span
+          v-for="tag in track.tags"
+          :key="tag"
+          class="rounded-full border border-hairline bg-white/60 px-2 py-0.5 font-mono text-[10px] font-medium text-body hover:border-primary hover:text-primary-active transition-colors"
+        >{{ tag }}</span>
+      </div>
     </div>
 
-    <!-- Right rail: actions + meta -->
-    <div class="flex w-[300px] shrink-0 flex-col justify-between gap-2">
-      <div class="flex items-center gap-2">
-        <button
-          class="grid h-7 w-7 place-items-center rounded-md border border-hairline-strong bg-surface-card text-muted hover:text-primary"
-          aria-label="お気に入り"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polygon points="12 2 15 9 22 9.5 17 14.5 18.5 22 12 18 5.5 22 7 14.5 2 9.5 9 9 12 2" />
-          </svg>
-        </button>
-        <button
-          class="grid h-7 w-7 place-items-center rounded-md border border-hairline-strong bg-surface-card text-error hover:bg-error/10"
-          aria-label="ダウンロード"
-          @click="onDownload"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 3v12" />
-            <path d="m7 10 5 5 5-5" />
-            <path d="M5 21h14" />
-          </svg>
-        </button>
-        <button
-          class="grid h-7 w-7 place-items-center rounded-md border border-hairline-strong bg-surface-card text-muted hover:text-ink"
-          aria-label="カート"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="9" cy="20" r="1.5" />
-            <circle cx="18" cy="20" r="1.5" />
-            <path d="M3 4h2l2.5 11h11l2-8H6" />
-          </svg>
-        </button>
-        <div class="ml-auto font-mono text-[12px] text-ink">{{ price }}</div>
-      </div>
+    <!-- Right: tokens + heart -->
+    <div class="flex flex-col items-end gap-2">
+      <div class="font-mono text-[12px] text-ink">{{ tokenCost }} tk</div>
 
-      <div class="min-w-0">
-        <div class="truncate text-[14px] font-medium text-ink">{{ track.title }}</div>
-        <div class="mt-0.5 flex items-center gap-2 text-[11px] text-muted">
-          <span class="pill bg-surface-strong">{{ track.creatorName }}</span>
-          <span class="font-mono">#{{ track.id.slice(-5) }}</span>
-        </div>
-      </div>
+      <!-- Heart: user=toggle only, creator=toggle + count -->
+      <button
+        class="flex items-center gap-1 transition-colors"
+        :class="isFav ? 'text-accent' : 'text-muted hover:text-accent'"
+        :aria-label="isFav ? 'お気に入り解除' : 'お気に入り'"
+        @click.stop="toggleFav"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"
+          :fill="isFav ? 'currentColor' : 'none'">
+          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+        </svg>
+        <span
+          v-if="auth.role === 'creator' || auth.role === 'admin'"
+          class="font-mono text-[11px]"
+        >{{ (track.favoriteCount ?? 0) + (isFav ? 1 : 0) }}</span>
+      </button>
 
-      <div class="flex items-center justify-between text-[10px] text-muted">
-        <span>類似作品 {{ track.similarWorks }}</span>
-        <span :class="track.youtubeSafe ? 'text-success' : 'text-muted-soft'">
-          YouTube{{ track.youtubeSafe ? '安心' : '要確認' }}
-        </span>
-      </div>
+      <!-- Download -->
+      <button
+        class="flex items-center justify-center rounded-md border border-hairline bg-white/60 p-1.5 text-muted transition-colors hover:border-primary hover:text-primary-active"
+        aria-label="ダウンロード"
+        @click.stop="onDownload"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" />
+        </svg>
+      </button>
     </div>
   </div>
 </template>

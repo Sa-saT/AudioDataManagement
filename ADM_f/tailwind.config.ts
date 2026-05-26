@@ -10,11 +10,13 @@ export default <Partial<Config>>{
   theme: {
     extend: {
       colors: {
-        // Brand / Accent
+        // Brand
         primary: {
-          DEFAULT: '#f54e00',
-          active: '#d04200',
+          DEFAULT: '#40e0d0',
+          active: '#2bb8aa',
         },
+        // Scarce accent: NEW badge / token warning / error only
+        accent: '#ff6347',
         // Surface
         canvas: {
           DEFAULT: '#f7f7f4',

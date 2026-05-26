@@ -246,6 +246,60 @@ The system uses **hairline-only depth**. No drop shadows, no elevation tiers. Ca
 7. Cursor Orange stays scarce.
 8. Timeline pastels stay scoped to in-product agent visualizations.
 
+## Pathfinder Brand Override
+
+Cursor リファレンスから以下の点のみ差し替え。他のトークン・タイポグラフィ・spacing は継承。
+
+### Colors
+
+| Token | Cursor 値 | Pathfinder 値 |
+|---|---|---|
+| `{colors.primary}` | Cursor Orange `#f54e00` | Turquoise `#40e0d0` |
+| `{colors.primary-active}` | `#d04200` | `#2bb8aa` |
+| `{colors.accent}` | (なし) | Tomato `#ff6347` — NEW バッジ / token 残量 ≤10% / error 限定 |
+
+### Canvas (背景)
+- Cursor: warm cream `{colors.canvas}` (#f7f7f4)
+- Pathfinder: `public/background.png` (washi 和紙テクスチャ 1920×1080)
+  `background-size: cover; background-repeat: no-repeat; background-attachment: fixed`
+
+### Card
+- Cursor: `{colors.surface-card}` (solid #ffffff)
+- Pathfinder: `rgba(255,255,255,0.72)` + `backdrop-filter: blur(8px)` + 1px `{colors.hairline}` border
+
+### Header
+- 高さ: **48px** (Cursor 64px から縮小)
+- 背景: 透明 — washi がそのまま透ける
+- Active page indicator: ロゴ下 2px turquoise (#40e0d0) 下線
+- 表示: ロゴ (Pathfinder) + nav リンクのみ。role / token 等の status は Dashboard ページ側に表示
+
+### Footer
+- 高さ: **64px**
+- 背景: 透明
+- 上辺: 1px turquoise (#40e0d0) hairline
+- 内容: `© YYYY Pathfinder` + バージョン番号、中央揃え
+
+### Card hover
+- `transform: translateY(-1px)` + border-color → turquoise (200ms)
+
+### Waveform
+- Idle: `{colors.muted}` (#807d72)
+- Playing progress: turquoise #40e0d0
+- Cursor: turquoise
+
+### Card content (AudioCard)
+- Layout (grid): `[WaveformPlayer: 260px] [meta+tags: 1fr] [right: 88px]`
+- meta: title / creator / tags (イメージタグ pill)
+- right: token 数 + ♥ heart (user: toggle only / creator: ♥ + 人数)
+
+### Accent (Tomato) usage rules
+- ✅ NEW バッジ
+- ✅ token 残量 ≤10% のゲージ
+- ✅ error / validation
+- ❌ それ以外での使用禁止 — turquoise と同様に scarce に保つ
+
+---
+
 ## Known Gaps
 
 - CursorGothic is a licensed typeface; Inter is the substitute.

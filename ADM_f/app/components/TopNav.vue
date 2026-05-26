@@ -12,44 +12,35 @@ const isActive = (path: string) => route.path === path
 </script>
 
 <template>
-  <header class="border-b border-hairline bg-canvas">
-    <div class="mx-auto flex h-16 max-w-[1200px] items-center justify-between px-6">
-      <NuxtLink to="/dashboard" class="flex items-center gap-2">
-        <span class="text-[20px] font-semibold tracking-[-0.02em] text-ink">ADM</span>
-        <span class="text-[13px] text-muted">/ Audio Data Management</span>
+  <header class="sticky top-0 z-10 h-12 border-b border-hairline-soft/50">
+    <div class="mx-auto flex h-full max-w-[1200px] items-center gap-8 px-6">
+      <!-- Brand -->
+      <NuxtLink to="/dashboard" class="flex items-center gap-2 text-[15px] font-bold tracking-[-0.03em] text-ink">
+        <span class="relative flex h-4 w-4 items-center justify-center rounded-full border-[1.5px] border-primary">
+          <span class="h-[5px] w-[5px] rounded-full bg-primary" />
+        </span>
+        Pathfinder
       </NuxtLink>
 
-      <nav class="flex items-center gap-6 text-sm">
+      <!-- Nav -->
+      <nav class="flex items-center gap-5">
         <NuxtLink
-          to="/dashboard"
-          :class="['text-body hover:text-ink', isActive('/dashboard') && 'text-ink font-medium']"
+          v-for="link in [
+            { to: '/dashboard', label: 'Dashboard' },
+            { to: '/activate',  label: 'Activate' },
+          ]"
+          :key="link.to"
+          :to="link.to"
+          class="relative flex h-12 items-center text-[13px] font-medium text-ink transition-opacity"
+          :class="isActive(link.to) ? 'opacity-100' : 'opacity-[0.55] hover:opacity-100'"
         >
-          Dashboard
-        </NuxtLink>
-        <NuxtLink
-          to="/activate"
-          :class="['text-body hover:text-ink', isActive('/activate') && 'text-ink font-medium']"
-        >
-          Activate
+          {{ link.label }}
+          <span
+            v-if="isActive(link.to)"
+            class="absolute inset-x-0 -bottom-px h-0.5 rounded-sm bg-primary"
+          />
         </NuxtLink>
       </nav>
-
-      <div class="flex items-center gap-3">
-        <span
-          class="pill"
-          :class="auth.isActivated ? 'bg-ink text-canvas' : 'bg-surface-strong text-ink'"
-        >
-          {{ auth.role }}
-        </span>
-        <span class="text-sm text-body">{{ auth.displayName }}</span>
-        <button
-          v-if="auth.isActivated"
-          class="text-sm text-muted hover:text-ink"
-          @click="auth.deactivate()"
-        >
-          解除
-        </button>
-      </div>
     </div>
   </header>
 </template>

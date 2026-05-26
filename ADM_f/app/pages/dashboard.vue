@@ -4,7 +4,7 @@ import { useAuthStore } from '~/stores/auth'
 import type { SortKey } from '~/types/audio'
 
 definePageMeta({ layout: 'default' })
-useHead({ title: 'Dashboard — Audio Data Management' })
+useHead({ title: 'Dashboard — Pathfinder' })
 
 const audios = useAudiosStore()
 const auth = useAuthStore()
@@ -13,46 +13,76 @@ onMounted(() => auth.hydrate())
 const perPageOptions = [25, 50, 100, 200] as const
 const sortOptions: Array<{ key: SortKey; label: string }> = [
   { key: 'recommended', label: 'オススメ順' },
-  { key: 'newest', label: '新着順' },
+  { key: 'newest',      label: '新着順' },
 ]
 
 const rangeLabel = computed(() => {
   const start = (audios.page - 1) * audios.perPage + 1
   const end = Math.min(audios.page * audios.perPage, audios.totalCount)
-  return `${start}件 - ${end}件`
+  return `${start}–${end}`
 })
+
+// Mock token state (will be replaced by real API in Phase 3)
+const mockMonthlyQuota = 30_000
+const mockUsed = 12_438
+const tokenPct = computed(() => Math.round((mockUsed / mockMonthlyQuota) * 100))
+const tokenLow = computed(() => tokenPct.value >= 90)
 </script>
 
 <template>
   <div>
-    <!-- Header bar -->
-    <div class="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+    <!-- Dashboard header -->
+    <div class="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
       <div>
         <h1 class="text-[26px] font-normal tracking-[-0.0125em] text-ink">Dashboard</h1>
         <p class="mt-1 text-[13px] text-body">
           {{ rangeLabel }} / 全{{ audios.totalCount }}件
-          <span v-if="!auth.isActivated" class="ml-2 text-error">
+          <span v-if="!auth.isActivated" class="ml-2 text-accent">
             * アクティベートされていません。ダウンロードは不可。
           </span>
         </p>
       </div>
 
+      <!-- Status: token gauge + role chip -->
+      <div v-if="auth.isActivated" class="flex items-center gap-4">
+        <div class="flex min-w-[200px] flex-col gap-1">
+          <div class="flex justify-between font-mono text-[11px] text-muted">
+            <span>TOKENS</span>
+            <span :class="tokenLow ? 'text-accent' : ''">
+              {{ mockUsed.toLocaleString('ja-JP') }} / {{ mockMonthlyQuota.toLocaleString('ja-JP') }}
+            </span>
+          </div>
+          <div class="h-1 overflow-hidden rounded-full border border-hairline-soft bg-white/50">
+            <div
+              class="h-full rounded-full transition-all"
+              :class="tokenLow ? 'bg-accent' : 'bg-primary'"
+              :style="`width: ${tokenPct}%`"
+            />
+          </div>
+        </div>
+        <span class="rounded-full bg-ink px-3 py-1 font-mono text-[11px] font-medium uppercase tracking-widest text-canvas">
+          {{ auth.role }}
+        </span>
+        <span class="text-[13px] text-body">{{ auth.displayName }}</span>
+        <button
+          class="text-[12px] text-muted hover:text-ink transition-colors"
+          @click="auth.deactivate()"
+        >解除</button>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-4">
       <div class="flex flex-wrap items-center gap-4">
         <div class="flex items-center gap-2 text-[12px] text-muted">
           <span>表示順:</span>
           <button
             v-for="opt in sortOptions"
             :key="opt.key"
-            class="rounded-sm px-2 py-1"
-            :class="
-              audios.sort === opt.key
-                ? 'bg-ink text-canvas'
-                : 'text-body hover:text-ink'
-            "
+            class="rounded-sm px-2 py-1 transition-colors"
+            :class="audios.sort === opt.key ? 'bg-ink text-canvas' : 'text-body hover:text-ink'"
             @click="audios.setSort(opt.key)"
-          >
-            {{ opt.label }}
-          </button>
+          >{{ opt.label }}</button>
         </div>
 
         <div class="flex items-center gap-2 text-[12px] text-muted">
@@ -60,39 +90,29 @@ const rangeLabel = computed(() => {
           <button
             v-for="n in perPageOptions"
             :key="n"
-            class="rounded-sm px-2 py-1"
-            :class="
-              audios.perPage === n
-                ? 'bg-ink text-canvas'
-                : 'text-body hover:text-ink'
-            "
+            class="rounded-sm px-2 py-1 transition-colors"
+            :class="audios.perPage === n ? 'bg-ink text-canvas' : 'text-body hover:text-ink'"
             @click="audios.setPerPage(n)"
-          >
-            {{ n }}
-          </button>
+          >{{ n }}</button>
         </div>
+      </div>
 
-        <div class="flex items-center gap-1 font-mono text-[12px] text-muted">
-          <button
-            class="rounded-sm px-2 py-1 hover:text-ink disabled:opacity-30"
-            :disabled="audios.page <= 1"
-            @click="audios.setPage(audios.page - 1)"
-          >
-            ‹
-          </button>
-          <span>{{ audios.page }} / {{ audios.pageCount }}</span>
-          <button
-            class="rounded-sm px-2 py-1 hover:text-ink disabled:opacity-30"
-            :disabled="audios.page >= audios.pageCount"
-            @click="audios.setPage(audios.page + 1)"
-          >
-            ›
-          </button>
-        </div>
+      <div class="flex items-center gap-1 font-mono text-[12px] text-muted">
+        <button
+          class="rounded-sm px-2 py-1 hover:text-ink disabled:opacity-30"
+          :disabled="audios.page <= 1"
+          @click="audios.setPage(audios.page - 1)"
+        >‹</button>
+        <span>{{ audios.page }} / {{ audios.pageCount }}</span>
+        <button
+          class="rounded-sm px-2 py-1 hover:text-ink disabled:opacity-30"
+          :disabled="audios.page >= audios.pageCount"
+          @click="audios.setPage(audios.page + 1)"
+        >›</button>
       </div>
     </div>
 
-    <!-- List -->
+    <!-- Card list -->
     <div class="space-y-2">
       <AudioCard v-for="t in audios.paged" :key="t.id" :track="t" />
     </div>
