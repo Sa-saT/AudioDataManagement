@@ -46,7 +46,7 @@ settings = get_settings()
 
 router = APIRouter(prefix="/audios", tags=["audios"])
 
-_ALLOWED_PER_PAGE = {5, 10, 15, 20, 25, 30, 35, 40}
+_ALLOWED_PER_PAGE = set(range(5, 201, 5))  # 5, 10, 15, ..., 200 (5刻み)
 
 _FILENAME_SAFE_RE = re.compile(r"[^\w\s\-.぀-ゟ゠-ヿ一-鿿]")
 

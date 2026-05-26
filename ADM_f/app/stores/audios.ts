@@ -6,20 +6,28 @@ import type {
 } from '~/types/audio'
 import { mapApiAudio } from '~/types/audio'
 
-type PerPage = 5 | 10 | 15 | 20 | 25 | 30 | 35 | 40
-
 interface AudiosState {
   items: AudioTrack[]
   total: number
   loading: boolean
   error: string | null
   sort: SortKey
-  perPage: PerPage
+  perPage: number
   page: number
   searchQuery: string
 }
 
-const PER_PAGE_OPTIONS = [5, 10, 15, 20, 25, 30, 35, 40] as const
+const STEP = 5
+const DEFAULT_PER_PAGE = 10
+
+/** Compute valid per-page options based on total (multiples of STEP, ≤ total) */
+function computePerPageOptions(total: number): number[] {
+  if (total < STEP) return []
+  const max = Math.floor(total / STEP) * STEP
+  const opts: number[] = []
+  for (let i = STEP; i <= max; i += STEP) opts.push(i)
+  return opts
+}
 
 export const useAudiosStore = defineStore('audios', {
   state: (): AudiosState => ({
@@ -28,15 +36,11 @@ export const useAudiosStore = defineStore('audios', {
     loading: false,
     error: null,
     sort: 'recommended',
-    perPage: 10,
+    perPage: DEFAULT_PER_PAGE,
     page: 1,
     searchQuery: '',
   }),
   getters: {
-    /**
-     * Client-side filtering applied on the server-fetched batch (for now).
-     * When backend gains a server-side search param, switch to that.
-     */
     sorted(state): AudioTrack[] {
       const q = state.searchQuery.trim().toLowerCase()
       if (!q) return state.items
@@ -54,7 +58,14 @@ export const useAudiosStore = defineStore('audios', {
     paged(): AudioTrack[] {
       return this.sorted
     },
-    /** Used by Dashboard to render either skeleton or empty state */
+    /** Valid per-page options for the stepper (dynamic from total) */
+    perPageOptions(): number[] {
+      return computePerPageOptions(this.total)
+    },
+    /** When total < STEP, show static "全N件" instead of stepper */
+    showPerPageStepper(): boolean {
+      return this.perPageOptions.length > 0
+    },
     isEmpty(): boolean {
       return !this.loading && this.items.length === 0 && !this.error
     },
@@ -74,6 +85,12 @@ export const useAudiosStore = defineStore('audios', {
         })
         this.items = res.items.map(mapApiAudio)
         this.total = res.total
+        // Clamp perPage to valid options after total is known
+        const opts = computePerPageOptions(this.total)
+        if (opts.length > 0 && !opts.includes(this.perPage)) {
+          const max = opts[opts.length - 1] ?? STEP
+          this.perPage = this.perPage > max ? max : (opts[0] ?? STEP)
+        }
       } catch (err: unknown) {
         const e = err as { message?: string; code?: string }
         this.error = e?.message ?? 'API への接続に失敗しました'
@@ -89,15 +106,17 @@ export const useAudiosStore = defineStore('audios', {
       this.fetch()
     },
     stepPerPage(dir: 1 | -1) {
-      const idx = PER_PAGE_OPTIONS.indexOf(this.perPage)
-      const next = PER_PAGE_OPTIONS[Math.max(0, Math.min(PER_PAGE_OPTIONS.length - 1, idx + dir))]
-      if (next && next !== this.perPage) {
+      const opts = this.perPageOptions
+      if (opts.length === 0) return
+      const idx = opts.indexOf(this.perPage)
+      const next = opts[Math.max(0, Math.min(opts.length - 1, idx + dir))]
+      if (next != null && next !== this.perPage) {
         this.perPage = next
         this.page = 1
         this.fetch()
       }
     },
-    setPerPage(n: PerPage) {
+    setPerPage(n: number) {
       if (n === this.perPage) return
       this.perPage = n
       this.page = 1

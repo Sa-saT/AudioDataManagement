@@ -13,7 +13,7 @@ onMounted(async () => {
   await audios.fetch()
 })
 
-const perPageOptions = [5, 10, 15, 20, 25, 30, 35, 40] as const
+// per-page options は store で動的計算 (total に応じた 5 の倍数)
 
 const rangeLabel = computed(() => {
   if (audios.total === 0) return '0–0'
@@ -215,25 +215,37 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
         </Transition>
       </div>
 
-      <!-- Per-page stepper — total が最小選択肢未満のときは非表示 -->
-      <div
-        v-if="audios.total >= perPageOptions[0]"
-        class="flex shrink-0 items-center gap-1 font-mono text-[12px]"
-      >
+      <!-- Per-page: total >= 5 ならステッパー、未満なら静的に [total] を表示 -->
+      <div class="flex shrink-0 items-center gap-1 font-mono text-[12px]">
         <span class="text-[10px] font-semibold uppercase tracking-widest text-muted">件/頁</span>
-        <button
-          class="rounded-sm px-2 py-1 text-muted hover:text-ink disabled:opacity-30"
-          :disabled="audios.perPage === perPageOptions[0]"
-          @click="onPrev"
-        >◀</button>
-        <div class="flex items-center justify-center rounded-md bg-primary px-3 py-1 text-white">
-          <NumberRoller :value="audios.perPage" :digits="2" :font-size="13" font-weight="600" />
-        </div>
-        <button
-          class="rounded-sm px-2 py-1 text-muted hover:text-ink disabled:opacity-30"
-          :disabled="audios.perPage === perPageOptions[perPageOptions.length - 1]"
-          @click="onNext"
-        >▶</button>
+
+        <template v-if="audios.showPerPageStepper">
+          <button
+            class="rounded-sm px-2 py-1 text-muted hover:text-ink disabled:opacity-30"
+            :disabled="audios.perPage === audios.perPageOptions[0]"
+            @click="onPrev"
+          >◀</button>
+          <div class="flex items-center justify-center rounded-md bg-primary px-3 py-1 text-white">
+            <NumberRoller
+              :value="audios.perPage"
+              :digits="Math.max(2, audios.perPage.toString().length)"
+              :font-size="13"
+              font-weight="600"
+              hide-leading-zeros
+            />
+          </div>
+          <button
+            class="rounded-sm px-2 py-1 text-muted hover:text-ink disabled:opacity-30"
+            :disabled="audios.perPage === audios.perPageOptions[audios.perPageOptions.length - 1]"
+            @click="onNext"
+          >▶</button>
+        </template>
+
+        <!-- total < 5: 全件表示 (静的) -->
+        <div
+          v-else
+          class="flex items-center justify-center rounded-md bg-primary px-3 py-1 font-semibold text-white"
+        >{{ audios.total }}</div>
       </div>
     </div>
 
