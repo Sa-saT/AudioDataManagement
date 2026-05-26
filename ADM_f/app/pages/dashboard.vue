@@ -24,6 +24,28 @@ const tokenLow = computed(() => tokenPct.value >= 90)
 
 const searchInput = ref(audios.searchQuery)
 watch(searchInput, (v) => audios.setSearch(v))
+
+// ◀▶ 連動スクロール: カードリストを 5 項目分動かす
+const cardListRef = ref<HTMLDivElement | null>(null)
+
+function scrollByItems(delta: number) {
+  const container = cardListRef.value
+  if (!container) return
+  const firstCard = container.querySelector('.card') as HTMLElement | null
+  if (!firstCard) return
+  const gap = 8 // space-y-2
+  const itemHeight = firstCard.offsetHeight + gap
+  container.scrollBy({ top: delta * itemHeight, behavior: 'smooth' })
+}
+
+function onPrev() {
+  audios.stepPerPage(-1)
+  scrollByItems(-5)
+}
+function onNext() {
+  audios.stepPerPage(1)
+  scrollByItems(5)
+}
 </script>
 
 <template>
@@ -85,12 +107,12 @@ watch(searchInput, (v) => audios.setSearch(v))
         </button>
       </div>
 
-      <!-- Per-page stepper: ◀ [animated counter] ▶ — vue-bits 風 digit roll -->
+      <!-- Per-page stepper: ◀▶ で per-page 切替 + リスト 5 項目スクロール連動 -->
       <div class="flex shrink-0 items-center gap-1 font-mono text-[12px]">
         <button
           class="rounded-sm px-2 py-1 text-muted hover:text-ink disabled:opacity-30"
           :disabled="audios.perPage === perPageOptions[0]"
-          @click="audios.stepPerPage(-1)"
+          @click="onPrev"
         >◀</button>
         <div class="flex items-center justify-center rounded-md bg-primary px-3 py-1 text-white">
           <NumberRoller :value="audios.perPage" :digits="2" :font-size="13" font-weight="600" />
@@ -98,13 +120,14 @@ watch(searchInput, (v) => audios.setSearch(v))
         <button
           class="rounded-sm px-2 py-1 text-muted hover:text-ink disabled:opacity-30"
           :disabled="audios.perPage === perPageOptions[perPageOptions.length - 1]"
-          @click="audios.stepPerPage(1)"
+          @click="onNext"
         >▶</button>
       </div>
     </div>
 
     <!-- ③ Card list: ここだけスクロール -->
     <div
+      ref="cardListRef"
       class="flex-1 overflow-y-auto py-3"
       style="mask-image: linear-gradient(to bottom, transparent 0px, black 28px, black calc(100% - 28px), transparent 100%); -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 28px, black calc(100% - 28px), transparent 100%);"
     >
