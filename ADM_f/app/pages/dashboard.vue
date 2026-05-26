@@ -15,13 +15,6 @@ onMounted(async () => {
 
 // per-page options は store で動的計算 (total に応じた 5 の倍数)
 
-const rangeLabel = computed(() => {
-  if (audios.total === 0) return '0–0'
-  const start = (audios.page - 1) * audios.perPage + 1
-  const end = Math.min(audios.page * audios.perPage, audios.total)
-  return `${start}–${end}`
-})
-
 const listCount = computed(() => audios.sorted.length)
 const countDigits = computed(() =>
   Math.max(2, audios.total.toString().length),
@@ -119,22 +112,12 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
 <template>
   <div class="mx-auto flex h-full max-w-[1200px] flex-col px-6">
 
-    <!-- ① Status row -->
-    <div class="flex shrink-0 flex-wrap items-center justify-between gap-4 pb-3 pt-5">
-      <p class="flex items-center gap-1 text-[13px] text-body">
-        <span>{{ rangeLabel }} / 全</span>
-        <NumberRoller
-          :value="listCount"
-          :digits="countDigits"
-          :font-size="13"
-          font-weight="500"
-          hide-leading-zeros
-        />
-        <span>件</span>
-        <span v-if="!auth.isActivated" class="ml-2 text-accent">
-          * アクティベートされていません。ダウンロードは不可。
-        </span>
+    <!-- ① Status row: activation warning / token info のみ (件数は controls 行へ統合) -->
+    <div class="flex shrink-0 flex-wrap items-center justify-between gap-4 pb-3 pt-5 min-h-[28px]">
+      <p v-if="!auth.isActivated" class="text-[13px] text-accent">
+        * アクティベートされていません。ダウンロードは不可。
       </p>
+      <span v-else />
 
       <div v-if="auth.isActivated" class="flex items-center gap-4">
         <div class="flex min-w-[200px] flex-col gap-1">
@@ -215,10 +198,8 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
         </Transition>
       </div>
 
-      <!-- Per-page: total >= 5 ならステッパー、未満なら静的に [total] を表示 -->
+      <!-- Per-page + 全件 統合表示: ◀ [perPage] ▶ / 全 [total] 件 -->
       <div class="flex shrink-0 items-center gap-1 font-mono text-[12px]">
-        <span class="text-[10px] font-semibold uppercase tracking-widest text-muted">件/頁</span>
-
         <template v-if="audios.showPerPageStepper">
           <button
             class="rounded-sm px-2 py-1 text-muted hover:text-ink disabled:opacity-30"
@@ -241,11 +222,24 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
           >▶</button>
         </template>
 
-        <!-- total < 5: 全件表示 (静的) -->
+        <!-- total < 5: 静的に [total] -->
         <div
           v-else
           class="flex items-center justify-center rounded-md bg-primary px-3 py-1 font-semibold text-white"
         >{{ audios.total }}</div>
+
+        <!-- /全 N 件 -->
+        <span class="ml-1 flex items-center gap-0.5 text-body">
+          <span>/ 全</span>
+          <NumberRoller
+            :value="listCount"
+            :digits="countDigits"
+            :font-size="12"
+            font-weight="500"
+            hide-leading-zeros
+          />
+          <span>件</span>
+        </span>
       </div>
     </div>
 
