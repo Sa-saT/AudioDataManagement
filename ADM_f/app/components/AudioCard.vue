@@ -11,16 +11,24 @@ const isPlaying = computed(() => playerRef.value?.isPlaying ?? false)
 const isFav = ref(false)
 const toggleFav = () => { isFav.value = !isFav.value }
 
-const tokenCost = computed(() => props.track.durationSec)
-
 const isNew = computed(() => {
   const pub = new Date(props.track.publishedAt).getTime()
   return Date.now() - pub < 7 * 24 * 60 * 60 * 1000
 })
 
+const durationLabel = computed(() => {
+  const s = props.track.durationSec
+  return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`
+})
+
+// creator 名は creator / admin のみ表示
+const showCreator = computed(() =>
+  auth.role === 'creator' || auth.role === 'admin'
+)
+
 const onDownload = () => {
   if (!auth.canDownload) {
-    alert('音源をダウンロードするには /activate からアクティベートしてください。')
+    alert('音源をダウンロードするには Activate してください。')
     return
   }
   alert(`(mock) ダウンロード開始: ${props.track.title}`)
@@ -31,7 +39,7 @@ const onDownload = () => {
   <div
     class="card grid items-center gap-4 px-4 py-3 transition-all duration-200 hover:-translate-y-px"
     :class="isPlaying ? 'border-primary' : 'hover:border-primary'"
-    style="grid-template-columns: 260px 1fr 88px"
+    style="grid-template-columns: 260px 1fr auto"
   >
     <!-- WaveformPlayer (play btn + waveform + time) -->
     <WaveformPlayer
@@ -51,24 +59,28 @@ const onDownload = () => {
         >NEW</span>
       </div>
       <div class="mt-0.5 flex items-center gap-2 text-[12px] text-muted">
-        <span>{{ track.creatorName }}</span>
-        <span class="h-1 w-1 rounded-full bg-muted-soft" />
+        <!-- creator 名: creator / admin のみ -->
+        <template v-if="showCreator">
+          <span>{{ track.creatorName }}</span>
+          <span class="h-1 w-1 rounded-full bg-muted-soft" />
+        </template>
         <span class="font-mono">{{ track.youtubeSafe ? 'YT安心' : 'YT要確認' }}</span>
       </div>
       <div v-if="track.tags?.length" class="mt-1.5 flex flex-wrap gap-1">
         <span
           v-for="tag in track.tags"
           :key="tag"
-          class="rounded-full border border-hairline bg-white/60 px-2 py-0.5 font-mono text-[10px] font-medium text-body hover:border-primary hover:text-primary-active transition-colors"
+          class="rounded-full border border-hairline bg-white/60 px-2 py-0.5 font-mono text-[10px] font-medium text-body transition-colors hover:border-primary hover:text-primary-active"
         >{{ tag }}</span>
       </div>
     </div>
 
-    <!-- Right: tokens + heart -->
-    <div class="flex flex-col items-end gap-2">
-      <div class="font-mono text-[12px] text-ink">{{ tokenCost }} tk</div>
+    <!-- Right: [duration] [♥] [DL] — 横並び -->
+    <div class="flex items-center gap-3">
+      <!-- Duration -->
+      <span class="font-mono text-[12px] text-muted">{{ durationLabel }}</span>
 
-      <!-- Heart: user=toggle only, creator=toggle + count -->
+      <!-- Heart: toggle (creator/admin は人数も表示) -->
       <button
         class="flex items-center gap-1 transition-colors"
         :class="isFav ? 'text-accent' : 'text-muted hover:text-accent'"
@@ -92,7 +104,7 @@ const onDownload = () => {
         @click.stop="onDownload"
       >
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" />
+          <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>
         </svg>
       </button>
     </div>
