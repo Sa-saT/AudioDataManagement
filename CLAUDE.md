@@ -35,7 +35,17 @@ AudioDataManagement/
 │   ├── tailwind.config.ts
 │   └── nuxt.config.ts
 ├── ADM_b/                Backend (FastAPI)
-│   ├── main.py
+│   ├── app/
+│   │   ├── main.py       FastAPI エントリ
+│   │   ├── config.py     pydantic-settings (.env 読込)
+│   │   ├── db.py         SQLAlchemy engine/session
+│   │   └── models/       ORM (users / licenses / audios / payouts ...)
+│   ├── migrations/       Alembic
+│   ├── scripts/
+│   │   └── init_db.sh    冪等な DB / role / 依存 / migration 一括初期化
+│   ├── .env.example      環境変数テンプレ (init_db.sh が .env を生成)
+│   ├── alembic.ini
+│   ├── requirements.txt
 │   └── venv/
 ├── docs/                 仕様ドキュメント
 │   ├── REQUIREMENTS.md   要件定義書
@@ -60,9 +70,17 @@ pnpm nuxt prepare # 型再生成
 ### Backend
 ```bash
 cd ADM_b
+./scripts/init_db.sh                  # 初回 or 再実行 (冪等)
 source venv/bin/activate
-uvicorn main:app --reload    # http://localhost:8000/
+uvicorn app.main:app --reload         # http://localhost:8000/
 ```
+
+`init_db.sh` は: `.env` 生成 (強乱数シークレット) → `adm_migrator` / `adm_app` ロール作成 → DB 作成 → venv & 依存 → `alembic upgrade head` → app ロールに最小権限付与 → storage ディレクトリ作成。
+
+### DB ロール (最小権限)
+- `adm_migrator`: DDL 用。Alembic から接続。DB owner
+- `adm_app`: DML のみ。FastAPI が常用接続 (SELECT/INSERT/UPDATE/DELETE)
+- 本番もこの2ロール構成を踏襲。secret は環境ごとに切替
 
 ## 4. ユーザロール
 
