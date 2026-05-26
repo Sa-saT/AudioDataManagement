@@ -5,7 +5,7 @@ import { buildMockTracks } from '~/utils/mockTracks'
 interface AudiosState {
   all: AudioTrack[]
   sort: SortKey
-  perPage: 25 | 50 | 100 | 200
+  perPage: 10 | 20 | 25 | 30 | 40
   page: number
   searchQuery: string
 }
@@ -14,7 +14,7 @@ export const useAudiosStore = defineStore('audios', {
   state: (): AudiosState => ({
     all: buildMockTracks(),
     sort: 'recommended',
-    perPage: 50,
+    perPage: 25,
     page: 1,
     searchQuery: '',
   }),
@@ -51,6 +51,12 @@ export const useAudiosStore = defineStore('audios', {
     setSort(s: SortKey) {
       this.sort = s
       this.page = 1
+    },
+    stepPerPage(dir: 1 | -1) {
+      const opts = [10, 20, 25, 30, 40] as const
+      const idx = opts.indexOf(this.perPage)
+      const next = opts[Math.max(0, Math.min(opts.length - 1, idx + dir))]
+      if (next) { this.perPage = next; this.page = 1 }
     },
     setPerPage(n: AudiosState['perPage']) {
       this.perPage = n

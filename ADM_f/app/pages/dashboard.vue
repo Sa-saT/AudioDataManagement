@@ -10,7 +10,7 @@ const audios = useAudiosStore()
 const auth = useAuthStore()
 onMounted(() => auth.hydrate())
 
-const perPageOptions = [25, 50, 100, 200] as const
+const perPageOptions = [10, 20, 25, 30, 40] as const
 const sortOptions: Array<{ key: SortKey; label: string }> = [
   { key: 'recommended', label: 'オススメ順' },
   { key: 'newest',      label: '新着順' },
@@ -22,26 +22,11 @@ const rangeLabel = computed(() => {
   return `${start}–${end}`
 })
 
-// Windowed page number buttons  ◀ 3 4 [5] 6 7 ▶
-const pageWindow = computed(() => {
-  const total = audios.pageCount
-  const cur = audios.page
-  const size = 5
-  let start = Math.max(1, cur - Math.floor(size / 2))
-  const end = Math.min(total, start + size - 1)
-  if (end - start < size - 1) start = Math.max(1, end - size + 1)
-  const pages: number[] = []
-  for (let i = start; i <= end; i++) pages.push(i)
-  return pages
-})
-
-// Token state (mock — replaced by real API in Phase 3)
 const mockMonthlyQuota = 30_000
 const mockUsed = 12_438
 const tokenPct = computed(() => Math.round((mockUsed / mockMonthlyQuota) * 100))
 const tokenLow = computed(() => tokenPct.value >= 90)
 
-// Search
 const searchInput = ref(audios.searchQuery)
 watch(searchInput, (v) => audios.setSearch(v))
 </script>
@@ -105,7 +90,7 @@ watch(searchInput, (v) => audios.setSearch(v))
       </div>
     </div>
 
-    <!-- ③ Controls: ソート / 件数 / ページネーション — 固定 -->
+    <!-- ③ Controls: ソート / 表示件数ステッパー / ページ矢印 — 固定 -->
     <div class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-hairline-soft py-2">
       <div class="flex flex-wrap items-center gap-4">
         <!-- Sort -->
@@ -120,47 +105,54 @@ watch(searchInput, (v) => audios.setSearch(v))
           >{{ opt.label }}</button>
         </div>
 
-        <!-- Per page -->
-        <div class="flex items-center gap-2 text-[12px] text-muted">
-          <span>表示件数:</span>
+        <!-- Per-page stepper: ◀ 10 20 [25] 30 40 ▶ -->
+        <div class="flex items-center gap-1 text-[12px]">
+          <button
+            class="px-1 text-muted hover:text-ink disabled:opacity-30"
+            :disabled="audios.perPage === perPageOptions[0]"
+            @click="audios.stepPerPage(-1)"
+          >◀</button>
           <button
             v-for="n in perPageOptions"
             :key="n"
-            class="rounded-sm px-2 py-1 transition-colors"
-            :class="audios.perPage === n ? 'bg-ink text-canvas' : 'text-body hover:text-ink'"
+            class="min-w-[26px] rounded-sm px-1.5 py-0.5 transition-colors"
+            :class="audios.perPage === n
+              ? 'bg-primary text-white font-semibold'
+              : 'text-body hover:text-ink'"
             @click="audios.setPerPage(n)"
           >{{ n }}</button>
+          <button
+            class="px-1 text-muted hover:text-ink disabled:opacity-30"
+            :disabled="audios.perPage === perPageOptions[perPageOptions.length - 1]"
+            @click="audios.stepPerPage(1)"
+          >▶</button>
         </div>
       </div>
 
-      <!-- Windowed pagination: ◀ 3 4 [5] 6 7 ▶ -->
-      <div class="flex items-center gap-1 font-mono text-[12px]">
+      <!-- Page navigation: ◀ n / total ▶ -->
+      <div class="flex items-center gap-1 font-mono text-[12px] text-muted">
         <button
-          class="rounded-sm px-2 py-1 text-muted hover:text-ink disabled:opacity-30"
+          class="rounded-sm px-2 py-1 hover:text-ink disabled:opacity-30"
           :disabled="audios.page <= 1"
           @click="audios.setPage(audios.page - 1)"
         >◀</button>
-
-        <template v-for="p in pageWindow" :key="p">
-          <button
-            class="min-w-[28px] rounded-sm px-2 py-1 transition-colors"
-            :class="p === audios.page
-              ? 'bg-primary text-white font-semibold'
-              : 'text-body hover:text-ink'"
-            @click="audios.setPage(p)"
-          >{{ p }}</button>
-        </template>
-
+        <span class="px-1">{{ audios.page }} / {{ audios.pageCount }}</span>
         <button
-          class="rounded-sm px-2 py-1 text-muted hover:text-ink disabled:opacity-30"
+          class="rounded-sm px-2 py-1 hover:text-ink disabled:opacity-30"
           :disabled="audios.page >= audios.pageCount"
           @click="audios.setPage(audios.page + 1)"
         >▶</button>
       </div>
     </div>
 
-    <!-- ④ Card list — ここだけスクロール -->
-    <div class="flex-1 overflow-y-auto py-3">
+    <!-- ④ Card list: ここだけスクロール、上下フェードアウト -->
+    <div
+      class="flex-1 overflow-y-auto py-3"
+      style="
+        mask-image: linear-gradient(to bottom, transparent 0px, black 28px, black calc(100% - 28px), transparent 100%);
+        -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 28px, black calc(100% - 28px), transparent 100%);
+      "
+    >
       <div v-if="audios.paged.length === 0" class="py-16 text-center text-[13px] text-muted">
         「{{ audios.searchQuery }}」に一致する音源は見つかりませんでした。
       </div>

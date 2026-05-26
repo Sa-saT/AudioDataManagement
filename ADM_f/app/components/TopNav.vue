@@ -44,7 +44,7 @@ function deactivate() {
 </script>
 
 <template>
-  <header class="sticky top-0 z-10 h-12 border-b border-hairline-soft/50">
+  <header class="sticky top-0 z-10 h-12 border-b border-hairline-soft/40 backdrop-blur-[14px] saturate-150" style="background: rgba(255,255,255,0.06);">
     <div class="mx-auto flex h-full max-w-[1200px] items-center justify-between px-6">
 
       <!-- Left: brand + nav -->
