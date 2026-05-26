@@ -22,18 +22,35 @@ const rangeLabel = computed(() => {
   return `${start}–${end}`
 })
 
+// Windowed page number buttons  ◀ 3 4 [5] 6 7 ▶
+const pageWindow = computed(() => {
+  const total = audios.pageCount
+  const cur = audios.page
+  const size = 5
+  let start = Math.max(1, cur - Math.floor(size / 2))
+  const end = Math.min(total, start + size - 1)
+  if (end - start < size - 1) start = Math.max(1, end - size + 1)
+  const pages: number[] = []
+  for (let i = start; i <= end; i++) pages.push(i)
+  return pages
+})
+
+// Token state (mock — replaced by real API in Phase 3)
 const mockMonthlyQuota = 30_000
 const mockUsed = 12_438
 const tokenPct = computed(() => Math.round((mockUsed / mockMonthlyQuota) * 100))
 const tokenLow = computed(() => tokenPct.value >= 90)
+
+// Search
+const searchInput = ref(audios.searchQuery)
+watch(searchInput, (v) => audios.setSearch(v))
 </script>
 
 <template>
-  <!-- h-full + flex-col: 一覧のみスクロール、ヘッダ・コントロールは固定 -->
   <div class="mx-auto flex h-full max-w-[1200px] flex-col px-6">
 
-    <!-- ① Status row (h1 なし) -->
-    <div class="flex shrink-0 flex-wrap items-center justify-between gap-4 pt-5 pb-3">
+    <!-- ① Status row -->
+    <div class="flex shrink-0 flex-wrap items-center justify-between gap-4 pb-3 pt-5">
       <p class="text-[13px] text-body">
         {{ rangeLabel }} / 全{{ audios.totalCount }}件
         <span v-if="!auth.isActivated" class="ml-2 text-accent">
@@ -61,15 +78,37 @@ const tokenLow = computed(() => tokenPct.value >= 90)
           {{ auth.role }}
         </span>
         <span class="text-[13px] text-body">{{ auth.displayName }}</span>
-        <button class="text-[12px] text-muted transition-colors hover:text-ink" @click="auth.deactivate()">
-          解除
+      </div>
+    </div>
+
+    <!-- ② Search bar -->
+    <div class="shrink-0 pb-2">
+      <div class="relative">
+        <svg class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        <input
+          v-model="searchInput"
+          type="search"
+          placeholder="タイトル / クリエイター / タグで検索…"
+          class="w-full rounded-lg border border-hairline bg-white/60 py-2 pl-9 pr-4 text-[13px] text-ink placeholder:text-muted-soft backdrop-blur-sm outline-none transition-colors focus:border-primary focus:bg-white/80"
+        />
+        <button
+          v-if="searchInput"
+          class="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-ink"
+          @click="searchInput = ''"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6 6 18M6 6l12 12"/>
+          </svg>
         </button>
       </div>
     </div>
 
-    <!-- ② Controls: ソート / 件数 / ページネーション — スクロールしない -->
+    <!-- ③ Controls: ソート / 件数 / ページネーション — 固定 -->
     <div class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-hairline-soft py-2">
       <div class="flex flex-wrap items-center gap-4">
+        <!-- Sort -->
         <div class="flex items-center gap-2 text-[12px] text-muted">
           <span>表示順:</span>
           <button
@@ -81,6 +120,7 @@ const tokenLow = computed(() => tokenPct.value >= 90)
           >{{ opt.label }}</button>
         </div>
 
+        <!-- Per page -->
         <div class="flex items-center gap-2 text-[12px] text-muted">
           <span>表示件数:</span>
           <button
@@ -93,24 +133,38 @@ const tokenLow = computed(() => tokenPct.value >= 90)
         </div>
       </div>
 
-      <div class="flex items-center gap-1 font-mono text-[12px] text-muted">
+      <!-- Windowed pagination: ◀ 3 4 [5] 6 7 ▶ -->
+      <div class="flex items-center gap-1 font-mono text-[12px]">
         <button
-          class="rounded-sm px-2 py-1 hover:text-ink disabled:opacity-30"
+          class="rounded-sm px-2 py-1 text-muted hover:text-ink disabled:opacity-30"
           :disabled="audios.page <= 1"
           @click="audios.setPage(audios.page - 1)"
-        >‹</button>
-        <span>{{ audios.page }} / {{ audios.pageCount }}</span>
+        >◀</button>
+
+        <template v-for="p in pageWindow" :key="p">
+          <button
+            class="min-w-[28px] rounded-sm px-2 py-1 transition-colors"
+            :class="p === audios.page
+              ? 'bg-primary text-white font-semibold'
+              : 'text-body hover:text-ink'"
+            @click="audios.setPage(p)"
+          >{{ p }}</button>
+        </template>
+
         <button
-          class="rounded-sm px-2 py-1 hover:text-ink disabled:opacity-30"
+          class="rounded-sm px-2 py-1 text-muted hover:text-ink disabled:opacity-30"
           :disabled="audios.page >= audios.pageCount"
           @click="audios.setPage(audios.page + 1)"
-        >›</button>
+        >▶</button>
       </div>
     </div>
 
-    <!-- ③ Card list: ここだけスクロール -->
+    <!-- ④ Card list — ここだけスクロール -->
     <div class="flex-1 overflow-y-auto py-3">
-      <div class="space-y-2">
+      <div v-if="audios.paged.length === 0" class="py-16 text-center text-[13px] text-muted">
+        「{{ audios.searchQuery }}」に一致する音源は見つかりませんでした。
+      </div>
+      <div v-else class="space-y-2">
         <AudioCard v-for="t in audios.paged" :key="t.id" :track="t" />
       </div>
     </div>

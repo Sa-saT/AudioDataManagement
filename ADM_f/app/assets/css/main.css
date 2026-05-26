@@ -19,11 +19,9 @@
   }
 }
 
-/* thin scrollbar for card list */
-.overflow-y-auto::-webkit-scrollbar { width: 4px; }
-.overflow-y-auto::-webkit-scrollbar-track { background: transparent; }
-.overflow-y-auto::-webkit-scrollbar-thumb { background: #cfcdc4; border-radius: 2px; }
-.overflow-y-auto::-webkit-scrollbar-thumb:hover { background: #40e0d0; }
+/* hide scrollbar */
+.overflow-y-auto { scrollbar-width: none; }
+.overflow-y-auto::-webkit-scrollbar { display: none; }
 
 @layer components {
   .btn-primary {

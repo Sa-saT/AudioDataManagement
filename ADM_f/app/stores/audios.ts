@@ -7,6 +7,7 @@ interface AudiosState {
   sort: SortKey
   perPage: 25 | 50 | 100 | 200
   page: number
+  searchQuery: string
 }
 
 export const useAudiosStore = defineStore('audios', {
@@ -15,10 +16,19 @@ export const useAudiosStore = defineStore('audios', {
     sort: 'recommended',
     perPage: 50,
     page: 1,
+    searchQuery: '',
   }),
   getters: {
     sorted(state): AudioTrack[] {
-      const list = [...state.all]
+      const q = state.searchQuery.trim().toLowerCase()
+      let list = q
+        ? state.all.filter(
+            (t) =>
+              t.title.toLowerCase().includes(q) ||
+              t.creatorName.toLowerCase().includes(q) ||
+              t.tags?.some((tag) => tag.toLowerCase().includes(q)),
+          )
+        : [...state.all]
       if (state.sort === 'newest') {
         list.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
       } else {
@@ -48,6 +58,10 @@ export const useAudiosStore = defineStore('audios', {
     },
     setPage(p: number) {
       this.page = Math.min(Math.max(1, p), this.pageCount)
+    },
+    setSearch(q: string) {
+      this.searchQuery = q
+      this.page = 1
     },
   },
 })
