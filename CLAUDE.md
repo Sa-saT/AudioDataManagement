@@ -153,9 +153,20 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 | Phase | 内容 | 状態 |
 |---|---|---|
 | 1 | フロント基礎 (Dashboard / Activate / Pinia / 擬似波形) | 完了 |
-| 2 | FastAPI + PostgreSQL 接続、`/audios` `/auth/activate`、実 wav 配信 | 未着手 |
+| 2 | FastAPI + PostgreSQL 接続、`/audios` `/auth/activate`、実 wav 配信 | **進行中** |
 | 3 | Creator: アップロード / Admin: 管理画面 / 購入 / 検索 | 未着手 |
 | 4 | 本番運用 (CDN, 監視, バックアップ) | 未着手 |
+
+### Phase 2 タスク進捗
+
+| # | 内容 | 状態 | 推奨モデル |
+|---|---|---|---|
+| 7 | DB 基盤 (SQLAlchemy / Alembic / init_db.sh) | ✅ 完了 | Sonnet |
+| 8 | POST /auth/activate (.lic 検証 + JWT) | ✅ 完了 | Sonnet |
+| 9 | GET /audios, GET /audios/{id} | 進行中 | Sonnet |
+| 10 | POST /audios (ffprobe + preview + peaks) | 未着手 | Sonnet |
+| 11 | Range 配信 (signed URL + 206 Partial Content) | 未着手 | Sonnet |
+| 12 | POST /audios/{id}/download (排他 tx) | 未着手 | **Opus 4.7** ← 着手前に `/model claude-opus-4-7` に切り替えること |
 
 ## 9. 用語
 
