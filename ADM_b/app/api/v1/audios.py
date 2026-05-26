@@ -1,20 +1,26 @@
 import shutil
+import subprocess
 import tempfile
 import uuid
 from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
+from app.config import get_settings
 from app.db import get_db
 from app.models import Audio, CreatorProfile
 from app.models.base import new_uuid
 from app.models.user import User
 from app.schemas.audio import AudioDetail, AudioListItem, AudioListResponse, CreatorBrief
 from app.security.deps import require_role
+from app.security.signed_url import SignedURLError, issue as issue_signed_url, verify as verify_signed_url
 from app.services import audio_file
+
+settings = get_settings()
 
 router = APIRouter(prefix="/audios", tags=["audios"])
 
@@ -138,6 +144,87 @@ def upload_audio(
     ).scalar_one()
 
     return _to_detail(audio)
+
+
+@router.get("/stream")
+def stream_audio(
+    audio_id: str = Query(...),
+    start: int = Query(0, ge=0),
+    exp: int = Query(...),
+    sig: str = Query(...),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    try:
+        verify_signed_url(audio_id, start, exp, sig)
+    except SignedURLError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": exc.code, "message": exc.message},
+        )
+
+    try:
+        parsed_id = uuid.UUID(audio_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "audio not found"})
+
+    audio = db.execute(
+        select(Audio).where(Audio.id == parsed_id, Audio.is_public.is_(True))
+    ).scalar_one_or_none()
+    if audio is None:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "audio not found"})
+
+    file_path = Path(audio.file_path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail={"code": "FILE_NOT_FOUND", "message": "audio file missing"})
+
+    proc = subprocess.Popen(
+        [
+            "ffmpeg", "-y",
+            "-ss", str(start),
+            "-t", str(settings.PREVIEW_DURATION_SEC),
+            "-i", str(file_path),
+            "-c:a", "copy",
+            "-f", "wav",
+            "pipe:1",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+
+    def _iter_chunks():
+        try:
+            while True:
+                chunk = proc.stdout.read(65536)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            proc.stdout.close()
+            proc.wait()
+
+    return StreamingResponse(_iter_chunks(), media_type="audio/wav")
+
+
+@router.get("/{audio_id}/stream-url")
+def get_stream_url(
+    audio_id: str,
+    start: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+) -> dict:
+    try:
+        parsed_id = uuid.UUID(audio_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "audio not found"})
+
+    audio = db.execute(
+        select(Audio.id).where(Audio.id == parsed_id, Audio.is_public.is_(True))
+    ).scalar_one_or_none()
+    if audio is None:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "audio not found"})
+
+    params = issue_signed_url(str(parsed_id), start)
+    qs = "&".join(f"{k}={v}" for k, v in params.items())
+    return {"url": f"/api/v1/audios/stream?{qs}"}
 
 
 def _to_detail(audio: Audio) -> AudioDetail:
