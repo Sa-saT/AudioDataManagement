@@ -56,9 +56,13 @@ async function executeDownload() {
     if (res.remaining_tokens !== null) {
       auth.applyRemainingTokens(res.remaining_tokens)
     }
-    // ファイル保存をブラウザに任せる
+    // backend は相対パスを返すので apiBaseUrl を付与してファイル保存
+    const baseURL = useRuntimeConfig().public.apiBaseUrl as string
+    const dlUrl = res.download_url.startsWith('http')
+      ? res.download_url
+      : `${baseURL}${res.download_url}`
     const a = document.createElement('a')
-    a.href = res.download_url
+    a.href = dlUrl
     a.download = ''
     document.body.appendChild(a)
     a.click()

@@ -71,11 +71,15 @@ export function useStreamPlayer(audioId: string): StreamPlayer {
 
   async function fetchAndDecode(start: number): Promise<AudioBuffer> {
     const api = useApi()
+    const config = useRuntimeConfig()
+    const baseURL = config.public.apiBaseUrl as string
     const { url } = await api.get<StreamUrlResponse>(
       `/api/v1/audios/${audioId}/stream-url`,
       { query: { start } },
     )
-    const res = await fetch(url)
+    // backend は相対パス /api/v1/audios/stream?... を返すので apiBaseUrl を付与
+    const fullUrl = url.startsWith('http') ? url : `${baseURL}${url}`
+    const res = await fetch(fullUrl)
     if (!res.ok) throw new Error(`stream fetch failed: ${res.status}`)
     const arr = await res.arrayBuffer()
     return await ensureCtx().decodeAudioData(arr)
