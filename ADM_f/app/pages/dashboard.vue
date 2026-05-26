@@ -17,6 +17,9 @@ const rangeLabel = computed(() => {
   return `${start}–${end}`
 })
 
+const listCount = computed(() => audios.sorted.length)
+const countDigits = computed(() => Math.max(2, audios.all.length.toString().length))
+
 const mockMonthlyQuota = 30_000
 const mockUsed = 12_438
 const tokenPct = computed(() => Math.round((mockUsed / mockMonthlyQuota) * 100))
@@ -107,8 +110,16 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
 
     <!-- ① Status row -->
     <div class="flex shrink-0 flex-wrap items-center justify-between gap-4 pb-3 pt-5">
-      <p class="text-[13px] text-body">
-        {{ rangeLabel }} / 全{{ audios.totalCount }}件
+      <p class="flex items-center gap-1 text-[13px] text-body">
+        <span>{{ rangeLabel }} / 全</span>
+        <NumberRoller
+          :value="listCount"
+          :digits="countDigits"
+          :font-size="13"
+          font-weight="500"
+          hide-leading-zeros
+        />
+        <span>件</span>
         <span v-if="!auth.isActivated" class="ml-2 text-accent">
           * アクティベートされていません。ダウンロードは不可。
         </span>
@@ -189,9 +200,6 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
               「{{ searchInput }}」に一致するタグはありません
             </div>
 
-            <div class="mt-3 border-t border-hairline-soft pt-2 text-[10px] text-muted-soft">
-              タグをクリックで適用 / Esc で閉じる
-            </div>
           </div>
         </Transition>
       </div>

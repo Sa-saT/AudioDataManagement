@@ -101,9 +101,10 @@ function goDownloads() {
         >
           <span v-if="auth.isActivated" class="font-mono text-[11px] uppercase tracking-widest text-muted">{{ auth.role }}</span>
           <span v-if="auth.isActivated" class="text-[12px]">{{ auth.displayName }}</span>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
-            <path d="M3 12h18M3 6h18M3 18h18"/>
-          </svg>
+          <span class="hamburger" :class="{ open: menuOpen }">
+            <span class="line line-top"></span>
+            <span class="line line-bot"></span>
+          </span>
         </button>
 
         <!-- Dropdown panel -->
@@ -196,4 +197,29 @@ function goDownloads() {
 
 .menu-enter-active, .menu-leave-active { transition: opacity 150ms, transform 150ms; }
 .menu-enter-from, .menu-leave-to { opacity: 0; transform: translateY(-4px); }
+
+/* 2-line hamburger → X */
+.hamburger {
+  position: relative;
+  display: inline-block;
+  width: 16px;
+  height: 12px;
+  color: currentColor;
+}
+.hamburger .line {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 1.6px;
+  background: currentColor;
+  border-radius: 1px;
+  transition:
+    top 300ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: center;
+}
+.hamburger .line-top { top: 3px; }
+.hamburger .line-bot { top: 9px; }
+.hamburger.open .line-top { top: 6px; transform: rotate(45deg); }
+.hamburger.open .line-bot { top: 6px; transform: rotate(-45deg); }
 </style>

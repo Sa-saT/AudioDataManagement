@@ -6,11 +6,12 @@
  */
 interface Props {
   value: number
-  digits?: number      // 表示する桁数
-  fontSize?: number    // px
+  digits?: number       // 表示する桁数 (最大)
+  fontSize?: number     // px
   textColor?: string
   fontWeight?: string | number
-  durationMs?: number  // アニメーション時間
+  durationMs?: number   // アニメーション時間
+  hideLeadingZeros?: boolean // true で先頭の 0 桁を非表示
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -19,6 +20,7 @@ const props = withDefaults(defineProps<Props>(), {
   textColor: 'currentColor',
   fontWeight: 600,
   durationMs: 450,
+  hideLeadingZeros: false,
 })
 
 const digitHeight = computed(() => Math.round(props.fontSize * 1.2))
@@ -32,6 +34,16 @@ const places = computed(() =>
 const currentDigits = computed(() =>
   places.value.map((p) => Math.floor(Math.abs(props.value) / p) % 10),
 )
+
+// 先頭ゼロ桁を非表示にする場合の各桁の表示判定
+const visibleAt = computed(() => {
+  if (!props.hideLeadingZeros) return currentDigits.value.map(() => true)
+  let started = false
+  return currentDigits.value.map((d, i, arr) => {
+    if (d !== 0) started = true
+    return started || i === arr.length - 1
+  })
+})
 </script>
 
 <template>
@@ -41,6 +53,7 @@ const currentDigits = computed(() =>
   >
     <div
       v-for="(_, i) in places"
+      v-show="visibleAt[i]"
       :key="i"
       class="relative overflow-hidden"
       :style="{ width: '1ch', height: `${digitHeight}px` }"
