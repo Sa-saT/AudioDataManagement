@@ -46,7 +46,8 @@ settings = get_settings()
 
 router = APIRouter(prefix="/audios", tags=["audios"])
 
-_ALLOWED_PER_PAGE = set(range(5, 201, 5))  # 5, 10, 15, ..., 200 (5刻み)
+_MIN_PER_PAGE = 5
+_MAX_PER_PAGE = 200
 
 _FILENAME_SAFE_RE = re.compile(r"[^\w\s\-.぀-ゟ゠-ヿ一-鿿]")
 
@@ -88,10 +89,13 @@ def list_audios(
     per_page: int = Query(10),
     db: Session = Depends(get_db),
 ) -> AudioListResponse:
-    if per_page not in _ALLOWED_PER_PAGE:
+    if per_page < _MIN_PER_PAGE or per_page > _MAX_PER_PAGE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "INVALID_PER_PAGE", "message": f"per_page must be one of {sorted(_ALLOWED_PER_PAGE)}"},
+            detail={
+                "code": "INVALID_PER_PAGE",
+                "message": f"per_page must be between {_MIN_PER_PAGE} and {_MAX_PER_PAGE}",
+            },
         )
 
     base = (

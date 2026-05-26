@@ -20,12 +20,18 @@ interface AudiosState {
 const STEP = 5
 const DEFAULT_PER_PAGE = 10
 
-/** Compute valid per-page options based on total (multiples of STEP, ≤ total) */
+/**
+ * Per-page options:
+ *   - total < STEP: 空配列 (静的に [total] を表示)
+ *   - total >= STEP: 5刻み + 最終に total 自体を追加 (5倍数でない場合)
+ *     例: total=12 → [5, 10, 12]  /  total=80 → [5,10,...,80]
+ */
 function computePerPageOptions(total: number): number[] {
   if (total < STEP) return []
-  const max = Math.floor(total / STEP) * STEP
   const opts: number[] = []
-  for (let i = STEP; i <= max; i += STEP) opts.push(i)
+  const maxMultiple = Math.floor(total / STEP) * STEP
+  for (let i = STEP; i <= maxMultiple; i += STEP) opts.push(i)
+  if (maxMultiple < total) opts.push(total)
   return opts
 }
 
