@@ -118,10 +118,13 @@ defineExpose({ isPlaying })
       </svg>
     </button>
 
-    <div class="flex-1">
+    <div class="min-w-0 flex-1">
       <div ref="containerRef" class="w-full"></div>
-      <div class="mt-1 font-mono text-[11px] text-muted">
-        {{ currentLabel }} / {{ totalLabel }}
+      <div class="mt-1 flex items-center gap-3">
+        <span class="font-mono text-[11px] text-muted">
+          {{ currentLabel }} / {{ totalLabel }}
+        </span>
+        <slot name="actions" />
       </div>
     </div>
   </div>

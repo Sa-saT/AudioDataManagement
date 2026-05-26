@@ -38,24 +38,21 @@ const onDownload = () => {
     :class="isPlaying ? 'border-primary' : 'hover:border-primary'"
     style="grid-template-columns: 260px 1fr"
   >
-    <!-- Left: waveform + actions row below -->
-    <div class="flex flex-col gap-2">
-      <WaveformPlayer
-        ref="playerRef"
-        :peaks="track.peaks"
-        :duration-sec="track.durationSec"
-        :src="track.src"
-      />
-
-      <!-- 波形下のアクション行: ♥ + DL -->
-      <div class="flex items-center justify-end gap-3 pl-[52px]">
+    <!-- Left: waveform + (time + ♥ + DL inline below waveform) -->
+    <WaveformPlayer
+      ref="playerRef"
+      :peaks="track.peaks"
+      :duration-sec="track.durationSec"
+      :src="track.src"
+    >
+      <template #actions>
         <button
           class="flex items-center gap-1 transition-colors"
           :class="isFav ? 'text-accent' : 'text-muted hover:text-accent'"
           :aria-label="isFav ? 'お気に入り解除' : 'お気に入り'"
           @click.stop="toggleFav"
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"
+          <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"
             :fill="isFav ? 'currentColor' : 'none'">
             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
           </svg>
@@ -65,16 +62,16 @@ const onDownload = () => {
         </button>
 
         <button
-          class="flex items-center justify-center rounded-md border border-hairline bg-white/60 p-1.5 text-muted transition-colors hover:border-primary hover:text-primary-active"
+          class="flex items-center justify-center rounded-md border border-hairline bg-white/60 p-1 text-muted transition-colors hover:border-primary hover:text-primary-active"
           aria-label="ダウンロード"
           @click.stop="onDownload"
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>
           </svg>
         </button>
-      </div>
-    </div>
+      </template>
+    </WaveformPlayer>
 
     <!-- Right: meta + tags -->
     <div class="min-w-0 pt-1">
