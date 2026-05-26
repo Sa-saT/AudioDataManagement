@@ -12,6 +12,7 @@ const isFav = ref(false)
 const toggleFav = () => { isFav.value = !isFav.value }
 
 const isNew = computed(() => {
+  if (!props.track.publishedAt) return false
   const pub = new Date(props.track.publishedAt).getTime()
   return Date.now() - pub < 7 * 24 * 60 * 60 * 1000
 })

@@ -45,11 +45,18 @@ async function onPick(e: Event) {
     return
   }
   try {
-    const text = await f.text()
-    auth.activateFromText(text)
+    await auth.activateFromFile(f)
     closeActivate()
   } catch (err: unknown) {
-    errorMsg.value = err instanceof Error ? err.message : 'アクティベートに失敗しました。'
+    const e = err as { data?: { detail?: { code?: string; message?: string } | string }; message?: string }
+    const detail = e?.data?.detail
+    if (typeof detail === 'object' && detail?.message) {
+      errorMsg.value = detail.message
+    } else if (typeof detail === 'string') {
+      errorMsg.value = detail
+    } else {
+      errorMsg.value = e?.message ?? 'アクティベートに失敗しました。'
+    }
   }
 }
 

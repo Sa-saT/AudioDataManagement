@@ -7,22 +7,33 @@ useHead({ title: 'Dashboard — Pathfinder' })
 
 const audios = useAudiosStore()
 const auth = useAuthStore()
-onMounted(() => auth.hydrate())
+
+onMounted(async () => {
+  auth.hydrate()
+  await audios.fetch()
+})
 
 const perPageOptions = [10, 20, 25, 30, 40] as const
 
 const rangeLabel = computed(() => {
+  if (audios.total === 0) return '0–0'
   const start = (audios.page - 1) * audios.perPage + 1
-  const end = Math.min(audios.page * audios.perPage, audios.totalCount)
+  const end = Math.min(audios.page * audios.perPage, audios.total)
   return `${start}–${end}`
 })
 
 const listCount = computed(() => audios.sorted.length)
-const countDigits = computed(() => Math.max(2, audios.all.length.toString().length))
+const countDigits = computed(() =>
+  Math.max(2, audios.total.toString().length),
+)
 
-const mockMonthlyQuota = 30_000
+// Token quota — read from authenticated user license; usage stays mocked until Phase 3 BE
+const monthlyQuota = computed(() => auth.user?.monthlyQuotaTokens ?? 0)
 const mockUsed = 12_438
-const tokenPct = computed(() => Math.round((mockUsed / mockMonthlyQuota) * 100))
+const tokenPct = computed(() => {
+  if (monthlyQuota.value === 0) return 0
+  return Math.round((mockUsed / monthlyQuota.value) * 100)
+})
 const tokenLow = computed(() => tokenPct.value >= 90)
 
 // ─── Search + tag panel ───────────────────────────
@@ -34,7 +45,7 @@ const searchBoxRef = ref<HTMLDivElement | null>(null)
 
 const allTags = computed(() => {
   const map = new Map<string, number>()
-  for (const t of audios.all) {
+  for (const t of audios.items) {
     if (!t.tags) continue
     for (const tag of t.tags) {
       map.set(tag, (map.get(tag) ?? 0) + 1)
@@ -130,7 +141,7 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
           <div class="flex justify-between font-mono text-[11px] text-muted">
             <span>TOKENS</span>
             <span :class="tokenLow ? 'text-accent' : ''">
-              {{ mockUsed.toLocaleString('ja-JP') }} / {{ mockMonthlyQuota.toLocaleString('ja-JP') }}
+              {{ mockUsed.toLocaleString('ja-JP') }} / {{ monthlyQuota.toLocaleString('ja-JP') }}
             </span>
           </div>
           <div class="h-1 overflow-hidden rounded-full border border-hairline-soft bg-white/50">
@@ -228,9 +239,51 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
       class="flex-1 overflow-y-auto py-3"
       style="mask-image: linear-gradient(to bottom, transparent 0px, black 28px, black calc(100% - 28px), transparent 100%); -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 28px, black calc(100% - 28px), transparent 100%);"
     >
-      <div v-if="audios.paged.length === 0" class="py-16 text-center text-[13px] text-muted">
+      <!-- Loading skeletons -->
+      <div v-if="audios.loading && audios.items.length === 0" class="space-y-2">
+        <div
+          v-for="i in 4"
+          :key="i"
+          class="card flex items-center gap-4 px-4 py-3"
+        >
+          <div class="h-12 w-[260px] animate-pulse rounded bg-hairline-soft" />
+          <div class="flex-1 space-y-2">
+            <div class="h-4 w-1/2 animate-pulse rounded bg-hairline-soft" />
+            <div class="h-3 w-1/3 animate-pulse rounded bg-hairline-soft" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Error -->
+      <div
+        v-else-if="audios.error"
+        class="card mx-auto mt-6 max-w-[520px] p-6 text-center text-[13px]"
+      >
+        <p class="text-accent font-medium">API への接続に失敗しました</p>
+        <p class="mt-1 text-muted">{{ audios.error }}</p>
+        <button
+          class="mt-4 rounded-md bg-ink px-4 py-1.5 text-[12px] font-medium text-canvas hover:bg-primary"
+          @click="audios.fetch()"
+        >再試行</button>
+      </div>
+
+      <!-- Empty (no data at all) -->
+      <div
+        v-else-if="audios.total === 0 && !audios.searchQuery"
+        class="py-16 text-center text-[13px] text-muted"
+      >
+        まだ公開されている音源はありません。
+      </div>
+
+      <!-- Filtered empty -->
+      <div
+        v-else-if="audios.paged.length === 0"
+        class="py-16 text-center text-[13px] text-muted"
+      >
         「{{ audios.searchQuery }}」に一致する音源は見つかりませんでした。
       </div>
+
+      <!-- Normal list -->
       <div v-else class="space-y-2">
         <AudioCard v-for="t in audios.paged" :key="t.id" :track="t" />
       </div>

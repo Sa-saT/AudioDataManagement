@@ -61,7 +61,7 @@ const visibleAt = computed(() => {
       <div
         class="ease-[cubic-bezier(0.34,1.56,0.64,1)]"
         :style="{
-          transform: `translateY(-${currentDigits[i] * digitHeight}px)`,
+          transform: `translateY(-${(currentDigits[i] ?? 0) * digitHeight}px)`,
           transition: `transform ${durationMs}ms cubic-bezier(0.34,1.56,0.64,1)`,
         }"
       >
