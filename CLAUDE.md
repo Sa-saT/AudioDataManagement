@@ -153,20 +153,29 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 | Phase | 内容 | 状態 |
 |---|---|---|
 | 1 | フロント基礎 (Dashboard / Activate / Pinia / 擬似波形) | 完了 |
-| 2 | FastAPI + PostgreSQL 接続、`/audios` `/auth/activate`、実 wav 配信 | **進行中** |
-| 3 | Creator: アップロード / Admin: 管理画面 / 購入 / 検索 | 未着手 |
+| 2 | FastAPI + PostgreSQL 接続、`/audios` `/auth/activate`、実 wav 配信 | ✅ 完了 |
+| 3 | Creator: アップロード UI / Admin: 管理画面 / 購入 / 検索 | **次着手** |
 | 4 | 本番運用 (CDN, 監視, バックアップ) | 未着手 |
 
-### Phase 2 タスク進捗
+### Phase 2 タスク進捗 (バックエンド)
 
-| # | 内容 | 状態 | 推奨モデル |
-|---|---|---|---|
-| 7 | DB 基盤 (SQLAlchemy / Alembic / init_db.sh) | ✅ 完了 | Sonnet |
-| 8 | POST /auth/activate (.lic 検証 + JWT) | ✅ 完了 | Sonnet |
-| 9 | GET /audios, GET /audios/{id} | 進行中 | Sonnet |
-| 10 | POST /audios (ffprobe + preview + peaks) | 未着手 | Sonnet |
-| 11 | Range 配信 (signed URL + 206 Partial Content) | 未着手 | Sonnet |
-| 12 | POST /audios/{id}/download (排他 tx) | 未着手 | **Opus 4.7** ← 着手前に `/model claude-opus-4-7` に切り替えること |
+| # | 内容 | 状態 |
+|---|---|---|
+| 7 | DB 基盤 (SQLAlchemy / Alembic / init_db.sh) | ✅ 完了 |
+| 8 | POST /auth/activate (.lic 検証 + JWT) | ✅ 完了 |
+| 9 | GET /audios, GET /audios/{id} | ✅ 完了 |
+| 10 | POST /audios (ffprobe + peaks + 原本保存) | ✅ 完了 |
+| 11 | 視聴: GET /audios/{id}/stream-url + /stream (10秒動的切り出し + signed URL) | ✅ 完了 |
+| 12 | DL: POST /audios/{id}/download (排他tx) + /download-url + /download-file (Range対応) | ✅ 完了 |
+
+### Phase 3 次着手スコープ
+
+- Creator アップロード UI (エラーポップアップで `INVALID_CODEC` 等を日本語表示)
+- Dashboard を実 API に接続 (mockTracks 撤去)
+- 視聴: 波形クリック → `/stream-url?start=N` 取得 → Web Audio API で10秒再生
+- 購入フロー: 確認モーダル → `/download` → 完了表示 + ファイル保存
+- My Downloads: `/download-url` 経由の再DL
+- Admin 管理画面 (ランク変更 / lic 発行 / token 追加付与 / payout 承認)
 
 ## 9. 用語
 
