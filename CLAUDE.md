@@ -77,10 +77,21 @@ uvicorn main:app --reload    # http://localhost:8000/
 
 ## 5. 音源・ストレージ
 
-- 拡張子: `.wav`
-- 開発環境の保存場所: `/storage/sounds/`
+- 拡張子: `.wav` (PCM、非圧縮)
+- 想定スペック上限: **48 kHz / 24 bit / stereo**
+- 保存場所 (開発): 原本 `/storage/sounds/{id}.wav` / プレビュー `/storage/sounds/{id}_preview.wav`
 - 波形プレビュー: サーバが事前計算した `peaks` (正規化0..1配列) を JSONB で保持
 - token量 = `duration_sec` (1秒 = 1 token)
+
+### 音質ポリシー (必須要件)
+
+クライアント / ユーザ共にプロを想定。**アプリ側で音質を劣化させない**。
+
+- 視聴 (ストリーミング) も DL もトランスコード・ビットレート変換禁止。原本と同一の PCM `.wav` をビットパーフェクト配信。
+- 視聴は **先頭 60 秒のプレビュー** (`*_preview.wav`) を **HTTP Range Request (206 Partial Content) でチャンク配信**。`Accept-Ranges: bytes` 必須。
+- wavesurfer.js は **MediaElement バックエンド**で使う (WebAudio の一括 decode は使わない)。
+- 配信 URL は短命 signed URL (HMAC + 有効期限)。
+- 詳細は `docs/REQUIREMENTS.md` §5.3 (FR-STREAM-03〜09) / `docs/API_SPEC.md` `GET /audios/{id}/stream`。
 
 ## 5.5 料金/トークン制 (重要)
 

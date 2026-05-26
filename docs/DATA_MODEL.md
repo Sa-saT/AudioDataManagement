@@ -70,9 +70,11 @@ creator ロール限定の追加情報。
 
 ### 2.4 `audios`
 
-音源本体。実ファイルは `/storage/sounds/{id}.wav`。
+音源本体。原本は `/storage/sounds/{id}.wav`、視聴用プレビューは `/storage/sounds/{id}_preview.wav` (アップロード時に先頭60秒を切り出し)。
 `duration_sec` がそのままDL時のtoken消費量となる (1秒=1token)。
 `downloaded_by_user_id` が NULL でない音源は売却済みで、Dashboard 一覧から除外する。
+
+視聴は **プレビューファイルを Range Request でチャンク配信** (非圧縮 PCM 維持、最大 48 kHz / 24 bit)。DL は原本ファイルを signed URL で配信。
 
 | 列 | 型 | 制約 | 説明 |
 |---|---|---|---|
@@ -80,10 +82,14 @@ creator ロール限定の追加情報。
 | `creator_id` | UUID | FK→creator_profiles.user_id, NOT NULL | |
 | `title` | TEXT | NOT NULL | |
 | `description` | TEXT |  | |
-| `file_path` | TEXT | NOT NULL | `/storage/sounds/{id}.wav` |
-| `duration_sec` | INTEGER | NOT NULL, CHECK (>0) | = token消費量 |
-| `sample_rate` | INTEGER |  | 例: 44100, 48000 |
-| `peaks` | JSONB | NOT NULL | 波形プレビュー用 (0..1 配列) |
+| `file_path` | TEXT | NOT NULL | 原本 `.wav` のパス。例: `/storage/sounds/{id}.wav`。DL 経路でのみ配信 |
+| `preview_path` | TEXT | NOT NULL | プレビュー `.wav` のパス。例: `/storage/sounds/{id}_preview.wav`。視聴 Range 配信対象 |
+| `preview_duration_sec` | INTEGER | NOT NULL, DEFAULT 60, CHECK (>0 AND <=60) | プレビュー長 (秒)。原本が短ければ duration_sec と同値 |
+| `duration_sec` | INTEGER | NOT NULL, CHECK (>0) | 原本長 = token消費量 |
+| `sample_rate` | INTEGER | NOT NULL | Hz。例: 44100, 48000。上限 48000 (FR-STREAM-06) |
+| `bit_depth` | SMALLINT | NOT NULL | bit。例: 16, 24。上限 24 (FR-STREAM-06) |
+| `channels` | SMALLINT | NOT NULL, DEFAULT 2 | 1=mono / 2=stereo |
+| `peaks` | JSONB | NOT NULL | 波形プレビュー用 (0..1 配列)。音声デコードに依存しない波形描画用 |
 | `is_public` | BOOLEAN | NOT NULL, DEFAULT false | |
 | `youtube_safe` | BOOLEAN | NOT NULL, DEFAULT true | YT利用可否 |
 | `recommend_score` | NUMERIC(6,2) | NOT NULL, DEFAULT 0 | オススメ順ソート用 |

@@ -114,7 +114,25 @@ Response 200:
 詳細取得 (販売中・売却済み問わず、メタのみ。売却済みは「sold」フラグ付き)。
 
 ### GET `/audios/{id}/stream`
-プレビュー再生用ストリーミング (公開、token消費なし、低ビットレート版を返すことを推奨)。
+
+プレビュー再生用ストリーミング (公開、token消費なし)。
+
+クライアント / ユーザ共にプロを想定するため、**アプリ側で音質劣化を発生させない**。トランスコード・ビットレート変換は行わず、原本と同一の PCM `.wav` をビットパーフェクトで配信する。
+
+**配信仕様**
+- 配信対象: 先頭 60 秒を切り出した `*_preview.wav` (`audios.preview_path`)。フォーマットは原本と同一 (最大 48 kHz / 24 bit PCM)。
+- プロトコル: HTTP Range Request (RFC 7233)。`Accept-Ranges: bytes` を必ず返し、`Range: bytes=START-END` を受けて `206 Partial Content` でチャンク返却。Range なし要求は `200` で全体返却。
+- `Content-Type: audio/wav`、`Content-Length` / `Content-Range` 必須。
+- 認可: `?sig=...&exp=...` 形式の短命 signed URL (HMAC-SHA256、TTL 数分)。`exp` 失効時は `403 EXPIRED_SIGNATURE`。
+- キャッシュ: `Cache-Control: private, max-age=60`。
+
+**ステップ**
+1. クライアントが `GET /audios/{id}/stream-url` (別エンドポイント) または `/audios/{id}` 詳細 で短命 signed URL を取得。
+2. `<audio>` / wavesurfer.js (MediaElement バックエンド) がその URL に対し Range 付きで GET を発行、ブラウザ標準のチャンク取得で再生。
+
+Errors: 403 `EXPIRED_SIGNATURE` / 403 `INVALID_SIGNATURE` / 404 / 416 `Range Not Satisfiable`
+
+> 原本 (`audios.file_path`) はこのエンドポイントからは配信しない。原本取得は `/audios/{id}/download` 経路のみ。
 
 ### POST `/audios/{id}/download`
 原本 `.wav` のダウンロード。要 JWT + アクティベート済み。
