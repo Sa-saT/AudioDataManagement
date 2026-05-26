@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     STORAGE_DIR: str = "/tmp/adm_storage/sounds"
 
     # Audio
-    PREVIEW_DURATION_SEC: int = 60
+    PREVIEW_DURATION_SEC: int = 10
     MAX_SAMPLE_RATE: int = 48000
     MAX_BIT_DEPTH: int = 24
 

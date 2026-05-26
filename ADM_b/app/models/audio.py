@@ -24,10 +24,6 @@ class Audio(Base, TimestampMixin):
     __tablename__ = "audios"
     __table_args__ = (
         CheckConstraint("duration_sec > 0", name="duration_sec_positive"),
-        CheckConstraint(
-            "preview_duration_sec > 0 AND preview_duration_sec <= 60",
-            name="preview_duration_sec_range",
-        ),
         Index("idx_audios_published_at", "published_at"),
         Index("idx_audios_recommend_score", "recommend_score"),
         Index("idx_audios_creator_id", "creator_id"),
@@ -48,9 +44,6 @@ class Audio(Base, TimestampMixin):
     description: Mapped[str | None] = mapped_column(Text)
 
     file_path: Mapped[str] = mapped_column(Text, nullable=False)
-    preview_path: Mapped[str] = mapped_column(Text, nullable=False)
-    preview_duration_sec: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
-
     duration_sec: Mapped[int] = mapped_column(Integer, nullable=False)
     sample_rate: Mapped[int] = mapped_column(Integer, nullable=False)
     bit_depth: Mapped[int] = mapped_column(SmallInteger, nullable=False)

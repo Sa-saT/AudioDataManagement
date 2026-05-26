@@ -61,16 +61,17 @@
 ### 5.3 視聴 / ストリーミング
 
 クライアント / ユーザ共にサウンドのプロを想定しており、**視聴時にもアプリ側の音質劣化を発生させない**ことを必須要件とする。
+未アクティベートの guest にも音源の良さを体験させ、営業・加入促進に活用できる設計とする。
 
-- FR-STREAM-01: 視聴は guest を含め全ロール可能。
-- FR-STREAM-02: 視聴 (ストリーミング) は token を消費しない (何回でも無料)。
+- FR-STREAM-01: 視聴は **JWT 不要。guest を含め全ロール可能**。
+- FR-STREAM-02: 視聴は token を消費しない (何回でも無料)。
 - FR-STREAM-03: 視聴用音源は**原本と同一の非圧縮 PCM `.wav`** を配信する。サーバ側でのトランスコード・ビットレート変換・ダウンミックスを行わない (ビットパーフェクト)。
-- FR-STREAM-04: 配信は **HTTP Range Request (RFC 7233, `206 Partial Content`) によるチャンク単位**で行う。`Accept-Ranges: bytes` を必ず返し、シーク・先読みに対応する。
-- FR-STREAM-05: 視聴可能な区間は**先頭から最大 60 秒のプレビュー**に限定する。サーバはこの区間を切り出した `*_preview.wav` を事前生成し、ストリーミング配信対象とする。原本へのアクセスは DL 経路でのみ可能とする。
-- FR-STREAM-06: 想定する音源スペックの上限は **48 kHz / 24 bit PCM** (スタジオ品質)。これを超えるファイル (96kHz / 32bit float 等) はアップロード時に弾くか、視聴用プレビューのみ 48/24 に dither なしでサンプル単位カットする (Phase 3 で検討)。
-- FR-STREAM-07: フロントの波形プレビュー描画は `audios.peaks` (正規化済み配列) を使い、音声本体のデコード結果には依存しない。
-- FR-STREAM-08: wavesurfer.js は MediaElement バックエンドで動作させ、`<audio>` の Range 配信を活用する (WebAudio バックエンドの一括 decode は使わない)。
-- FR-STREAM-09: ストリーミング URL は短命の signed URL (HMAC + 有効期限) を都度発行する。直リンク貼り付けによる長期再利用を防ぐ。
+- FR-STREAM-04: 視聴は**動的チャンク切り出し**方式。クライアントが `?start=秒` を指定し、サーバが原本から `start` 〜 `start+10 秒` の PCM wav をリアルタイムで切り出して返す。事前生成ファイルは持たない。
+- FR-STREAM-05: 1リクエストあたりのチャンク長は **10 秒固定** (サーバ設定 `PREVIEW_DURATION_SEC`)。`start` は `0` 〜 `duration_sec - 1` の範囲で任意指定可能。範囲外は 400。
+- FR-STREAM-06: 想定する音源スペックの上限は **48 kHz / 24 bit PCM** (スタジオ品質)。これを超えるファイルはアップロード時に拒否する。
+- FR-STREAM-07: フロントの波形描画は `audios.peaks` (正規化済み配列) のみで行い、音声デコード結果に依存しない。wavesurfer.js は波形表示専用として使用する。
+- FR-STREAM-08: 音声再生は **Web Audio API (AudioContext)**。`fetch` でチャンク取得 → `decodeAudioData` → `AudioBufferSourceNode.start`。波形クリック時に `start` を算出して10秒チャンクを取得・再生する。
+- FR-STREAM-09: 視聴 URL は短命 signed URL (HMAC-SHA256 + 有効期限 30 秒)。直リンクの長期再利用・一括ダウンローダー対策。
 
 ### 5.4 ダウンロード / トークン消費
 

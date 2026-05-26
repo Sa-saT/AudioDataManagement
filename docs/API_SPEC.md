@@ -113,24 +113,47 @@ Response 200:
 ### GET `/audios/{id}`
 詳細取得 (販売中・売却済み問わず、メタのみ。売却済みは「sold」フラグ付き)。
 
+### GET `/audios/{id}/stream-url`
+
+視聴用 signed URL を発行する (公開、JWT 不要、token 消費なし)。
+
+Query:
+| 名前 | 型 | 既定 | 説明 |
+|---|---|---|---|
+| `start` | int | 0 | 再生開始位置 (秒)。0 〜 duration_sec-1 |
+
+Response 200:
+```json
+{ "url": "http://localhost:8000/api/v1/audios/{id}/stream?start=0&sig=xxx&exp=1234567890" }
+```
+
+- signed URL の TTL は 30 秒 (`SIGNED_URL_TTL_SECONDS`)。
+- 署名対象: `{audio_id}:{start}:{exp}` を HMAC-SHA256。
+
+Errors: 400 `INVALID_START` / 404
+
+---
+
 ### GET `/audios/{id}/stream`
 
-プレビュー再生用ストリーミング (公開、token消費なし)。
+10 秒チャンクの PCM wav を返す (公開、JWT 不要)。
 
-クライアント / ユーザ共にプロを想定するため、**アプリ側で音質劣化を発生させない**。トランスコード・ビットレート変換は行わず、原本と同一の PCM `.wav` をビットパーフェクトで配信する。
+Query: `start`, `sig`, `exp` (stream-url が発行した signed URL そのまま使用)
 
 **配信仕様**
-- 配信対象: 先頭 60 秒を切り出した `*_preview.wav` (`audios.preview_path`)。フォーマットは原本と同一 (最大 48 kHz / 24 bit PCM)。
-- プロトコル: HTTP Range Request (RFC 7233)。`Accept-Ranges: bytes` を必ず返し、`Range: bytes=START-END` を受けて `206 Partial Content` でチャンク返却。Range なし要求は `200` で全体返却。
-- `Content-Type: audio/wav`、`Content-Length` / `Content-Range` 必須。
-- 認可: `?sig=...&exp=...` 形式の短命 signed URL (HMAC-SHA256、TTL 数分)。`exp` 失効時は `403 EXPIRED_SIGNATURE`。
-- キャッシュ: `Cache-Control: private, max-age=60`。
+- 認可: `sig` + `exp` を HMAC で検証。失効・改竄は 403。
+- ffmpeg で原本の `start` 秒から `PREVIEW_DURATION_SEC` (= 10) 秒を `-c:a copy` で切り出し、PCM wav として返却 (トランスコードなし、ビットパーフェクト)。
+- `start + 10 > duration_sec` の場合は残り秒数まで返す (無音パディングしない)。
+- `Content-Type: audio/wav`、`Content-Length` 付与。
+- `Cache-Control: no-store` (signed URL 再利用を防ぐ)。
 
-**ステップ**
-1. クライアントが `GET /audios/{id}/stream-url` (別エンドポイント) または `/audios/{id}` 詳細 で短命 signed URL を取得。
-2. `<audio>` / wavesurfer.js (MediaElement バックエンド) がその URL に対し Range 付きで GET を発行、ブラウザ標準のチャンク取得で再生。
+**フロント利用フロー**
+1. 波形クリック → クリック位置から `start` 秒を算出
+2. `GET /stream-url?start={N}` → signed URL 取得
+3. `fetch(signed_url)` → `AudioContext.decodeAudioData` → `AudioBufferSourceNode.start`
+4. 10 秒再生完了後に次チャンクが必要な場合は 2 に戻る
 
-Errors: 403 `EXPIRED_SIGNATURE` / 403 `INVALID_SIGNATURE` / 404 / 416 `Range Not Satisfiable`
+Errors: 400 `INVALID_START` / 403 `EXPIRED_SIGNATURE` / 403 `INVALID_SIGNATURE` / 404
 
 > 原本 (`audios.file_path`) はこのエンドポイントからは配信しない。原本取得は `/audios/{id}/download` 経路のみ。
 
