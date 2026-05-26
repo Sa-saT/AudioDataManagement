@@ -1,3 +1,4 @@
+import re
 import shutil
 import subprocess
 import tempfile
@@ -5,26 +6,63 @@ import uuid
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.config import get_settings
 from app.db import get_db
-from app.models import Audio, CreatorProfile
+from app.models import (
+    Audio,
+    CreatorPayout,
+    CreatorProfile,
+    CreatorRankPrice,
+    DownloadKind,
+    DownloadLog,
+    PayoutStatus,
+    TokenConsumption,
+)
 from app.models.base import new_uuid
 from app.models.user import User
-from app.schemas.audio import AudioDetail, AudioListItem, AudioListResponse, CreatorBrief
-from app.security.deps import require_role
-from app.security.signed_url import SignedURLError, issue as issue_signed_url, verify as verify_signed_url
-from app.services import audio_file
+from app.schemas.audio import (
+    AudioDetail,
+    AudioListItem,
+    AudioListResponse,
+    CreatorBrief,
+    DownloadResponse,
+)
+from app.security.deps import get_current_user, require_role
+from app.security.signed_url import (
+    SignedURLError,
+    issue_download,
+    issue_stream,
+    verify_download,
+    verify_stream,
+)
+from app.services import audio_file, tokens as tokens_service
 
 settings = get_settings()
 
 router = APIRouter(prefix="/audios", tags=["audios"])
 
 _ALLOWED_PER_PAGE = {25, 50, 100, 200}
+
+_FILENAME_SAFE_RE = re.compile(r"[^\w\s\-.぀-ゟ゠-ヿ一-鿿]")
+
+
+def _build_url(path: str, params: dict) -> str:
+    qs = "&".join(f"{k}={v}" for k, v in params.items())
+    return f"{path}?{qs}"
+
+
+def _safe_filename(title: str) -> str:
+    s = _FILENAME_SAFE_RE.sub("", title).strip().replace(" ", "_")
+    return s[:80] or "audio"
+
+
+def _client_ip(request: Request) -> str | None:
+    return request.client.host if request.client else None
 
 
 def _to_list_item(audio: Audio) -> AudioListItem:
@@ -155,7 +193,7 @@ def stream_audio(
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
     try:
-        verify_signed_url(audio_id, start, exp, sig)
+        verify_stream(audio_id, start, exp, sig)
     except SignedURLError as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -205,6 +243,196 @@ def stream_audio(
     return StreamingResponse(_iter_chunks(), media_type="audio/wav")
 
 
+@router.get("/download-file")
+def download_file(
+    audio_id: str = Query(...),
+    exp: int = Query(...),
+    sig: str = Query(...),
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    try:
+        verify_download(audio_id, exp, sig)
+    except SignedURLError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": exc.code, "message": exc.message},
+        )
+
+    try:
+        parsed_id = uuid.UUID(audio_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "audio not found"})
+
+    audio = db.execute(select(Audio).where(Audio.id == parsed_id)).scalar_one_or_none()
+    if audio is None:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "audio not found"})
+
+    file_path = Path(audio.file_path)
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "FILE_NOT_FOUND", "message": "audio file missing"},
+        )
+
+    return FileResponse(
+        path=str(file_path),
+        media_type="audio/wav",
+        filename=f"{_safe_filename(audio.title)}.wav",
+    )
+
+
+@router.post("/{audio_id}/download", response_model=DownloadResponse)
+def download_audio(
+    audio_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> DownloadResponse:
+    try:
+        parsed_id = uuid.UUID(audio_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "audio not found"})
+
+    audio = db.execute(
+        select(Audio).where(Audio.id == parsed_id).with_for_update()
+    ).scalar_one_or_none()
+    if audio is None or not audio.is_public:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "audio not found"})
+
+    ip = _client_ip(request)
+    ua = request.headers.get("user-agent")
+
+    # Re-download by the original buyer: no token consumption, no payout.
+    if audio.downloaded_by_user_id == current_user.id:
+        db.add(DownloadLog(
+            user_id=current_user.id, audio_id=parsed_id,
+            kind=DownloadKind.redownload, ip=ip, user_agent=ua,
+        ))
+        db.commit()
+        params = issue_download(str(parsed_id))
+        return DownloadResponse(
+            download_url=_build_url("/api/v1/audios/download-file", params),
+            is_redownload=True,
+        )
+
+    # Already sold to someone else.
+    if audio.downloaded_by_user_id is not None:
+        db.add(DownloadLog(
+            user_id=current_user.id, audio_id=parsed_id,
+            kind=DownloadKind.denied_sold, ip=ip, user_agent=ua,
+        ))
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "ALREADY_SOLD", "message": "this audio has already been purchased by another user"},
+        )
+
+    # Initial purchase.
+    license_obj = current_user.license
+    if license_obj is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "NO_LICENSE", "message": "no active license"},
+        )
+
+    cost = audio.duration_sec
+    available = tokens_service.available_tokens(db, current_user.id, license_obj)
+    if available < cost:
+        db.add(DownloadLog(
+            user_id=current_user.id, audio_id=parsed_id,
+            kind=DownloadKind.denied_no_token, ip=ip, user_agent=ua,
+        ))
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "code": "INSUFFICIENT_TOKENS",
+                "message": f"need {cost} tokens but only {available} available",
+                "required": cost,
+                "available": available,
+            },
+        )
+
+    creator_profile = db.execute(
+        select(CreatorProfile).where(CreatorProfile.user_id == audio.creator_id)
+    ).scalar_one()
+    rank_price = db.execute(
+        select(CreatorRankPrice).where(CreatorRankPrice.rank == creator_profile.rank)
+    ).scalar_one()
+
+    audio.downloaded_by_user_id = current_user.id
+    audio.downloaded_at = func.now()
+
+    period = tokens_service.current_period_jst()
+    db.add(TokenConsumption(
+        user_id=current_user.id,
+        audio_id=parsed_id,
+        license_id=license_obj.id,
+        tokens=cost,
+        period_yyyymm=period,
+    ))
+    db.add(CreatorPayout(
+        audio_id=parsed_id,
+        creator_id=audio.creator_id,
+        rank_at_payout=creator_profile.rank,
+        unit_price_yen=rank_price.unit_price_yen,
+        amount_yen=rank_price.unit_price_yen,
+        status=PayoutStatus.pending,
+    ))
+    db.add(DownloadLog(
+        user_id=current_user.id, audio_id=parsed_id,
+        kind=DownloadKind.initial, ip=ip, user_agent=ua,
+    ))
+    db.commit()
+
+    params = issue_download(str(parsed_id))
+    return DownloadResponse(
+        download_url=_build_url("/api/v1/audios/download-file", params),
+        is_redownload=False,
+        token_cost=cost,
+        remaining_tokens=available - cost,
+    )
+
+
+@router.get("/{audio_id}/download-url", response_model=DownloadResponse)
+def get_download_url(
+    audio_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> DownloadResponse:
+    try:
+        parsed_id = uuid.UUID(audio_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "audio not found"})
+
+    audio = db.execute(select(Audio).where(Audio.id == parsed_id)).scalar_one_or_none()
+    if audio is None:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "audio not found"})
+    if audio.downloaded_by_user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "NOT_PURCHASED", "message": "audio has not been purchased"},
+        )
+    if audio.downloaded_by_user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "NOT_OWNER", "message": "you do not own this audio"},
+        )
+
+    db.add(DownloadLog(
+        user_id=current_user.id, audio_id=parsed_id,
+        kind=DownloadKind.redownload, ip=_client_ip(request), user_agent=request.headers.get("user-agent"),
+    ))
+    db.commit()
+
+    params = issue_download(str(parsed_id))
+    return DownloadResponse(
+        download_url=_build_url("/api/v1/audios/download-file", params),
+        is_redownload=True,
+    )
+
+
 @router.get("/{audio_id}/stream-url")
 def get_stream_url(
     audio_id: str,
@@ -222,9 +450,8 @@ def get_stream_url(
     if audio is None:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "audio not found"})
 
-    params = issue_signed_url(str(parsed_id), start)
-    qs = "&".join(f"{k}={v}" for k, v in params.items())
-    return {"url": f"/api/v1/audios/stream?{qs}"}
+    params = issue_stream(str(parsed_id), start)
+    return {"url": _build_url("/api/v1/audios/stream", params)}
 
 
 def _to_detail(audio: Audio) -> AudioDetail:

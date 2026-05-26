@@ -34,3 +34,10 @@ class AudioListResponse(BaseModel):
     page: int
     per_page: int
     items: list[AudioListItem]
+
+
+class DownloadResponse(BaseModel):
+    download_url: str
+    is_redownload: bool
+    token_cost: int | None = None
+    remaining_tokens: int | None = None
