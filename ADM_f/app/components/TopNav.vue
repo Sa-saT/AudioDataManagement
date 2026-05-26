@@ -95,7 +95,7 @@ function goDownloads() {
       <!-- Right: dropdown menu -->
       <div ref="menuRef" class="relative">
         <button
-          class="flex items-center gap-2 rounded-md border border-hairline bg-white/40 px-3 py-1.5 text-[12px] text-ink transition-colors hover:border-primary hover:bg-white/70"
+          class="flex items-center gap-2 px-1 py-1.5 text-[12px] text-ink transition-colors hover:text-primary-active"
           aria-label="メニュー"
           @click.stop="toggleMenu"
         >
