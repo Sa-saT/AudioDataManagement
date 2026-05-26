@@ -1,0 +1,64 @@
+# ---- OS ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Editor / IDE ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ---- Claude Code ----
+.claude/
+
+# ---- Logs ----
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---- Env ----
+.env
+.env.*
+!.env.example
+
+# ---- Frontend (Nuxt 4 / Node) ----
+ADM_f/node_modules/
+ADM_f/.nuxt/
+ADM_f/.output/
+ADM_f/.data/
+ADM_f/dist/
+ADM_f/.cache/
+ADM_f/.nitro/
+ADM_f/.vercel/
+ADM_f/.netlify/
+ADM_f/coverage/
+
+# ---- Backend (Python / FastAPI) ----
+ADM_b/venv/
+ADM_b/.venv/
+ADM_b/__pycache__/
+ADM_b/**/__pycache__/
+ADM_b/*.py[cod]
+ADM_b/*$py.class
+ADM_b/.pytest_cache/
+ADM_b/.mypy_cache/
+ADM_b/.ruff_cache/
+ADM_b/.coverage
+ADM_b/htmlcov/
+ADM_b/*.egg-info/
+
+# ---- Storage / Media ----
+storage/
+ADM_b/storage/
+*.wav
+!docs/**/*.wav
+
+# ---- License files ----
+*.lic
+
+# ---- Build / Misc ----
+*.tsbuildinfo
