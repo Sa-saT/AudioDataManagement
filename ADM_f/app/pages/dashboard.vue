@@ -85,22 +85,18 @@ watch(searchInput, (v) => audios.setSearch(v))
         </button>
       </div>
 
-      <!-- Per-page stepper (right): ◀ 10 20 [25] 30 40 ▶ -->
-      <div class="flex shrink-0 items-center gap-0.5 font-mono text-[12px]">
+      <!-- Per-page stepper: ◀ [animated counter] ▶ — vue-bits 風 digit roll -->
+      <div class="flex shrink-0 items-center gap-1 font-mono text-[12px]">
         <button
-          class="px-1.5 py-1 text-muted hover:text-ink disabled:opacity-30"
+          class="rounded-sm px-2 py-1 text-muted hover:text-ink disabled:opacity-30"
           :disabled="audios.perPage === perPageOptions[0]"
           @click="audios.stepPerPage(-1)"
         >◀</button>
+        <div class="flex items-center justify-center rounded-md bg-primary px-3 py-1 text-white">
+          <NumberRoller :value="audios.perPage" :digits="2" :font-size="13" font-weight="600" />
+        </div>
         <button
-          v-for="n in perPageOptions"
-          :key="n"
-          class="min-w-[26px] rounded-sm px-1.5 py-0.5 transition-colors"
-          :class="audios.perPage === n ? 'bg-primary text-white font-semibold' : 'text-body hover:text-ink'"
-          @click="audios.setPerPage(n)"
-        >{{ n }}</button>
-        <button
-          class="px-1.5 py-1 text-muted hover:text-ink disabled:opacity-30"
+          class="rounded-sm px-2 py-1 text-muted hover:text-ink disabled:opacity-30"
           :disabled="audios.perPage === perPageOptions[perPageOptions.length - 1]"
           @click="audios.stepPerPage(1)"
         >▶</button>

@@ -3,22 +3,37 @@ import { useAuthStore } from '~/stores/auth'
 
 const auth = useAuthStore()
 const route = useRoute()
+const router = useRouter()
 
 onMounted(() => auth.hydrate())
 
 const isActive = (path: string) => route.path === path
 
-// Activate modal
+// ─── Dropdown menu ────────────────────────────────
+const menuOpen = ref(false)
+const menuRef = ref<HTMLDivElement | null>(null)
+const toggleMenu = () => { menuOpen.value = !menuOpen.value }
+const closeMenu = () => { menuOpen.value = false }
+
+function onDocClick(e: MouseEvent) {
+  if (!menuRef.value) return
+  if (!menuRef.value.contains(e.target as Node)) closeMenu()
+}
+onMounted(() => document.addEventListener('click', onDocClick))
+onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
+
+// ─── Activate modal ────────────────────────────────
 const showModal = ref(false)
 const fileName = ref<string | null>(null)
 const errorMsg = ref<string | null>(null)
 
-function openModal() {
+function openActivate() {
   fileName.value = null
   errorMsg.value = null
   showModal.value = true
+  closeMenu()
 }
-function closeModal() { showModal.value = false }
+function closeActivate() { showModal.value = false }
 
 async function onPick(e: Event) {
   errorMsg.value = null
@@ -32,7 +47,7 @@ async function onPick(e: Event) {
   try {
     const text = await f.text()
     auth.activateFromText(text)
-    closeModal()
+    closeActivate()
   } catch (err: unknown) {
     errorMsg.value = err instanceof Error ? err.message : 'アクティベートに失敗しました。'
   }
@@ -40,11 +55,20 @@ async function onPick(e: Event) {
 
 function deactivate() {
   auth.deactivate()
+  closeMenu()
+}
+
+function goDownloads() {
+  router.push('/downloads')
+  closeMenu()
 }
 </script>
 
 <template>
-  <header class="sticky top-0 z-10 h-12 border-b border-hairline-soft/40 backdrop-blur-[14px] saturate-150" style="background: rgba(255,255,255,0.06);">
+  <header
+    class="sticky top-0 z-10 h-12 border-b border-hairline-soft/40 backdrop-blur-[14px] saturate-150"
+    style="background: rgba(255,255,255,0.06);"
+  >
     <div class="mx-auto flex h-full max-w-[1200px] items-center justify-between px-6">
 
       <!-- Left: brand + nav -->
@@ -68,24 +92,60 @@ function deactivate() {
         </nav>
       </div>
 
-      <!-- Right: activate / deactivate -->
-      <div class="flex items-center gap-3">
-        <template v-if="auth.isActivated">
-          <span class="rounded-full bg-ink px-3 py-1 font-mono text-[11px] font-medium uppercase tracking-widest text-canvas">
-            {{ auth.role }}
-          </span>
-          <span class="text-[13px] text-body">{{ auth.displayName }}</span>
-          <button
-            class="rounded-md border border-hairline px-3 py-1 text-[12px] text-muted transition-colors hover:border-accent hover:text-accent"
-            @click="deactivate"
-          >Deactivate</button>
-        </template>
-        <template v-else>
-          <button
-            class="rounded-md bg-ink px-3 py-1.5 text-[12px] font-medium text-canvas transition-colors hover:bg-primary hover:text-white"
-            @click="openModal"
-          >Activate</button>
-        </template>
+      <!-- Right: dropdown menu -->
+      <div ref="menuRef" class="relative">
+        <button
+          class="flex items-center gap-2 rounded-md border border-hairline bg-white/40 px-3 py-1.5 text-[12px] text-ink transition-colors hover:border-primary hover:bg-white/70"
+          aria-label="メニュー"
+          @click.stop="toggleMenu"
+        >
+          <span v-if="auth.isActivated" class="font-mono text-[11px] uppercase tracking-widest text-muted">{{ auth.role }}</span>
+          <span v-if="auth.isActivated" class="text-[12px]">{{ auth.displayName }}</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+            <path d="M3 12h18M3 6h18M3 18h18"/>
+          </svg>
+        </button>
+
+        <!-- Dropdown panel -->
+        <Transition name="menu">
+          <div
+            v-if="menuOpen"
+            class="absolute right-0 top-[calc(100%+6px)] w-56 overflow-hidden rounded-lg border border-hairline bg-white/85 shadow-lg backdrop-blur-md"
+          >
+            <!-- Activate / Deactivate -->
+            <button
+              v-if="!auth.isActivated"
+              class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-[13px] text-ink transition-colors hover:bg-white"
+              @click="openActivate"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>
+              </svg>
+              Activate
+            </button>
+            <button
+              v-else
+              class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-[13px] text-ink transition-colors hover:bg-white"
+              @click="deactivate"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 5 12 10 7"/><line x1="5" y1="12" x2="15" y2="12"/>
+              </svg>
+              Deactivate
+            </button>
+
+            <!-- Downloads -->
+            <button
+              class="flex w-full items-center gap-2 border-t border-hairline-soft px-4 py-2.5 text-left text-[13px] text-ink transition-colors hover:bg-white"
+              @click="goDownloads"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Downloads
+            </button>
+          </div>
+        </Transition>
       </div>
     </div>
   </header>
@@ -96,23 +156,20 @@ function deactivate() {
       <div
         v-if="showModal"
         class="fixed inset-0 z-50 flex items-start justify-center bg-black/25 pt-24 backdrop-blur-sm"
-        @click.self="closeModal"
+        @click.self="closeActivate"
       >
         <div class="card mx-4 w-full max-w-[480px] p-6">
           <div class="mb-4 flex items-center justify-between">
             <h2 class="text-[16px] font-semibold text-ink">Activate</h2>
-            <button class="text-muted hover:text-ink" @click="closeModal">
+            <button class="text-muted hover:text-ink" @click="closeActivate">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M18 6 6 18M6 6l12 12"/>
               </svg>
             </button>
           </div>
-
           <p class="mb-4 text-[13px] text-body">
             お手持ちの <span class="font-mono">.lic</span> ファイルを選択してアクティベートしてください。
           </p>
-
-          <!-- File drop zone -->
           <label class="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-hairline-strong bg-white/40 px-6 py-8 text-center transition-colors hover:border-primary hover:bg-white/60">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="text-muted">
               <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>
@@ -126,7 +183,6 @@ function deactivate() {
               @change="onPick"
             />
           </label>
-
           <p v-if="errorMsg" class="mt-3 text-[12px] text-accent">{{ errorMsg }}</p>
         </div>
       </div>
@@ -137,4 +193,7 @@ function deactivate() {
 <style scoped>
 .fade-enter-active, .fade-leave-active { transition: opacity 150ms; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+.menu-enter-active, .menu-leave-active { transition: opacity 150ms, transform 150ms; }
+.menu-enter-from, .menu-leave-to { opacity: 0; transform: translateY(-4px); }
 </style>
