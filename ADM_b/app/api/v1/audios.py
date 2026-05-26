@@ -46,7 +46,7 @@ settings = get_settings()
 
 router = APIRouter(prefix="/audios", tags=["audios"])
 
-_ALLOWED_PER_PAGE = {10, 20, 25, 30, 40}
+_ALLOWED_PER_PAGE = {5, 10, 15, 20, 25, 30, 35, 40}
 
 _FILENAME_SAFE_RE = re.compile(r"[^\w\s\-.぀-ゟ゠-ヿ一-鿿]")
 
@@ -85,7 +85,7 @@ def _to_list_item(audio: Audio) -> AudioListItem:
 def list_audios(
     sort: Literal["recommended", "newest"] = Query("recommended"),
     page: int = Query(1, ge=1),
-    per_page: int = Query(25),
+    per_page: int = Query(10),
     db: Session = Depends(get_db),
 ) -> AudioListResponse:
     if per_page not in _ALLOWED_PER_PAGE:

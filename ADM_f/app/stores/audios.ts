@@ -6,7 +6,7 @@ import type {
 } from '~/types/audio'
 import { mapApiAudio } from '~/types/audio'
 
-type PerPage = 10 | 20 | 25 | 30 | 40
+type PerPage = 5 | 10 | 15 | 20 | 25 | 30 | 35 | 40
 
 interface AudiosState {
   items: AudioTrack[]
@@ -19,7 +19,7 @@ interface AudiosState {
   searchQuery: string
 }
 
-const PER_PAGE_OPTIONS = [10, 20, 25, 30, 40] as const
+const PER_PAGE_OPTIONS = [5, 10, 15, 20, 25, 30, 35, 40] as const
 
 export const useAudiosStore = defineStore('audios', {
   state: (): AudiosState => ({
@@ -28,7 +28,7 @@ export const useAudiosStore = defineStore('audios', {
     loading: false,
     error: null,
     sort: 'recommended',
-    perPage: 25,
+    perPage: 10,
     page: 1,
     searchQuery: '',
   }),

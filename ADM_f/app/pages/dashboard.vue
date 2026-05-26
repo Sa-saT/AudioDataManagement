@@ -13,7 +13,7 @@ onMounted(async () => {
   await audios.fetch()
 })
 
-const perPageOptions = [10, 20, 25, 30, 40] as const
+const perPageOptions = [5, 10, 15, 20, 25, 30, 35, 40] as const
 
 const rangeLabel = computed(() => {
   if (audios.total === 0) return '0–0'
