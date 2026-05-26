@@ -198,12 +198,12 @@ function goDownloads() {
 .menu-enter-active, .menu-leave-active { transition: opacity 150ms, transform 150ms; }
 .menu-enter-from, .menu-leave-to { opacity: 0; transform: translateY(-4px); }
 
-/* 2-line hamburger → X */
+/* 2-line hamburger → X (transform-only animation, 参考: helloworld753315/vue_hamburger) */
 .hamburger {
   position: relative;
   display: inline-block;
-  width: 16px;
-  height: 12px;
+  width: 18px;
+  height: 14px;
   color: currentColor;
 }
 .hamburger .line {
@@ -213,13 +213,11 @@ function goDownloads() {
   height: 1.6px;
   background: currentColor;
   border-radius: 1px;
-  transition:
-    top 300ms cubic-bezier(0.4, 0, 0.2, 1),
-    transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
   transform-origin: center;
+  transition: transform 0.4s ease;
 }
-.hamburger .line-top { top: 3px; }
-.hamburger .line-bot { top: 9px; }
-.hamburger.open .line-top { top: 6px; transform: rotate(45deg); }
-.hamburger.open .line-bot { top: 6px; transform: rotate(-45deg); }
+.hamburger .line-top { top: 4px; }
+.hamburger .line-bot { top: 10px; }
+.hamburger.open .line-top { transform: translateY(3px) rotate(-45deg); }
+.hamburger.open .line-bot { transform: translateY(-3px) rotate(45deg); }
 </style>
