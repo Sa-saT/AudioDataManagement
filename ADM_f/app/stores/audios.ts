@@ -137,5 +137,10 @@ export const useAudiosStore = defineStore('audios', {
     setSearch(q: string) {
       this.searchQuery = q
     },
+    /** DL 成立により一覧から取り除く (単発販売: 売切れ) */
+    removeAudio(audioId: string) {
+      this.items = this.items.filter((t) => t.id !== audioId)
+      if (this.total > 0) this.total -= 1
+    },
   },
 })

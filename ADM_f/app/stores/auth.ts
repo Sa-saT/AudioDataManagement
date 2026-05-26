@@ -5,6 +5,8 @@ interface AuthState {
   token: string | null
   expiresAt: string | null
   user: AuthUser | null
+  /** Tokens used this period (synced from /download response) */
+  tokensUsed: number
 }
 
 const STORAGE_KEY = 'pathfinder.auth'
@@ -14,6 +16,7 @@ export const useAuthStore = defineStore('auth', {
     token: null,
     expiresAt: null,
     user: null,
+    tokensUsed: 0,
   }),
   getters: {
     isActivated: (s) => s.token !== null && s.user !== null,
@@ -21,6 +24,12 @@ export const useAuthStore = defineStore('auth', {
     displayName: (s) => s.user?.username ?? 'guest',
     canDownload(): boolean {
       return this.isActivated
+    },
+    monthlyQuotaTokens(s): number {
+      return s.user?.monthlyQuotaTokens ?? 0
+    },
+    tokensRemaining(): number {
+      return Math.max(0, this.monthlyQuotaTokens - this.tokensUsed)
     },
   },
   actions: {
@@ -65,7 +74,13 @@ export const useAuthStore = defineStore('auth', {
       this.token = null
       this.expiresAt = null
       this.user = null
+      this.tokensUsed = 0
       if (import.meta.client) localStorage.removeItem(STORAGE_KEY)
+    },
+
+    /** /download レスポンスの remaining_tokens を反映 */
+    applyRemainingTokens(remaining: number) {
+      this.tokensUsed = Math.max(0, this.monthlyQuotaTokens - remaining)
     },
 
     hydrate() {

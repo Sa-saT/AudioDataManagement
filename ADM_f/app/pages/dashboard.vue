@@ -20,12 +20,12 @@ const countDigits = computed(() =>
   Math.max(2, audios.total.toString().length),
 )
 
-// Token quota — read from authenticated user license; usage stays mocked until Phase 3 BE
-const monthlyQuota = computed(() => auth.user?.monthlyQuotaTokens ?? 0)
-const mockUsed = 12_438
+// Token quota: monthlyQuota from license, used 累計は DL レスポンスで auth に反映
+const monthlyQuota = computed(() => auth.monthlyQuotaTokens)
+const tokensUsed = computed(() => auth.tokensUsed)
 const tokenPct = computed(() => {
   if (monthlyQuota.value === 0) return 0
-  return Math.round((mockUsed / monthlyQuota.value) * 100)
+  return Math.round((tokensUsed.value / monthlyQuota.value) * 100)
 })
 const tokenLow = computed(() => tokenPct.value >= 90)
 
@@ -124,7 +124,7 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
           <div class="flex justify-between font-mono text-[11px] text-muted">
             <span>TOKENS</span>
             <span :class="tokenLow ? 'text-accent' : ''">
-              {{ mockUsed.toLocaleString('ja-JP') }} / {{ monthlyQuota.toLocaleString('ja-JP') }}
+              {{ tokensUsed.toLocaleString('ja-JP') }} / {{ monthlyQuota.toLocaleString('ja-JP') }}
             </span>
           </div>
           <div class="h-1 overflow-hidden rounded-full border border-hairline-soft bg-white/50">

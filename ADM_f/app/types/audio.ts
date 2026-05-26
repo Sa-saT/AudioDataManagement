@@ -48,6 +48,14 @@ export interface AudioTrack {
 
 export type SortKey = 'recommended' | 'newest'
 
+/** POST /audios/{id}/download response */
+export interface DownloadApiResponse {
+  download_url: string
+  is_redownload: boolean
+  token_cost: number | null
+  remaining_tokens: number | null
+}
+
 /**
  * Backend は peaks を「ファイル全体の max で正規化済み」で返すが、
  * 大半が大音量の曲だと値が 0.99 近辺に密集して波形が "ベタ塗り" に見える。

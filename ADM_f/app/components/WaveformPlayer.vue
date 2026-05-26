@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import WaveSurfer from 'wavesurfer.js'
+import { useStreamPlayer } from '~/composables/useStreamPlayer'
 
 const props = defineProps<{
+  /** Audio ID (uuid). Required for real streaming. */
+  audioId: string
   peaks: number[]
   durationSec: number
-  src?: string
 }>()
 
 const containerRef = ref<HTMLDivElement | null>(null)
 const ws = ref<WaveSurfer | null>(null)
-const isPlaying = ref(false)
-const currentTime = ref(0)
+
+const player = useStreamPlayer(props.audioId)
 
 const formatTime = (sec: number) => {
   const m = Math.floor(sec / 60)
@@ -19,12 +21,16 @@ const formatTime = (sec: number) => {
 }
 
 const totalLabel = computed(() => formatTime(props.durationSec))
-const currentLabel = computed(() => formatTime(currentTime.value))
+const currentLabel = computed(() => formatTime(player.currentTime.value))
 
 function buildWavePeaks(): [number[], number[]] {
-  // wavesurfer accepts dual-channel arrays (top/bottom). We mirror the same peaks.
   return [props.peaks, props.peaks.map((p) => -p)]
 }
+
+// WaveSurfer の表示用 progress を currentTime に同期
+watch(() => player.currentTime.value, (t) => {
+  if (ws.value) ws.value.setTime(t)
+})
 
 onMounted(() => {
   if (!containerRef.value) return
@@ -43,73 +49,46 @@ onMounted(() => {
     duration: props.durationSec,
   })
 
-  ws.value.on('play', () => (isPlaying.value = true))
-  ws.value.on('pause', () => (isPlaying.value = false))
-  ws.value.on('finish', () => {
-    isPlaying.value = false
-    currentTime.value = 0
-  })
-  ws.value.on('timeupdate', (t) => {
-    currentTime.value = t
-  })
+  // クリック位置 (0..1 の比率) を秒に変換して seekTo
   ws.value.on('interaction', (t) => {
-    currentTime.value = t
+    // t は秒 (duration が与えられているので直接秒数)
+    void player.seekTo(t)
   })
 })
 
 onBeforeUnmount(() => {
+  player.stop()
   ws.value?.destroy()
   ws.value = null
 })
 
-function toggle() {
-  if (!ws.value) return
-  // No real audio loaded → simulate playback via timer for the mock.
-  if (!props.src) {
-    if (isPlaying.value) {
-      stopMock()
-    } else {
-      startMock()
-    }
-    return
+async function toggle() {
+  if (player.isPlaying.value) {
+    player.pause()
+  } else {
+    await player.resume()
   }
-  ws.value.playPause()
 }
 
-let mockTimer: ReturnType<typeof setInterval> | null = null
-function startMock() {
-  isPlaying.value = true
-  mockTimer = setInterval(() => {
-    currentTime.value = Math.min(currentTime.value + 0.1, props.durationSec)
-    ws.value?.setTime(currentTime.value)
-    if (currentTime.value >= props.durationSec) stopMock(true)
-  }, 100)
-}
-function stopMock(reset = false) {
-  isPlaying.value = false
-  if (mockTimer) clearInterval(mockTimer)
-  mockTimer = null
-  if (reset) {
-    currentTime.value = 0
-    ws.value?.setTime(0)
-  }
-}
-onBeforeUnmount(() => {
-  if (mockTimer) clearInterval(mockTimer)
+defineExpose({
+  isPlaying: computed(() => player.isPlaying.value),
 })
-
-defineExpose({ isPlaying })
 </script>
 
 <template>
   <div class="flex items-center gap-3">
     <button
       class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors"
-      :class="isPlaying ? 'bg-primary text-white' : 'bg-ink text-canvas hover:bg-primary'"
-      :aria-label="isPlaying ? 'Pause' : 'Play'"
+      :class="player.isPlaying.value ? 'bg-primary text-white' : 'bg-ink text-canvas hover:bg-primary'"
+      :aria-label="player.isPlaying.value ? 'Pause' : 'Play'"
+      :disabled="player.isLoading.value"
       @click="toggle"
     >
-      <svg v-if="!isPlaying" width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+      <!-- Loading spinner -->
+      <svg v-if="player.isLoading.value" class="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+      </svg>
+      <svg v-else-if="!player.isPlaying.value" width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
         <path d="M3 1.5v11l9-5.5z" />
       </svg>
       <svg v-else width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
@@ -119,7 +98,7 @@ defineExpose({ isPlaying })
     </button>
 
     <div class="min-w-0 flex-1">
-      <div ref="containerRef" class="w-full"></div>
+      <div ref="containerRef" class="w-full" />
       <div class="mt-1 flex items-center gap-3">
         <span class="font-mono text-[11px] text-muted">
           {{ currentLabel }} / {{ totalLabel }}

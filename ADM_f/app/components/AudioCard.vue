@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import type { AudioTrack } from '~/types/audio'
+import type { AudioTrack, DownloadApiResponse } from '~/types/audio'
 import { useAuthStore } from '~/stores/auth'
+import { useAudiosStore } from '~/stores/audios'
+import { errorMessageJa } from '~/utils/errorMessageJa'
 
 const props = defineProps<{ track: AudioTrack }>()
 const auth = useAuthStore()
+const audios = useAudiosStore()
 
 const playerRef = ref<{ isPlaying: boolean } | null>(null)
 const isPlaying = computed(() => playerRef.value?.isPlaying ?? false)
@@ -24,12 +27,51 @@ const showFavCount = computed(() =>
   auth.role === 'creator' || auth.role === 'admin'
 )
 
-const onDownload = () => {
+// ─── Download flow ───────────────────────────────
+const confirmOpen = ref(false)
+const dlLoading = ref(false)
+const dlError = ref<string | null>(null)
+
+function openConfirm() {
   if (!auth.canDownload) {
     alert('音源をダウンロードするには Activate してください。')
     return
   }
-  alert(`(mock) ダウンロード開始: ${props.track.title}`)
+  if (auth.tokensRemaining < props.track.tokenCost) {
+    alert(`トークン残量が不足しています。必要 ${props.track.tokenCost} / 残量 ${auth.tokensRemaining}`)
+    return
+  }
+  dlError.value = null
+  confirmOpen.value = true
+}
+
+async function executeDownload() {
+  dlLoading.value = true
+  dlError.value = null
+  try {
+    const api = useApi()
+    const res = await api.post<DownloadApiResponse>(
+      `/api/v1/audios/${props.track.id}/download`,
+    )
+    if (res.remaining_tokens !== null) {
+      auth.applyRemainingTokens(res.remaining_tokens)
+    }
+    // ファイル保存をブラウザに任せる
+    const a = document.createElement('a')
+    a.href = res.download_url
+    a.download = ''
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+
+    confirmOpen.value = false
+    // 単発販売: 売切のため一覧から除去
+    audios.removeAudio(props.track.id)
+  } catch (err: unknown) {
+    dlError.value = errorMessageJa(err)
+  } finally {
+    dlLoading.value = false
+  }
 }
 </script>
 
@@ -39,12 +81,11 @@ const onDownload = () => {
     :class="isPlaying ? 'border-primary' : 'hover:border-primary'"
     style="grid-template-columns: 260px 1fr"
   >
-    <!-- Left: waveform + (time + ♥ + DL inline below waveform) -->
     <WaveformPlayer
       ref="playerRef"
+      :audio-id="track.id"
       :peaks="track.peaks"
       :duration-sec="track.durationSec"
-      :src="track.src"
     >
       <template #actions>
         <button
@@ -63,9 +104,10 @@ const onDownload = () => {
         </button>
 
         <button
-          class="flex items-center justify-center rounded-md border border-hairline bg-white/60 p-1 text-muted transition-colors hover:border-primary hover:text-primary-active"
-          aria-label="ダウンロード"
-          @click.stop="onDownload"
+          class="flex items-center justify-center rounded-md border border-hairline bg-white/60 p-1 text-muted transition-colors hover:border-primary hover:text-primary-active disabled:opacity-40"
+          :disabled="!auth.canDownload"
+          :aria-label="auth.canDownload ? 'ダウンロード' : 'ダウンロード (Activate 必須)'"
+          @click.stop="openConfirm"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>
@@ -74,7 +116,6 @@ const onDownload = () => {
       </template>
     </WaveformPlayer>
 
-    <!-- Right: meta + tags -->
     <div class="min-w-0 pt-1">
       <div class="flex items-center gap-2">
         <span class="truncate text-[14px] font-medium text-ink">{{ track.title }}</span>
@@ -89,6 +130,8 @@ const onDownload = () => {
           <span class="h-1 w-1 rounded-full bg-muted-soft" />
         </template>
         <span class="font-mono">{{ track.youtubeSafe ? 'YT安心' : 'YT要確認' }}</span>
+        <span class="h-1 w-1 rounded-full bg-muted-soft" />
+        <span class="font-mono">{{ track.tokenCost }} tk</span>
       </div>
       <div v-if="track.tags?.length" class="mt-1.5 flex flex-wrap gap-1">
         <span
@@ -98,5 +141,29 @@ const onDownload = () => {
         >{{ tag }}</span>
       </div>
     </div>
+
+    <!-- DL 確認モーダル -->
+    <ConfirmModal
+      v-model:open="confirmOpen"
+      title="ダウンロードの確認"
+      :confirm-label="`${track.tokenCost} tk を消費して購入`"
+      cancel-label="やめる"
+      :confirm-loading="dlLoading"
+      :error-message="dlError"
+      @confirm="executeDownload"
+    >
+      <p class="mb-2">
+        <span class="font-medium text-ink">{{ track.title }}</span>
+        をダウンロードします。
+      </p>
+      <p class="text-[12px] text-muted">
+        この音源は <span class="text-accent font-medium">単発販売</span> のため、
+        ダウンロード後は他ユーザの Dashboard から消えます。再ダウンロードは My Downloads から無料です。
+      </p>
+      <p class="mt-3 font-mono text-[12px]">
+        消費: <span class="text-accent font-semibold">{{ track.tokenCost }} tk</span>
+        / 残量見込: {{ Math.max(0, auth.tokensRemaining - track.tokenCost) }} tk
+      </p>
+    </ConfirmModal>
   </div>
 </template>
