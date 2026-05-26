@@ -215,8 +215,12 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
         </Transition>
       </div>
 
-      <!-- Per-page stepper -->
-      <div class="flex shrink-0 items-center gap-1 font-mono text-[12px]">
+      <!-- Per-page stepper — total が最小選択肢未満のときは非表示 -->
+      <div
+        v-if="audios.total >= perPageOptions[0]"
+        class="flex shrink-0 items-center gap-1 font-mono text-[12px]"
+      >
+        <span class="text-[10px] font-semibold uppercase tracking-widest text-muted">件/頁</span>
         <button
           class="rounded-sm px-2 py-1 text-muted hover:text-ink disabled:opacity-30"
           :disabled="audios.perPage === perPageOptions[0]"

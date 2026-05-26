@@ -48,6 +48,24 @@ export interface AudioTrack {
 
 export type SortKey = 'recommended' | 'newest'
 
+/**
+ * Backend は peaks を「ファイル全体の max で正規化済み」で返すが、
+ * 大半が大音量の曲だと値が 0.99 近辺に密集して波形が "ベタ塗り" に見える。
+ * クライアント側で min-max を 0..1 に拡げて視覚的コントラストを確保する。
+ */
+function spreadPeaks(peaks: number[]): number[] {
+  if (peaks.length === 0) return peaks
+  let min = Infinity
+  let max = -Infinity
+  for (const p of peaks) {
+    if (p < min) min = p
+    if (p > max) max = p
+  }
+  const range = max - min
+  if (range < 1e-6) return peaks.map(() => 0.5)
+  return peaks.map((p) => (p - min) / range)
+}
+
 /** Map API → frontend domain */
 export function mapApiAudio(api: ApiAudioListItem): AudioTrack {
   return {
@@ -58,7 +76,7 @@ export function mapApiAudio(api: ApiAudioListItem): AudioTrack {
     creatorName: api.creator.display_name,
     durationSec: api.duration_sec,
     tokenCost: api.token_cost,
-    peaks: api.peaks,
+    peaks: spreadPeaks(api.peaks),
     youtubeSafe: api.youtube_safe,
     publishedAt: api.published_at,
     tags: [],
