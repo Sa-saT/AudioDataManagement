@@ -65,10 +65,13 @@ function deactivate() {
   closeMenu()
 }
 
-function goDownloads() {
-  router.push('/downloads')
+function goTo(path: string) {
+  router.push(path)
   closeMenu()
 }
+
+const isCreator = computed(() => auth.role === 'creator' || auth.role === 'admin')
+const isAdmin = computed(() => auth.role === 'admin')
 </script>
 
 <template>
@@ -142,15 +145,41 @@ function goDownloads() {
               Deactivate
             </button>
 
-            <!-- Downloads -->
+            <!-- Downloads (all roles) -->
             <button
               class="flex w-full items-center gap-2 border-t border-hairline-soft px-4 py-2.5 text-left text-[13px] text-ink transition-colors hover:bg-white"
-              @click="goDownloads"
+              @click="goTo('/downloads')"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
               Downloads
+            </button>
+
+            <!-- Uploads (creator / admin) -->
+            <button
+              v-if="isCreator"
+              class="flex w-full items-center gap-2 border-t border-hairline-soft px-4 py-2.5 text-left text-[13px] text-ink transition-colors hover:bg-white"
+              @click="goTo('/uploads')"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              Uploads
+              <span class="ml-auto rounded bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] text-primary-active">creator</span>
+            </button>
+
+            <!-- Admin (admin のみ) -->
+            <button
+              v-if="isAdmin"
+              class="flex w-full items-center gap-2 border-t border-hairline-soft px-4 py-2.5 text-left text-[13px] text-ink transition-colors hover:bg-white"
+              @click="goTo('/admin')"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+              Admin
+              <span class="ml-auto rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[10px] text-accent">admin</span>
             </button>
           </div>
         </Transition>

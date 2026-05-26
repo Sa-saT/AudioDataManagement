@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import License, User, UserRole
+from app.models.creator import CreatorProfile, CreatorRank
 from app.schemas.auth import ActivateJsonRequest, ActivateResponse, UserOut
 from app.security.jwt import create_access_token
 from app.security.license import (
@@ -100,7 +101,26 @@ def _upsert_user_and_license(db: Session, payload: LicensePayload) -> tuple[User
     )
     db.add(license_row)
     db.flush()
+
+    _ensure_creator_profile(db, user, payload.role)
     return user, license_row
+
+
+def _ensure_creator_profile(db: Session, user: User, role: str) -> None:
+    """role=creator/admin で CreatorProfile が無ければ自動作成 (display_name=username)."""
+    if role not in ("creator", "admin"):
+        return
+    profile = db.execute(
+        select(CreatorProfile).where(CreatorProfile.user_id == user.id)
+    ).scalar_one_or_none()
+    if profile is not None:
+        return
+    db.add(CreatorProfile(
+        user_id=user.id,
+        display_name=user.username,
+        rank=CreatorRank.bronze,
+    ))
+    db.flush()
 
 
 @router.post(
