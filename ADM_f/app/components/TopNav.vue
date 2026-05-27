@@ -84,9 +84,7 @@ const isAdmin = computed(() => auth.role === 'admin')
       <!-- Left: brand + nav -->
       <div class="flex items-center gap-8" style="text-shadow:0 1px 3px rgba(255,255,255,0.8);">
         <NuxtLink to="/dashboard" class="flex items-center gap-2 text-[15px] font-bold tracking-[-0.03em] text-ink">
-          <span class="relative flex h-4 w-4 items-center justify-center rounded-full border-[1.5px] border-primary">
-            <span class="h-[5px] w-[5px] rounded-full bg-primary" />
-          </span>
+          <img src="/kapikapi.png" alt="" class="h-6 w-6 object-contain" />
           Pathfinder
         </NuxtLink>
 
