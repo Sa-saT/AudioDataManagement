@@ -128,13 +128,13 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
 
       <div v-if="auth.isActivated" class="flex items-center gap-4">
         <div class="flex min-w-[200px] flex-col gap-1">
-          <div class="flex justify-between font-mono text-[11px] text-body">
+          <div class="flex justify-between font-mono text-[11px] font-semibold text-ink">
             <span>TOKENS</span>
-            <span :class="tokenLow ? 'text-accent' : ''">
+            <span :class="tokenLow ? 'text-accent font-bold' : ''">
               {{ tokensUsed.toLocaleString('ja-JP') }} / {{ monthlyQuota.toLocaleString('ja-JP') }}
             </span>
           </div>
-          <div class="h-1 overflow-hidden rounded-full border border-hairline-soft bg-white/50">
+          <div class="h-1.5 overflow-hidden rounded-full border border-hairline-strong bg-surface-strong">
             <div
               class="h-full rounded-full transition-all"
               :class="tokenLow ? 'bg-accent' : 'bg-primary'"

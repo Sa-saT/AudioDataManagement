@@ -76,8 +76,8 @@ const isAdmin = computed(() => auth.role === 'admin')
 
 <template>
   <header
-    class="sticky top-0 z-10 h-12 border-b border-hairline-soft/40 backdrop-blur-[14px] saturate-150"
-    style="background: rgba(255,255,255,0.06);"
+    class="sticky top-0 z-10 h-12 border-b border-hairline backdrop-blur-[14px] saturate-150"
+    style="background: rgba(255,255,255,0.55);"
   >
     <div class="mx-auto flex h-full max-w-[1200px] items-center justify-between px-6">
 
@@ -109,8 +109,14 @@ const isAdmin = computed(() => auth.role === 'admin')
           aria-label="メニュー"
           @click.stop="toggleMenu"
         >
-          <span v-if="auth.isActivated" class="font-mono text-[11px] uppercase tracking-widest text-muted">{{ auth.role }}</span>
-          <span v-if="auth.isActivated" class="text-[12px]">{{ auth.displayName }}</span>
+          <span v-if="auth.isActivated" class="rounded px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-widest"
+            :style="auth.role === 'admin'
+              ? 'background:#ff634722;color:#c0392b;border:1px solid #ff634755'
+              : auth.role === 'creator'
+                ? 'background:#20b2aa22;color:#0e7a74;border:1px solid #20b2aa55'
+                : 'background:#26251e18;color:#26251e;border:1px solid #26251e30'"
+          >{{ auth.role }}</span>
+          <span v-if="auth.isActivated" class="text-[12px] font-medium text-ink">{{ auth.displayName }}</span>
           <span class="hamburger" :class="{ open: menuOpen }">
             <span class="line line-top"></span>
             <span class="line line-bot"></span>

@@ -137,9 +137,12 @@ async function executeDownload() {
         </button>
 
         <template v-if="isOwnAudio">
-          <!-- 編集ボタン: turquoise 薄め → hover で濃く -->
+          <!-- 編集ボタン: lightseagreen -->
           <button
-            class="flex items-center justify-center rounded-md border border-primary/40 bg-primary/8 p-1 text-primary-active transition-colors hover:border-primary hover:bg-primary/20"
+            class="flex items-center justify-center rounded-md border p-1 transition-colors"
+            style="border-color:#20b2aa55;background:#20b2aa12;color:#20b2aa;"
+            @mouseenter="$event.currentTarget.style.background='#20b2aa22'"
+            @mouseleave="$event.currentTarget.style.background='#20b2aa12'"
             aria-label="編集"
             @click.stop="editOpen = true"
           >
@@ -148,9 +151,12 @@ async function executeDownload() {
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4Z"/>
             </svg>
           </button>
-          <!-- 削除ボタン: 常に琥珀褐色 → hover で濃く -->
+          <!-- 削除ボタン: hotpink -->
           <button
-            class="flex items-center justify-center rounded-md border border-amber-400/60 bg-amber-50/80 p-1 text-amber-700 transition-colors hover:border-amber-500 hover:bg-amber-100"
+            class="flex items-center justify-center rounded-md border p-1 transition-colors"
+            style="border-color:#ff69b455;background:#ff69b412;color:#ff69b4;"
+            @mouseenter="$event.currentTarget.style.background='#ff69b422'"
+            @mouseleave="$event.currentTarget.style.background='#ff69b412'"
             aria-label="削除"
             @click.stop="deleteOpen = true"
           >
