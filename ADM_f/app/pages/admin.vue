@@ -264,11 +264,12 @@ watch(tab, (t) => {
       <button
         v-for="t in ([['users','ユーザ管理'],['payouts','Payout'],['tokens','Token付与'],['licenses','lic発行']] as [Tab, string][])"
         :key="t[0]"
-        class="pb-2 text-[12px] font-semibold text-ink transition-all"
+        class="relative pb-2 text-[12px] font-semibold text-ink transition-all"
         :class="tab === t[0] ? 'filter-active' : 'opacity-40 hover:opacity-70'"
         @click="tab = t[0]"
       >
         {{ t[1] }}
+        <span v-if="tab === t[0]" class="absolute inset-x-0 -bottom-px h-0.5 rounded-sm bg-primary" />
       </button>
     </div>
 
