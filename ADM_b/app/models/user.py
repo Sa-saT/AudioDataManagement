@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Integer, Text
+from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -49,6 +49,7 @@ class License(Base):
         nullable=False,
     )
     monthly_quota_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
+    group_name: Mapped[str | None] = mapped_column(String(64))
     signature: Mapped[str | None] = mapped_column(Text)
     issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

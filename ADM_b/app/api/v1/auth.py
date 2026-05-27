@@ -67,6 +67,7 @@ def _upsert_user_and_license(db: Session, payload: LicensePayload) -> tuple[User
         user.role = UserRole(payload.role)
         license_row.role = UserRole(payload.role)
         license_row.monthly_quota_tokens = payload.monthly_quota_tokens
+        license_row.group_name = payload.raw.get("group") or None
         license_row.signature = payload.signature
         license_row.issued_at = payload.issued_at
         license_row.expires_at = payload.expires_at
@@ -95,6 +96,7 @@ def _upsert_user_and_license(db: Session, payload: LicensePayload) -> tuple[User
         license_code=payload.license_code,
         role=UserRole(payload.role),
         monthly_quota_tokens=payload.monthly_quota_tokens,
+        group_name=payload.raw.get("group") or None,
         signature=payload.signature,
         issued_at=payload.issued_at,
         expires_at=payload.expires_at,
