@@ -22,6 +22,7 @@ const MESSAGES: Record<string, (e?: ApiError) => string> = {
   FORBIDDEN: () => '権限がありません。',
 
   // Download
+  CREATOR_CANNOT_DOWNLOAD: () => '他のクリエイターの音源はダウンロードできません。',
   INSUFFICIENT_TOKENS: (e) => {
     const body = e?.body as { detail?: { required?: number; available?: number } } | undefined
     const req = body?.detail?.required

@@ -28,10 +28,26 @@ const showFavCount = computed(() =>
   auth.role === 'creator' || auth.role === 'admin'
 )
 
-// 自分の音源かどうか
+// 自分の音源かどうか (creator/admin が自分のアップロード音源を見ているとき)
 const isOwnAudio = computed(() =>
   (auth.role === 'creator' || auth.role === 'admin') &&
   auth.user?.id === props.track.creatorId
+)
+
+// DL ボタン表示条件:
+//   user   → 常に表示 (token check あり)
+//   creator → 自分の音源のみ (token不要)
+//   admin  → 常に表示 (token不要)
+const showDlButton = computed(() => {
+  if (auth.role === 'user') return true
+  if (auth.role === 'creator') return isOwnAudio.value
+  if (auth.role === 'admin') return true
+  return false
+})
+
+// admin / creator の DL は token消費なし・sold にしない
+const isFreeDownload = computed(() =>
+  auth.role === 'admin' || auth.role === 'creator'
 )
 
 // ─── Edit flow ───────────────────────────────────
@@ -66,7 +82,8 @@ function openConfirm() {
     alert('音源をダウンロードするには Activate してください。')
     return
   }
-  if (auth.tokensRemaining < props.track.tokenCost) {
+  // user のみ token チェック (creator/admin は token不要)
+  if (!isFreeDownload.value && auth.tokensRemaining < props.track.tokenCost) {
     alert(`トークン残量が不足しています。必要 ${props.track.tokenCost} / 残量 ${auth.tokensRemaining}`)
     return
   }
@@ -135,9 +152,9 @@ async function executeDownload() {
           </span>
         </button>
 
-        <!-- DL ボタン: 自分の音源以外のみ表示 -->
+        <!-- DL ボタン: user=常時 / creator=自分の音源のみ / admin=常時 -->
         <button
-          v-if="!isOwnAudio"
+          v-if="showDlButton"
           class="flex items-center justify-center rounded-md border border-hairline bg-white/60 p-1 text-muted transition-colors hover:border-primary hover:text-primary-active disabled:opacity-40"
           :disabled="!auth.canDownload"
           :aria-label="auth.canDownload ? 'ダウンロード' : 'ダウンロード (Activate 必須)'"
@@ -231,14 +248,23 @@ async function executeDownload() {
         <span class="font-medium text-ink">{{ track.title }}</span>
         をダウンロードします。
       </p>
-      <p class="text-[12px] text-muted">
-        この音源は <span class="text-accent font-medium">単発販売</span> のため、
-        ダウンロード後は他ユーザの Dashboard から消えます。再ダウンロードは My Downloads から無料です。
-      </p>
-      <p class="mt-3 font-mono text-[12px]">
-        消費: <span class="text-accent font-semibold">{{ track.tokenCost }} tk</span>
-        / 残量見込: {{ Math.max(0, auth.tokensRemaining - track.tokenCost) }} tk
-      </p>
+      <!-- user: token消費・sold説明 -->
+      <template v-if="!isFreeDownload">
+        <p class="text-[12px] text-muted">
+          この音源は <span class="text-accent font-medium">単発販売</span> のため、
+          ダウンロード後は他ユーザの Dashboard から消えます。再ダウンロードは My Downloads から無料です。
+        </p>
+        <p class="mt-3 font-mono text-[12px]">
+          消費: <span class="text-accent font-semibold">{{ track.tokenCost }} tk</span>
+          / 残量見込: {{ Math.max(0, auth.tokensRemaining - track.tokenCost) }} tk
+        </p>
+      </template>
+      <!-- creator/admin: 無料・Dashboard残留 -->
+      <template v-else>
+        <p class="text-[12px] text-muted">
+          token消費なし。ダウンロード後も音源は Dashboard に残ります。
+        </p>
+      </template>
     </ConfirmModal>
   </div>
 </template>

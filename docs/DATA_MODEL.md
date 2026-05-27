@@ -287,7 +287,7 @@ Redmine のジャーナル相当。User / Admin / Creator の3者がチケット
 | `id` | UUID | PK | |
 | `user_id` | UUID | FK→users.id, NULLABLE | |
 | `audio_id` | UUID | FK→audios.id, NOT NULL | |
-| `kind` | ENUM(`initial`,`redownload`,`denied_no_token`,`denied_sold`) | NOT NULL | |
+| `kind` | ENUM(`initial`,`redownload`,`denied_no_token`,`denied_sold`,`admin_preview`) | NOT NULL | `admin_preview` = creator(自音源)またはadminによるDL。token消費なし、sold遷移なし |
 | `ip` | INET |  | |
 | `user_agent` | TEXT |  | |
 | `created_at` | TIMESTAMPTZ | NOT NULL DEFAULT now() | |

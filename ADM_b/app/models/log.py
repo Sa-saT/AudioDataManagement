@@ -14,6 +14,8 @@ class DownloadKind(str, enum.Enum):
     redownload = "redownload"
     denied_no_token = "denied_no_token"
     denied_sold = "denied_sold"
+    # creator (own audio) or admin: free, no sold, audio stays on Dashboard
+    admin_preview = "admin_preview"
 
 
 class DownloadLog(Base):

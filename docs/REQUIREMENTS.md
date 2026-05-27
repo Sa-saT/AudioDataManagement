@@ -33,8 +33,8 @@
 |---|---|---|
 | **guest** | 未アクティベート | 公開音源の閲覧・視聴 (ストリーミング再生) のみ。ダウンロード不可 |
 | **user** | `.lic` ファイル (role=user) | 視聴 / ダウンロード (token消費) / ダウンロード済み再取得 / お気に入り |
-| **creator** | `.lic` ファイル (role=creator) | user権限に加え、音源アップロード / 編集 / 削除 / 公開設定。**ただし sold 状態 (= 誰かにDLされた) の音源に対する一切の編集・削除権限を失う。** |
-| **admin** | `.lic` ファイル (role=admin) | 全リソース管理、ユーザ/クリエイター管理、ランク変更、システム設定、lic発行、token手動付与、Creator支払い承認。**sold状態の音源も含め全音源の編集・削除が可能。** |
+| **creator** | `.lic` ファイル (role=creator) | 音源アップロード / 編集 / 削除 / 公開設定。**自身がアップロードした音源のみ DL可能 (token消費なし、sold遷移なし)**。他の Creator 音源は DL 不可。**sold 状態の音源に対する編集・削除権限を失う。** |
+| **admin** | `.lic` ファイル (role=admin) | 全リソース管理、ユーザ/クリエイター管理、ランク変更、システム設定、lic発行、token手動付与、Creator支払い承認。**全音源 DL可能 (token消費なし、sold遷移なし)**。sold状態の音源も含め編集・削除が可能。 |
 
 > サイト初回アクセス時は guest として Dashboard が表示される。`/activate` で `.lic` を適用するとユーザ名・ロール・月間token量が反映される。
 
@@ -84,6 +84,8 @@
 - FR-DL-07: DL成功時、原本のコピーが購入者の Downloads ストレージ (`/storage/downloads/{user_id}/{audio_id}.wav`) に保存される。以降、購入者は signed URL 経由でこのコピーから再DLできる (FR-MYDL-03)。
 - FR-DL-08: 購入者の Downloads ストレージには licファイルで設定した容量上限 (`max_download_storage_bytes`) がある。DL後のコピー格納でこの上限を超える場合は DL 不可とし、「ストレージ容量が不足しています」を表示する。
 - FR-DL-09: **sold状態に遷移した音源に対して、アップロード元 Creator の編集・削除権限は即座に消滅する。** その後の管理権限は Admin のみが持つ。購入者 (DL user) は自身の Downloads ストレージ内のコピーのみ管理できる (削除してストレージを解放可能)。
+- FR-DL-10: **Creator は自身がアップロードした音源のみ DL可能。** token消費なし。DL しても音源は sold 状態に遷移しない (`downloaded_by_user_id` は変更されない)。他の Creator の音源はDL不可 (`CREATOR_CANNOT_DOWNLOAD`)。ログには `admin_preview` として記録する。
+- FR-DL-11: **Admin は全音源を DL可能。** token消費なし。DL しても音源は sold 状態に遷移しない。ログには `admin_preview` として記録する。
 
 ### 5.5 My Downloads (ダウンロード済み一覧)
 

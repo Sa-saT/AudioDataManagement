@@ -332,6 +332,40 @@ def download_audio(
 
     ip = _client_ip(request)
     ua = request.headers.get("user-agent")
+    role = current_user.role.value
+
+    # ── creator: 自分の音源のみ DL可。token不要、sold にしない ────────────────
+    if role == "creator":
+        if audio.creator_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"code": "CREATOR_CANNOT_DOWNLOAD", "message": "creators can only download their own audio"},
+            )
+        db.add(DownloadLog(
+            user_id=current_user.id, audio_id=parsed_id,
+            kind=DownloadKind.admin_preview, ip=ip, user_agent=ua,
+        ))
+        db.commit()
+        params = issue_download(str(parsed_id))
+        return DownloadResponse(
+            download_url=_build_url("/api/v1/audios/download-file", params),
+            is_redownload=False,
+        )
+
+    # ── admin: 全音源 DL可。token不要、sold にしない ──────────────────────────
+    if role == "admin":
+        db.add(DownloadLog(
+            user_id=current_user.id, audio_id=parsed_id,
+            kind=DownloadKind.admin_preview, ip=ip, user_agent=ua,
+        ))
+        db.commit()
+        params = issue_download(str(parsed_id))
+        return DownloadResponse(
+            download_url=_build_url("/api/v1/audios/download-file", params),
+            is_redownload=False,
+        )
+
+    # ── user: 以下は通常の購入フロー ──────────────────────────────────────────
 
     # Re-download by the original buyer: no token consumption, no payout.
     if audio.downloaded_by_user_id == current_user.id:
@@ -358,7 +392,7 @@ def download_audio(
             detail={"code": "ALREADY_SOLD", "message": "this audio has already been purchased by another user"},
         )
 
-    # Initial purchase.
+    # Initial purchase: token check, mark sold, create payout.
     license_obj = current_user.license
     if license_obj is None:
         raise HTTPException(
@@ -440,6 +474,31 @@ def get_download_url(
     audio = db.execute(select(Audio).where(Audio.id == parsed_id)).scalar_one_or_none()
     if audio is None:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "audio not found"})
+
+    role = current_user.role.value
+    ip = _client_ip(request)
+    ua = request.headers.get("user-agent")
+
+    # admin: 全音源を何度でも再DL可
+    if role == "admin":
+        db.add(DownloadLog(user_id=current_user.id, audio_id=parsed_id,
+                           kind=DownloadKind.admin_preview, ip=ip, user_agent=ua))
+        db.commit()
+        params = issue_download(str(parsed_id))
+        return DownloadResponse(download_url=_build_url("/api/v1/audios/download-file", params), is_redownload=True)
+
+    # creator: 自分の音源のみ再DL可
+    if role == "creator":
+        if audio.creator_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                                detail={"code": "CREATOR_CANNOT_DOWNLOAD", "message": "creators can only download their own audio"})
+        db.add(DownloadLog(user_id=current_user.id, audio_id=parsed_id,
+                           kind=DownloadKind.admin_preview, ip=ip, user_agent=ua))
+        db.commit()
+        params = issue_download(str(parsed_id))
+        return DownloadResponse(download_url=_build_url("/api/v1/audios/download-file", params), is_redownload=True)
+
+    # user: 購入済みチェック
     if audio.downloaded_by_user_id is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -451,10 +510,8 @@ def get_download_url(
             detail={"code": "NOT_OWNER", "message": "you do not own this audio"},
         )
 
-    db.add(DownloadLog(
-        user_id=current_user.id, audio_id=parsed_id,
-        kind=DownloadKind.redownload, ip=_client_ip(request), user_agent=request.headers.get("user-agent"),
-    ))
+    db.add(DownloadLog(user_id=current_user.id, audio_id=parsed_id,
+                       kind=DownloadKind.redownload, ip=ip, user_agent=ua))
     db.commit()
 
     params = issue_download(str(parsed_id))
