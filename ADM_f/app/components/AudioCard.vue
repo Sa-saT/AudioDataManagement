@@ -7,6 +7,7 @@ import { errorMessageJa } from '~/utils/errorMessageJa'
 const props = defineProps<{ track: AudioTrack }>()
 const auth = useAuthStore()
 const audios = useAudiosStore()
+const api = useApi()
 
 const playerRef = ref<{ isPlaying: boolean } | null>(null)
 const isPlaying = computed(() => playerRef.value?.isPlaying ?? false)
@@ -45,7 +46,6 @@ async function executeDelete() {
   delLoading.value = true
   delError.value = null
   try {
-    const api = useApi()
     await api.delete(`/api/v1/audios/${props.track.id}`)
     deleteOpen.value = false
     audios.removeAudio(props.track.id)
@@ -78,7 +78,6 @@ async function executeDownload() {
   dlLoading.value = true
   dlError.value = null
   try {
-    const api = useApi()
     const res = await api.post<DownloadApiResponse>(
       `/api/v1/audios/${props.track.id}/download`,
     )
@@ -185,27 +184,13 @@ async function executeDownload() {
 
       <!-- 編集・削除ボタン (最右、自分の音源のみ) -->
       <div v-if="isOwnAudio" class="flex shrink-0 items-center gap-1.5 pt-0.5">
-        <button
-          class="flex items-center justify-center rounded-md border p-1.5 transition-colors"
-          style="border-color:#20b2aa55;background:#20b2aa10;color:#20b2aa;"
-          @mouseenter="$event.currentTarget.style.background='#20b2aa20'"
-          @mouseleave="$event.currentTarget.style.background='#20b2aa10'"
-          aria-label="編集"
-          @click.stop="editOpen = true"
-        >
+        <button class="btn-edit flex items-center justify-center rounded-md border p-1.5" aria-label="編集" @click.stop="editOpen = true">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4Z"/>
           </svg>
         </button>
-        <button
-          class="flex items-center justify-center rounded-md border p-1.5 transition-colors"
-          style="border-color:#ff69b455;background:#ff69b410;color:#ff69b4;"
-          @mouseenter="$event.currentTarget.style.background='#ff69b420'"
-          @mouseleave="$event.currentTarget.style.background='#ff69b410'"
-          aria-label="削除"
-          @click.stop="deleteOpen = true"
-        >
+        <button class="btn-delete flex items-center justify-center rounded-md border p-1.5" aria-label="削除" @click.stop="deleteOpen = true">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
           </svg>
@@ -257,3 +242,10 @@ async function executeDownload() {
     </ConfirmModal>
   </div>
 </template>
+
+<style scoped>
+.btn-edit  { border-color:#20b2aa55; background:#20b2aa10; color:#20b2aa; transition:background 150ms; }
+.btn-edit:hover  { background:#20b2aa22; }
+.btn-delete { border-color:#ff69b455; background:#ff69b410; color:#ff69b4; transition:background 150ms; }
+.btn-delete:hover { background:#ff69b422; }
+</style>
