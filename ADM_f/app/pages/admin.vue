@@ -217,7 +217,7 @@ async function issueLic() {
     const body: Record<string, unknown> = {
       username: licUsername.value.trim(),
       role: licRole.value,
-      monthly_quota_tokens: licQuota.value,
+      ...(licRole.value === 'user' ? { monthly_quota_tokens: licQuota.value } : {}),
     }
     if (licExpires.value) body.expires_at = new Date(licExpires.value).toISOString()
 
@@ -304,7 +304,7 @@ watch(tab, (t) => {
               <p class="truncate text-[13px] font-medium text-ink">{{ u.username }}</p>
               <p class="font-mono text-[11px] text-muted">
                 {{ u.license_code ?? '—' }}
-                <span v-if="u.monthly_quota_tokens !== null"> / {{ u.monthly_quota_tokens.toLocaleString() }} tk/月</span>
+                <span v-if="u.role === 'user' && u.monthly_quota_tokens !== null"> / {{ u.monthly_quota_tokens.toLocaleString() }} tk/月</span>
               </p>
             </div>
 
@@ -522,7 +522,7 @@ watch(tab, (t) => {
             </div>
           </div>
 
-          <div>
+          <div v-if="licRole === 'user'">
             <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.07em] text-body-strong">月間 token</label>
             <div class="flex items-center gap-2">
               <input

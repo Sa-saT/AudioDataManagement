@@ -69,7 +69,8 @@ class TokenGrantResult(BaseModel):
 class LicIssueRequest(BaseModel):
     username: str = Field(..., min_length=1, max_length=32)
     role: str
-    monthly_quota_tokens: int = Field(..., ge=0)
+    # user のみ意味を持つ。creator/admin は省略可 (デフォルト 0)
+    monthly_quota_tokens: int = Field(0, ge=0)
     expires_at: datetime | None = None
 
 class LicIssuePreview(BaseModel):
