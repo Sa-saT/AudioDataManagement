@@ -136,77 +136,80 @@ async function executeDownload() {
           </span>
         </button>
 
-        <template v-if="isOwnAudio">
-          <!-- 編集ボタン: lightseagreen -->
-          <button
-            class="flex items-center justify-center rounded-md border p-1 transition-colors"
-            style="border-color:#20b2aa55;background:#20b2aa12;color:#20b2aa;"
-            @mouseenter="$event.currentTarget.style.background='#20b2aa22'"
-            @mouseleave="$event.currentTarget.style.background='#20b2aa12'"
-            aria-label="編集"
-            @click.stop="editOpen = true"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4Z"/>
-            </svg>
-          </button>
-          <!-- 削除ボタン: hotpink -->
-          <button
-            class="flex items-center justify-center rounded-md border p-1 transition-colors"
-            style="border-color:#ff69b455;background:#ff69b412;color:#ff69b4;"
-            @mouseenter="$event.currentTarget.style.background='#ff69b422'"
-            @mouseleave="$event.currentTarget.style.background='#ff69b412'"
-            aria-label="削除"
-            @click.stop="deleteOpen = true"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
-            </svg>
-          </button>
-        </template>
-        <template v-else>
-          <button
-            class="flex items-center justify-center rounded-md border border-hairline bg-white/60 p-1 text-muted transition-colors hover:border-primary hover:text-primary-active disabled:opacity-40"
-            :disabled="!auth.canDownload"
-            :aria-label="auth.canDownload ? 'ダウンロード' : 'ダウンロード (Activate 必須)'"
-            @click.stop="openConfirm"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>
-            </svg>
-          </button>
-        </template>
+        <!-- DL ボタン: 自分の音源以外のみ表示 -->
+        <button
+          v-if="!isOwnAudio"
+          class="flex items-center justify-center rounded-md border border-hairline bg-white/60 p-1 text-muted transition-colors hover:border-primary hover:text-primary-active disabled:opacity-40"
+          :disabled="!auth.canDownload"
+          :aria-label="auth.canDownload ? 'ダウンロード' : 'ダウンロード (Activate 必須)'"
+          @click.stop="openConfirm"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>
+          </svg>
+        </button>
       </template>
     </WaveformPlayer>
 
-    <div class="min-w-0 pt-1">
-      <div class="flex items-center gap-2">
-        <span class="truncate text-[14px] font-medium text-ink">{{ track.title }}</span>
-        <span
-          v-if="isNew"
-          class="shrink-0 rounded-[3px] bg-accent px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-widest text-white"
-        >NEW</span>
-        <span
-          v-if="isOwnAudio && track.isPublic === false"
-          class="shrink-0 rounded-[3px] border border-muted-soft px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-widest text-muted"
-        >DRAFT</span>
-      </div>
-      <div class="mt-0.5 flex items-center gap-2 text-[12px] text-body">
-        <template v-if="showCreator">
-          <span>{{ track.creatorName }}</span>
+    <div class="flex min-w-0 items-start gap-2 pt-1">
+      <!-- メタ情報 -->
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-2">
+          <span class="truncate text-[14px] font-medium text-ink">{{ track.title }}</span>
+          <span
+            v-if="isNew"
+            class="shrink-0 rounded-[3px] bg-accent px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-widest text-white"
+          >NEW</span>
+          <span
+            v-if="isOwnAudio && track.isPublic === false"
+            class="shrink-0 rounded-[3px] border border-muted-soft px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-widest text-muted"
+          >DRAFT</span>
+        </div>
+        <div class="mt-0.5 flex items-center gap-2 text-[12px] text-body">
+          <template v-if="showCreator">
+            <span>{{ track.creatorName }}</span>
+            <span class="h-1 w-1 rounded-full bg-muted" />
+          </template>
+          <span class="font-mono">{{ track.youtubeSafe ? 'YT安心' : 'YT要確認' }}</span>
           <span class="h-1 w-1 rounded-full bg-muted" />
-        </template>
-        <span class="font-mono">{{ track.youtubeSafe ? 'YT安心' : 'YT要確認' }}</span>
-        <span class="h-1 w-1 rounded-full bg-muted" />
-        <span class="font-mono font-semibold text-ink">{{ track.tokenCost }} tk</span>
+          <span class="font-mono font-semibold text-ink">{{ track.tokenCost }} tk</span>
+        </div>
+        <div v-if="track.tags?.length" class="mt-1.5 flex flex-wrap gap-1">
+          <span
+            v-for="tag in track.tags"
+            :key="tag"
+            class="rounded-full border border-hairline-strong bg-surface-strong/80 px-2 py-0.5 font-mono text-[10px] font-semibold text-body-strong transition-colors hover:border-primary hover:text-primary-active"
+          >{{ tag }}</span>
+        </div>
       </div>
-      <div v-if="track.tags?.length" class="mt-1.5 flex flex-wrap gap-1">
-        <span
-          v-for="tag in track.tags"
-          :key="tag"
-          class="rounded-full border border-hairline-strong bg-surface-strong/80 px-2 py-0.5 font-mono text-[10px] font-semibold text-body-strong transition-colors hover:border-primary hover:text-primary-active"
-        >{{ tag }}</span>
+
+      <!-- 編集・削除ボタン (最右、自分の音源のみ) -->
+      <div v-if="isOwnAudio" class="flex shrink-0 items-center gap-1.5 pt-0.5">
+        <button
+          class="flex items-center justify-center rounded-md border p-1.5 transition-colors"
+          style="border-color:#20b2aa55;background:#20b2aa10;color:#20b2aa;"
+          @mouseenter="$event.currentTarget.style.background='#20b2aa20'"
+          @mouseleave="$event.currentTarget.style.background='#20b2aa10'"
+          aria-label="編集"
+          @click.stop="editOpen = true"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4Z"/>
+          </svg>
+        </button>
+        <button
+          class="flex items-center justify-center rounded-md border p-1.5 transition-colors"
+          style="border-color:#ff69b455;background:#ff69b410;color:#ff69b4;"
+          @mouseenter="$event.currentTarget.style.background='#ff69b420'"
+          @mouseleave="$event.currentTarget.style.background='#ff69b410'"
+          aria-label="削除"
+          @click.stop="deleteOpen = true"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+          </svg>
+        </button>
       </div>
     </div>
 

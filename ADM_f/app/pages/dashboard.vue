@@ -225,7 +225,7 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
       <div class="flex shrink-0 items-center gap-1 font-mono text-[12px]">
         <template v-if="audios.showPerPageStepper">
           <button
-            class="rounded-sm px-2 py-1 text-muted hover:text-ink disabled:opacity-30"
+            class="rounded-sm px-2 py-1 font-semibold text-body-strong hover:text-ink disabled:opacity-30"
             :disabled="audios.perPage === audios.perPageOptions[0]"
             @click="onPrev"
           >◀</button>
@@ -239,7 +239,7 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
             />
           </div>
           <button
-            class="rounded-sm px-2 py-1 text-muted hover:text-ink disabled:opacity-30"
+            class="rounded-sm px-2 py-1 font-semibold text-body-strong hover:text-ink disabled:opacity-30"
             :disabled="audios.perPage === audios.perPageOptions[audios.perPageOptions.length - 1]"
             @click="onNext"
           >▶</button>
@@ -252,13 +252,14 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
         >{{ audios.total }}</div>
 
         <!-- /全 N 件 -->
-        <span class="ml-1 flex items-center gap-0.5 text-body">
-          <span>/ 全</span>
+        <span class="ml-1 flex items-center gap-0.5 rounded-md border border-hairline-strong bg-surface-strong/80 px-2.5 py-1 font-mono text-[12px] font-semibold text-ink">
+          <span class="text-muted">/</span>
+          <span class="mx-0.5">全</span>
           <NumberRoller
             :value="listCount"
             :digits="countDigits"
             :font-size="12"
-            font-weight="500"
+            font-weight="700"
             hide-leading-zeros
           />
           <span>件</span>

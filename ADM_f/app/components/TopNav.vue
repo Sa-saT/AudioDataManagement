@@ -76,13 +76,13 @@ const isAdmin = computed(() => auth.role === 'admin')
 
 <template>
   <header
-    class="sticky top-0 z-10 h-12 border-b border-hairline backdrop-blur-[14px] saturate-150"
-    style="background: rgba(255,255,255,0.55);"
+    class="sticky top-0 z-10 h-12 backdrop-blur-sm"
+    style="background:transparent;"
   >
     <div class="mx-auto flex h-full max-w-[1200px] items-center justify-between px-6">
 
       <!-- Left: brand + nav -->
-      <div class="flex items-center gap-8">
+      <div class="flex items-center gap-8" style="text-shadow:0 1px 3px rgba(255,255,255,0.8);">
         <NuxtLink to="/dashboard" class="flex items-center gap-2 text-[15px] font-bold tracking-[-0.03em] text-ink">
           <span class="relative flex h-4 w-4 items-center justify-center rounded-full border-[1.5px] border-primary">
             <span class="h-[5px] w-[5px] rounded-full bg-primary" />
@@ -106,6 +106,7 @@ const isAdmin = computed(() => auth.role === 'admin')
       <div ref="menuRef" class="relative">
         <button
           class="flex items-center gap-2 px-1 py-1.5 text-[12px] text-ink transition-colors hover:text-primary-active"
+          style="text-shadow:0 1px 3px rgba(255,255,255,0.8);"
           aria-label="メニュー"
           @click.stop="toggleMenu"
         >
