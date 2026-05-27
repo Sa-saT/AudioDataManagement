@@ -114,6 +114,8 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 ## 5.5 料金/トークン制 (重要)
 
 - **単発販売**: 各音源はシステム全体で1人のユーザにのみ DL される。誰か1人が DL した瞬間、その音源は全員の Dashboard から消える。
+- **sold後の権限**: DL完了 (sold状態) になると Creator の編集・削除権限は消滅。以降は Admin のみが管理権限を持つ。購入者は自身の Downloads ストレージ内コピーのみ管理可 (削除でストレージ解放、削除後は再DL不可)。
+- **Downloadsストレージ**: DL成功時に原本コピーを `/storage/downloads/{user_id}/{audio_id}.wav` に格納。lic で設定した容量上限 (`max_download_storage_bytes`) あり。購入者はこのコピーから無制限に再DL可。
 - **DL = token消費 + Creator支払い**: DL時に `audio.duration_sec` を当月の token から差し引き、同時に Creator への支払いレコードを生成する。
 - **試聴は無料**: ストリーミング再生は token を消費しない。
 - **再DLは無料**: My Downloads から何度でも再取得可能 (token消費なし、Creator追加支払いなし)。

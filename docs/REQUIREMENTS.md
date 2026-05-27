@@ -33,8 +33,8 @@
 |---|---|---|
 | **guest** | 未アクティベート | 公開音源の閲覧・視聴 (ストリーミング再生) のみ。ダウンロード不可 |
 | **user** | `.lic` ファイル (role=user) | 視聴 / ダウンロード (token消費) / ダウンロード済み再取得 / お気に入り |
-| **creator** | `.lic` ファイル (role=creator) | user権限に加え、音源アップロード / 編集 / 削除 / 公開設定 |
-| **admin** | `.lic` ファイル (role=admin) | 全リソース管理、ユーザ/クリエイター管理、ランク変更、システム設定、lic発行、token手動付与、Creator支払い承認 |
+| **creator** | `.lic` ファイル (role=creator) | user権限に加え、音源アップロード / 編集 / 削除 / 公開設定。**ただし sold 状態 (= 誰かにDLされた) の音源に対する一切の編集・削除権限を失う。** |
+| **admin** | `.lic` ファイル (role=admin) | 全リソース管理、ユーザ/クリエイター管理、ランク変更、システム設定、lic発行、token手動付与、Creator支払い承認。**sold状態の音源も含め全音源の編集・削除が可能。** |
 
 > サイト初回アクセス時は guest として Dashboard が表示される。`/activate` で `.lic` を適用するとユーザ名・ロール・月間token量が反映される。
 
@@ -81,13 +81,18 @@
 - FR-DL-04: DL成功時、音源の `downloaded_by_user_id` にユーザID、`downloaded_at` に現在時刻が記録される。
 - FR-DL-05: DL成功と同時に Creator に対する支払いレコード (`creator_payouts`) が生成される。
 - FR-DL-06: DL対象ファイルは `.wav` 形式。
+- FR-DL-07: DL成功時、原本のコピーが購入者の Downloads ストレージ (`/storage/downloads/{user_id}/{audio_id}.wav`) に保存される。以降、購入者は signed URL 経由でこのコピーから再DLできる (FR-MYDL-03)。
+- FR-DL-08: 購入者の Downloads ストレージには licファイルで設定した容量上限 (`max_download_storage_bytes`) がある。DL後のコピー格納でこの上限を超える場合は DL 不可とし、「ストレージ容量が不足しています」を表示する。
+- FR-DL-09: **sold状態に遷移した音源に対して、アップロード元 Creator の編集・削除権限は即座に消滅する。** その後の管理権限は Admin のみが持つ。購入者 (DL user) は自身の Downloads ストレージ内のコピーのみ管理できる (削除してストレージを解放可能)。
 
 ### 5.5 My Downloads (ダウンロード済み一覧)
 
 - FR-MYDL-01: メニューから「ダウンロード済み」画面に遷移できる。
 - FR-MYDL-02: 自身が DL した全音源を一覧表示する。
-- FR-MYDL-03: 一覧から音源を再ダウンロードできる (token消費なし、Creator支払いも発生しない)。
+- FR-MYDL-03: 一覧から音源を再ダウンロードできる (token消費なし、Creator支払いも発生しない)。再DL元は `/storage/downloads/{user_id}/{audio_id}.wav` のコピー。
 - FR-MYDL-04: 再DL回数はログ (`download_logs`) に記録されるが課金対象外。
+- FR-MYDL-05: Downloads ストレージの使用量 / 上限 (`max_download_storage_bytes`) を画面上で確認できる。
+- FR-MYDL-06: 一覧からファイルを削除できる。削除するとストレージのコピーが破棄され、容量が解放される。**削除後は再DL不可**。元の音源は sold 状態のため Dashboard にも表示されない。
 
 ### 5.6 月間トークン管理
 
@@ -101,8 +106,8 @@
 ### 5.7 Creator機能 (Phase 3)
 
 - FR-CRT-01: `.wav` ファイルをアップロードできる (タイトル / 公開設定)。ユーザ側に価格設定は存在しない。
-- FR-CRT-02: 自身がアップロードした音源を編集・削除できる (未売却分のみ削除可)。
-- FR-CRT-03: 音源の公開/非公開を切り替えられる。
+- FR-CRT-02: 自身がアップロードした音源を編集・削除できる。**ただし `sold` 状態 (`downloaded_by_user_id` が設定済み) の音源は編集・削除不可。** sold後はその音源への一切の書き込み権限を失う (FR-DL-09)。
+- FR-CRT-03: 音源の公開/非公開を切り替えられる (未売却音源のみ)。
 - FR-CRT-04: 自身の累計 DL 数 / Creator 支払い予定額 / 確定額を確認できる。
 
 ### 5.8 Creator支払い (Phase 3)

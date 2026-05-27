@@ -52,6 +52,7 @@ erDiagram
 | `role` | ENUM | NOT NULL | licファイル内の role |
 | `monthly_quota_tokens` | INTEGER | NOT NULL, CHECK (>=0) | 毎月リセットされる月間DL token量 |
 | `signature` | TEXT |  | HMAC署名 (Phase 2) |
+| `max_download_storage_bytes` | BIGINT | NOT NULL, DEFAULT 0 | Downloads ストレージの容量上限 (0=制限なし)。FR-DL-08 |
 | `issued_at` | TIMESTAMPTZ | NOT NULL | |
 | `expires_at` | TIMESTAMPTZ |  | NULL = 無期限 |
 | `revoked_at` | TIMESTAMPTZ |  | 失効日時 |
@@ -72,9 +73,12 @@ creator ロール限定の追加情報。
 
 音源本体。原本は `/storage/sounds/{id}.wav`。
 `duration_sec` がそのままDL時のtoken消費量となる (1秒=1token)。
-`downloaded_by_user_id` が NULL でない音源は売却済みで、Dashboard 一覧から除外する。
+`downloaded_by_user_id` が NULL でない音源は **sold (売却済み)** で、Dashboard 一覧から除外する。
+
+**sold後の権限:** アップロード元 Creator の編集・削除権限は消滅する。Admin のみ全権を持つ。購入者 (DL user) は自身の Downloads ストレージ内のコピーのみ管理できる (FR-DL-09)。
 
 視聴は **動的チャンク切り出し** (ffmpeg -ss start -t 10 -c:a copy)。事前生成プレビューファイルは持たない。DL は原本ファイルを signed URL で配信。
+DL成功時は購入者の Downloads ストレージ (`/storage/downloads/{user_id}/{id}.wav`) にコピーを保存する (FR-DL-07)。
 
 | 列 | 型 | 制約 | 説明 |
 |---|---|---|---|
@@ -92,8 +96,10 @@ creator ロール限定の追加情報。
 | `youtube_safe` | BOOLEAN | NOT NULL, DEFAULT true | YT利用可否 |
 | `recommend_score` | NUMERIC(6,2) | NOT NULL, DEFAULT 0 | オススメ順ソート用 |
 | `published_at` | TIMESTAMPTZ |  | 公開日時 |
+| `file_size_bytes` | BIGINT | NOT NULL | 原本ファイルサイズ。Downloads ストレージの残量計算に使用 (FR-DL-08) |
 | `downloaded_by_user_id` | UUID | FK→users.id, UNIQUE, NULLABLE | 売却済みなら買い手のID |
 | `downloaded_at` | TIMESTAMPTZ |  | 売却日時 |
+| `download_file_exists` | BOOLEAN | NOT NULL, DEFAULT false | 購入者の Downloads ストレージにコピーが存在するか。購入者が削除すると false になる (FR-MYDL-06) |
 | `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
 
@@ -214,7 +220,10 @@ draft
   └─ published (is_public=true, published_at=now)
        ├─ unpublished (is_public=false, downloaded_by_user_id=NULL)
        └─ sold (downloaded_by_user_id 設定済) ← 終端
-              └─ creator_payouts に1行生成 (status=pending)
+              ├─ creator_payouts に1行生成 (status=pending)
+              ├─ Creator の編集・削除権限消滅 (Admin のみ管理可)
+              ├─ download_file_exists=true (購入者の Downloads ストレージにコピー格納)
+              └─ 購入者がコピー削除 → download_file_exists=false (再DL不可)
 ```
 
 ### CreatorPayout

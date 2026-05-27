@@ -221,62 +221,41 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
         </Transition>
       </div>
 
-      <!-- Per-page + 全件: split pill [◀ count ▶ / 全 N 件] -->
-      <div class="flex shrink-0 items-stretch overflow-hidden rounded-md font-mono text-[12px]">
+      <!-- Per-page + 全件: ◀ count ▶ / 全 N 件 (プレーンテキスト、黒統一) -->
+      <div class="flex shrink-0 items-center gap-1 font-mono text-[12px] font-semibold text-ink">
         <template v-if="audios.showPerPageStepper">
-          <!-- 左: ◀ count ▶ (bg-primary 白文字) -->
-          <div class="flex items-center bg-primary text-white">
-            <button
-              class="px-2 py-1 font-bold opacity-80 transition-opacity hover:opacity-100 disabled:opacity-30"
-              :disabled="audios.perPage === audios.perPageOptions[0]"
-              @click="onPrev"
-            >◀</button>
-            <div class="flex items-center justify-center px-1 py-1">
-              <NumberRoller
-                :value="audios.perPage"
-                :digits="Math.max(2, audios.perPage.toString().length)"
-                :font-size="13"
-                font-weight="700"
-                hide-leading-zeros
-              />
-            </div>
-            <button
-              class="px-2 py-1 font-bold opacity-80 transition-opacity hover:opacity-100 disabled:opacity-30"
-              :disabled="audios.perPage === audios.perPageOptions[audios.perPageOptions.length - 1]"
-              @click="onNext"
-            >▶</button>
-          </div>
-          <!-- 右: / 全 N 件 (bg-primary/12 ink) -->
-          <div class="flex items-center gap-0.5 bg-primary/12 px-2.5 py-1 font-semibold text-ink">
-            <span class="text-primary/60">/</span>
-            <span class="mx-0.5">全</span>
-            <NumberRoller
-              :value="listCount"
-              :digits="countDigits"
-              :font-size="12"
-              font-weight="700"
-              hide-leading-zeros
-            />
-            <span>件</span>
-          </div>
+          <button
+            class="px-1 text-muted transition-colors hover:text-ink disabled:opacity-30"
+            :disabled="audios.perPage === audios.perPageOptions[0]"
+            @click="onPrev"
+          >◀</button>
+          <NumberRoller
+            :value="audios.perPage"
+            :digits="Math.max(2, audios.perPage.toString().length)"
+            :font-size="13"
+            font-weight="700"
+            hide-leading-zeros
+          />
+          <button
+            class="px-1 text-muted transition-colors hover:text-ink disabled:opacity-30"
+            :disabled="audios.perPage === audios.perPageOptions[audios.perPageOptions.length - 1]"
+            @click="onNext"
+          >▶</button>
+        </template>
+        <template v-else>
+          <span>{{ audios.total }}</span>
         </template>
 
-        <!-- total < 5: 静的に count / 全 N 件 -->
-        <template v-else>
-          <div class="flex items-center bg-primary px-3 py-1 font-bold text-white">{{ audios.total }}</div>
-          <div class="flex items-center gap-0.5 bg-primary/12 px-2.5 py-1 font-semibold text-ink">
-            <span class="text-primary/60">/</span>
-            <span class="mx-0.5">全</span>
-            <NumberRoller
-              :value="listCount"
-              :digits="countDigits"
-              :font-size="12"
-              font-weight="700"
-              hide-leading-zeros
-            />
-            <span>件</span>
-          </div>
-        </template>
+        <span class="text-muted">/</span>
+        <span>全</span>
+        <NumberRoller
+          :value="listCount"
+          :digits="countDigits"
+          :font-size="12"
+          font-weight="700"
+          hide-leading-zeros
+        />
+        <span>件</span>
       </div>
     </div>
 
