@@ -93,6 +93,7 @@ async function submit() {
   if (description.value.trim()) form.append('description', description.value.trim())
   form.append('youtube_safe', String(youtubeSafe.value))
   form.append('is_public', String(isPublic.value))
+  form.append('tags_json', JSON.stringify(selectedTags.value))
 
   try {
     await api.post('/api/v1/audios', { body: form })

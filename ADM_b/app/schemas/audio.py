@@ -18,6 +18,7 @@ class AudioListItem(BaseModel):
     peaks: list[Any]
     youtube_safe: bool
     published_at: datetime | None
+    tags: list[str] = []
 
 
 class AudioDetail(AudioListItem):
@@ -26,7 +27,17 @@ class AudioDetail(AudioListItem):
     bit_depth: int
     channels: int
     is_sold: bool
+    is_public: bool
     downloaded_at: datetime | None
+    created_at: datetime | None = None
+
+
+class AudioUpdateRequest(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    youtube_safe: bool | None = None
+    is_public: bool | None = None
+    tags: list[str] | None = None
 
 
 class AudioListResponse(BaseModel):

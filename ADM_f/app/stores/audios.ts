@@ -15,6 +15,7 @@ interface AudiosState {
   perPage: number
   page: number
   searchQuery: string
+  mineOnly: boolean
 }
 
 const STEP = 5
@@ -45,6 +46,7 @@ export const useAudiosStore = defineStore('audios', {
     perPage: DEFAULT_PER_PAGE,
     page: 1,
     searchQuery: '',
+    mineOnly: false,
   }),
   getters: {
     sorted(state): AudioTrack[] {
@@ -82,13 +84,13 @@ export const useAudiosStore = defineStore('audios', {
       this.error = null
       try {
         const api = useApi()
-        const res = await api.get<ApiAudioListResponse>('/api/v1/audios', {
-          query: {
-            sort: this.sort,
-            page: this.page,
-            per_page: this.perPage,
-          },
-        })
+        const query: Record<string, unknown> = {
+          sort: this.sort,
+          page: this.page,
+          per_page: this.perPage,
+        }
+        if (this.mineOnly) query.mine = true
+        const res = await api.get<ApiAudioListResponse>('/api/v1/audios', { query })
         this.items = res.items.map(mapApiAudio)
         this.total = res.total
         // Clamp perPage to valid options after total is known
@@ -137,10 +139,21 @@ export const useAudiosStore = defineStore('audios', {
     setSearch(q: string) {
       this.searchQuery = q
     },
+    setMine(enabled: boolean) {
+      if (this.mineOnly === enabled) return
+      this.mineOnly = enabled
+      this.searchQuery = ''
+      this.page = 1
+      this.fetch()
+    },
     /** DL 成立により一覧から取り除く (単発販売: 売切れ) */
     removeAudio(audioId: string) {
       this.items = this.items.filter((t) => t.id !== audioId)
       if (this.total > 0) this.total -= 1
+    },
+    updateAudio(updated: AudioTrack) {
+      const idx = this.items.findIndex((t) => t.id === updated.id)
+      if (idx !== -1) this.items[idx] = updated
     },
   },
 })

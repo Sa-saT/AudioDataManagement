@@ -1,10 +1,11 @@
+import json
 import re
 import shutil
 import subprocess
 import tempfile
 import uuid
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
@@ -23,16 +24,18 @@ from app.models import (
     PayoutStatus,
     TokenConsumption,
 )
+from app.models.audio import Tag, AudioTag
 from app.models.base import new_uuid
 from app.models.user import User
 from app.schemas.audio import (
     AudioDetail,
     AudioListItem,
     AudioListResponse,
+    AudioUpdateRequest,
     CreatorBrief,
     DownloadResponse,
 )
-from app.security.deps import get_current_user, require_role
+from app.security.deps import get_current_user, get_optional_user, require_role
 from app.security.signed_url import (
     SignedURLError,
     issue_download,
@@ -79,6 +82,7 @@ def _to_list_item(audio: Audio) -> AudioListItem:
         peaks=audio.peaks,
         youtube_safe=audio.youtube_safe,
         published_at=audio.published_at,
+        tags=[t.name for t in audio.tags],
     )
 
 
@@ -87,7 +91,9 @@ def list_audios(
     sort: Literal["recommended", "newest"] = Query("recommended"),
     page: int = Query(1, ge=1),
     per_page: int = Query(10),
+    mine: bool = Query(False),
     db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
 ) -> AudioListResponse:
     if per_page < _MIN_PER_PAGE or per_page > _MAX_PER_PAGE:
         raise HTTPException(
@@ -98,19 +104,30 @@ def list_audios(
             },
         )
 
-    base = (
-        select(Audio)
-        .options(joinedload(Audio.creator))
-        .where(Audio.is_public.is_(True), Audio.downloaded_by_user_id.is_(None))
-    )
+    if mine:
+        if current_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"code": "NOT_AUTHENTICATED", "message": "JWT required for mine=true"},
+            )
+        base = (
+            select(Audio)
+            .options(joinedload(Audio.creator))
+            .where(Audio.creator_id == current_user.id)
+        )
+        order = Audio.created_at.desc()
+    else:
+        base = (
+            select(Audio)
+            .options(joinedload(Audio.creator))
+            .where(Audio.is_public.is_(True), Audio.downloaded_by_user_id.is_(None))
+        )
+        order = Audio.recommend_score.desc() if sort == "recommended" else Audio.published_at.desc()
 
     total: int = db.execute(
-        select(func.count()).select_from(
-            base.subquery()
-        )
+        select(func.count()).select_from(base.subquery())
     ).scalar_one()
 
-    order = Audio.recommend_score.desc() if sort == "recommended" else Audio.published_at.desc()
     rows = db.execute(
         base.order_by(order).offset((page - 1) * per_page).limit(per_page)
     ).scalars().all()
@@ -130,6 +147,7 @@ def upload_audio(
     description: str | None = Form(None),
     youtube_safe: bool = Form(True),
     is_public: bool = Form(False),
+    tags_json: str = Form("[]"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("creator", "admin")),
 ) -> AudioDetail:
@@ -164,6 +182,13 @@ def upload_audio(
         if tmp_path and tmp_path.exists():
             tmp_path.unlink()
 
+    try:
+        tag_names: list[str] = json.loads(tags_json)
+        if not isinstance(tag_names, list):
+            tag_names = []
+    except (json.JSONDecodeError, ValueError):
+        tag_names = []
+
     audio = Audio(
         id=audio_id,
         creator_id=current_user.id,
@@ -179,6 +204,8 @@ def upload_audio(
         is_public=is_public,
     )
     db.add(audio)
+    db.flush()
+    _sync_tags(db, audio, tag_names)
     db.commit()
 
     audio = db.execute(
@@ -458,6 +485,104 @@ def get_stream_url(
     return {"url": _build_url("/api/v1/audios/stream", params)}
 
 
+def _sync_tags(db: Session, audio: Audio, tag_names: list[str]) -> None:
+    """Replace audio's tags with the given list, creating Tag rows as needed."""
+    tag_names = [n.strip().lower() for n in tag_names if n.strip()]
+    existing: dict[str, Tag] = {}
+    if tag_names:
+        rows = db.execute(select(Tag).where(Tag.name.in_(tag_names))).scalars().all()
+        existing = {t.name: t for t in rows}
+        for name in tag_names:
+            if name not in existing:
+                tag = Tag(name=name)
+                db.add(tag)
+                db.flush()
+                existing[name] = tag
+
+    db.execute(
+        AudioTag.__table__.delete().where(AudioTag.audio_id == audio.id)
+    )
+    for name in tag_names:
+        db.add(AudioTag(audio_id=audio.id, tag_id=existing[name].id))
+
+
+@router.put("/{audio_id}", response_model=AudioDetail)
+def update_audio(
+    audio_id: str,
+    body: AudioUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("creator", "admin")),
+) -> AudioDetail:
+    try:
+        parsed_id = uuid.UUID(audio_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "audio not found"})
+
+    audio = db.execute(
+        select(Audio).options(joinedload(Audio.creator)).where(Audio.id == parsed_id)
+    ).scalar_one_or_none()
+    if audio is None:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "audio not found"})
+
+    if current_user.role.value != "admin" and audio.creator_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "FORBIDDEN", "message": "not your audio"},
+        )
+
+    if body.title is not None:
+        audio.title = body.title
+    if body.description is not None:
+        audio.description = body.description
+    if body.youtube_safe is not None:
+        audio.youtube_safe = body.youtube_safe
+    if body.is_public is not None:
+        audio.is_public = body.is_public
+    if body.tags is not None:
+        _sync_tags(db, audio, body.tags)
+
+    db.commit()
+    db.refresh(audio)
+    return _to_detail(audio)
+
+
+@router.delete("/{audio_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_audio(
+    audio_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("creator", "admin")),
+) -> None:
+    try:
+        parsed_id = uuid.UUID(audio_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "audio not found"})
+
+    audio = db.execute(
+        select(Audio).where(Audio.id == parsed_id)
+    ).scalar_one_or_none()
+    if audio is None:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "audio not found"})
+
+    if current_user.role.value != "admin" and audio.creator_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "FORBIDDEN", "message": "not your audio"},
+        )
+
+    if audio.downloaded_by_user_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "AUDIO_ALREADY_SOLD", "message": "cannot delete a sold audio"},
+        )
+
+    file_path = Path(audio.file_path)
+    db.delete(audio)
+    db.commit()
+
+    if file_path.exists():
+        file_path.unlink(missing_ok=True)
+
+
 def _to_detail(audio: Audio) -> AudioDetail:
     return AudioDetail(
         id=str(audio.id),
@@ -471,12 +596,15 @@ def _to_detail(audio: Audio) -> AudioDetail:
         peaks=audio.peaks,
         youtube_safe=audio.youtube_safe,
         published_at=audio.published_at,
+        tags=[t.name for t in audio.tags],
         description=audio.description,
         sample_rate=audio.sample_rate,
         bit_depth=audio.bit_depth,
         channels=audio.channels,
         is_sold=audio.downloaded_by_user_id is not None,
+        is_public=audio.is_public,
         downloaded_at=audio.downloaded_at,
+        created_at=audio.created_at,
     )
 
 

@@ -63,6 +63,9 @@ class Audio(Base, TimestampMixin):
     downloaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     creator: Mapped["CreatorProfile"] = relationship("CreatorProfile", back_populates="audios")
+    tags: Mapped[list["Tag"]] = relationship(
+        "Tag", secondary="audio_tags", lazy="selectin", order_by="Tag.name"
+    )
 
 
 class Tag(Base):

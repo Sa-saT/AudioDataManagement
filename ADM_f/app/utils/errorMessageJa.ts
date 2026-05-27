@@ -18,6 +18,8 @@ const MESSAGES: Record<string, (e?: ApiError) => string> = {
   INVALID_CHANNELS: () => 'ステレオの音源のみ対応しています。',
   AUDIO_TOO_LONG: () => '音源が長すぎます (上限を超えています)。',
   NO_CREATOR_PROFILE: () => 'クリエイタープロファイルが見つかりません。管理者にお問い合わせください。',
+  AUDIO_ALREADY_SOLD: () => '購入済みの音源は削除できません。',
+  FORBIDDEN: () => '権限がありません。',
 
   // Download
   INSUFFICIENT_TOKENS: (e) => {

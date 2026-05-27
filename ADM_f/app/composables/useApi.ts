@@ -78,6 +78,7 @@ export function useApi() {
   return {
     get: <T>(path: string, opts?: ApiRequestOpts) => request<T>(path, 'GET', opts),
     post: <T>(path: string, opts?: ApiRequestOpts) => request<T>(path, 'POST', opts),
+    put: <T>(path: string, opts?: ApiRequestOpts) => request<T>(path, 'PUT', opts),
     delete: <T>(path: string, opts?: ApiRequestOpts) => request<T>(path, 'DELETE', opts),
   }
 }

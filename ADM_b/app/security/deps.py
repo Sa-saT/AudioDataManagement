@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
@@ -35,6 +37,19 @@ def get_current_user(
             detail={"code": "USER_NOT_FOUND", "message": "user not found"},
         )
     return user
+
+
+def get_optional_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: Session = Depends(get_db),
+) -> User | None:
+    if credentials is None:
+        return None
+    try:
+        payload = decode_token(credentials.credentials)
+    except TokenError:
+        return None
+    return db.execute(select(User).where(User.id == payload["sub"])).scalar_one_or_none()
 
 
 def require_role(*roles: str):

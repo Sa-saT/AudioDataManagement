@@ -71,7 +71,14 @@ function highlight(tag: string): string {
 }
 
 function pickTag(tag: string) {
+  audios.setMine(false)
   searchInput.value = tag
+  searchFocused.value = false
+}
+
+function toggleMine() {
+  audios.setMine(!audios.mineOnly)
+  searchInput.value = ''
   searchFocused.value = false
 }
 
@@ -174,6 +181,22 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
             <div class="mb-3 flex items-center justify-between text-[10px] font-semibold uppercase tracking-widest text-muted">
               <span>タグから絞り込み</span>
               <span class="font-mono">{{ filteredTags.length }} / {{ allTags.length }}</span>
+            </div>
+
+            <!-- 自身の音源 (creator/admin のみ) -->
+            <div v-if="auth.role === 'creator' || auth.role === 'admin'" class="mb-3">
+              <button
+                class="flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-colors"
+                :class="audios.mineOnly
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-hairline bg-white/70 text-body hover:border-primary hover:text-ink'"
+                @click="toggleMine"
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                </svg>
+                自身の音源
+              </button>
             </div>
 
             <div v-if="filteredTags.length > 0" class="flex flex-wrap gap-1.5">

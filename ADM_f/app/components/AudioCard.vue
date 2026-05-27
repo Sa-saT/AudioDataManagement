@@ -27,6 +27,35 @@ const showFavCount = computed(() =>
   auth.role === 'creator' || auth.role === 'admin'
 )
 
+// 自分の音源かどうか
+const isOwnAudio = computed(() =>
+  (auth.role === 'creator' || auth.role === 'admin') &&
+  auth.user?.id === props.track.creatorId
+)
+
+// ─── Edit flow ───────────────────────────────────
+const editOpen = ref(false)
+
+// ─── Delete flow ─────────────────────────────────
+const deleteOpen = ref(false)
+const delLoading = ref(false)
+const delError = ref<string | null>(null)
+
+async function executeDelete() {
+  delLoading.value = true
+  delError.value = null
+  try {
+    const api = useApi()
+    await api.delete(`/api/v1/audios/${props.track.id}`)
+    deleteOpen.value = false
+    audios.removeAudio(props.track.id)
+  } catch (err) {
+    delError.value = errorMessageJa(err)
+  } finally {
+    delLoading.value = false
+  }
+}
+
 // ─── Download flow ───────────────────────────────
 const confirmOpen = ref(false)
 const dlLoading = ref(false)
@@ -107,16 +136,41 @@ async function executeDownload() {
           </span>
         </button>
 
-        <button
-          class="flex items-center justify-center rounded-md border border-hairline bg-white/60 p-1 text-muted transition-colors hover:border-primary hover:text-primary-active disabled:opacity-40"
-          :disabled="!auth.canDownload"
-          :aria-label="auth.canDownload ? 'ダウンロード' : 'ダウンロード (Activate 必須)'"
-          @click.stop="openConfirm"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>
-          </svg>
-        </button>
+        <template v-if="isOwnAudio">
+          <!-- 編集ボタン -->
+          <button
+            class="flex items-center justify-center rounded-md border border-hairline bg-white/60 p-1 text-muted transition-colors hover:border-primary hover:text-primary-active"
+            aria-label="編集"
+            @click.stop="editOpen = true"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4Z"/>
+            </svg>
+          </button>
+          <!-- 削除ボタン -->
+          <button
+            class="flex items-center justify-center rounded-md border border-hairline bg-white/60 p-1 text-muted transition-colors hover:border-error hover:text-error"
+            aria-label="削除"
+            @click.stop="deleteOpen = true"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+            </svg>
+          </button>
+        </template>
+        <template v-else>
+          <button
+            class="flex items-center justify-center rounded-md border border-hairline bg-white/60 p-1 text-muted transition-colors hover:border-primary hover:text-primary-active disabled:opacity-40"
+            :disabled="!auth.canDownload"
+            :aria-label="auth.canDownload ? 'ダウンロード' : 'ダウンロード (Activate 必須)'"
+            @click.stop="openConfirm"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>
+            </svg>
+          </button>
+        </template>
       </template>
     </WaveformPlayer>
 
@@ -127,6 +181,10 @@ async function executeDownload() {
           v-if="isNew"
           class="shrink-0 rounded-[3px] bg-accent px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-widest text-white"
         >NEW</span>
+        <span
+          v-if="isOwnAudio && track.isPublic === false"
+          class="shrink-0 rounded-[3px] border border-muted-soft px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-widest text-muted"
+        >DRAFT</span>
       </div>
       <div class="mt-0.5 flex items-center gap-2 text-[12px] text-muted">
         <template v-if="showCreator">
@@ -145,6 +203,25 @@ async function executeDownload() {
         >{{ tag }}</span>
       </div>
     </div>
+
+    <!-- 編集モーダル -->
+    <AudioEditModal
+      v-model:open="editOpen"
+      :track="track"
+    />
+
+    <!-- 削除確認モーダル -->
+    <ConfirmModal
+      v-model:open="deleteOpen"
+      title="音源を削除"
+      :message="`「${track.title}」を削除します。この操作は取り消せません。`"
+      confirm-label="削除する"
+      cancel-label="やめる"
+      variant="danger"
+      :confirm-loading="delLoading"
+      :error-message="delError"
+      @confirm="executeDelete"
+    />
 
     <!-- DL 確認モーダル -->
     <ConfirmModal

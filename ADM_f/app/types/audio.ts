@@ -13,6 +13,9 @@ export interface ApiAudioListItem {
   peaks: number[]
   youtube_safe: boolean
   published_at: string | null
+  tags?: string[]
+  is_public?: boolean
+  description?: string | null
 }
 
 export interface ApiAudioListResponse {
@@ -38,8 +41,10 @@ export interface AudioTrack {
   publishedAt: string | null
   /** Optional real source URL (.wav). When omitted, only waveform renders. */
   src?: string
-  /** Image/mood tags selected by creator at upload (Phase 3 backend extension) */
+  /** Image/mood tags selected by creator at upload */
   tags?: string[]
+  isPublic?: boolean
+  description?: string | null
   /** Number of users who favorited (Phase 3 backend extension) */
   favoriteCount?: number
   /** For client-side fallback sort */
@@ -87,7 +92,9 @@ export function mapApiAudio(api: ApiAudioListItem): AudioTrack {
     peaks: spreadPeaks(api.peaks),
     youtubeSafe: api.youtube_safe,
     publishedAt: api.published_at,
-    tags: [],
+    tags: api.tags ?? [],
+    isPublic: api.is_public,
+    description: api.description,
     favoriteCount: 0,
   }
 }
