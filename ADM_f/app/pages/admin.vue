@@ -257,20 +257,18 @@ watch(tab, (t) => {
     <!-- Header row -->
     <div class="flex shrink-0 items-center gap-3 py-5">
       <h1 class="font-mono text-[13px] font-bold uppercase tracking-widest text-ink">Admin</h1>
-      <span class="rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-accent">admin only</span>
     </div>
 
     <!-- Tabs -->
-    <div class="flex shrink-0 gap-1 border-b border-hairline-soft pb-0">
+    <div class="flex shrink-0 gap-4 border-b border-hairline-soft pb-0">
       <button
         v-for="t in ([['users','ユーザ管理'],['payouts','Payout'],['tokens','Token付与'],['licenses','lic発行']] as [Tab, string][])"
         :key="t[0]"
-        class="relative px-4 py-2 text-[12px] font-medium transition-colors"
-        :class="tab === t[0] ? 'text-ink' : 'text-muted hover:text-body'"
+        class="pb-2 text-[12px] font-semibold text-ink transition-all"
+        :class="tab === t[0] ? 'filter-active' : 'opacity-40 hover:opacity-70'"
         @click="tab = t[0]"
       >
         {{ t[1] }}
-        <span v-if="tab === t[0]" class="absolute inset-x-0 -bottom-px h-0.5 rounded-sm bg-primary" />
       </button>
     </div>
 
