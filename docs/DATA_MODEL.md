@@ -204,7 +204,27 @@ Admin による追加 token 付与。当月分のみ有効 (FR-TKN-06)。
 | `created_at` | TIMESTAMPTZ | NOT NULL DEFAULT now() |
 | PK | (user_id, audio_id) |  |
 
-### 2.11 `orders` (発注チケット)
+### 2.11 `system_settings` (システム設定 / 機能フラグ)
+
+Admin が管理画面から変更できるシステム全体の設定テーブル。key-value 形式で将来のフラグ追加にも対応。
+
+| 列 | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `key` | TEXT | PK | 設定キー。例: `commission_enabled` |
+| `value` | TEXT | NOT NULL | JSON 互換文字列。boolean は `"true"` / `"false"` |
+| `description` | TEXT |  | Admin UI に表示する説明文 |
+| `updated_by_admin_id` | UUID | FK→users.id, NULLABLE | 最後に変更した Admin |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
+
+初期データ:
+```
+key                   value    description
+commission_enabled    "false"  発注 (Commission) 機能の有効/無効
+```
+
+> 追加予定フラグの例: `maintenance_mode`, `new_registration_enabled` など。
+
+### 2.12 `orders` (発注チケット)
 
 ユーザが発注するカスタム制作依頼の本体。Dashboard の `audios` とは独立した管理。
 音源ファイルは Done 確定後に `/storage/orders/{id}.wav` に保存。
@@ -229,7 +249,7 @@ Admin による追加 token 付与。当月分のみ有効 (FR-TKN-06)。
 
 > 状態遷移: `draft → open → recruiting → assigned → reviewing → done`。差し戻し: `reviewing → assigned`。どの段階でも `cancelled` へ移行可。
 
-### 2.12 `order_candidate_creators` (発注候補Creator)
+### 2.13 `order_candidate_creators` (発注候補Creator)
 
 Admin が一つの発注チケットに対して複数 Creator に打診できる中間テーブル。
 
@@ -244,7 +264,7 @@ Admin が一つの発注チケットに対して複数 Creator に打診でき�
 | `response_at` | TIMESTAMPTZ |  | |
 | UNIQUE | (order_id, creator_id) |  | 同一チケットへの重複指名防止 |
 
-### 2.13 `order_messages` (チケット内メッセージ)
+### 2.14 `order_messages` (チケット内メッセージ)
 
 Redmine のジャーナル相当。User / Admin / Creator の3者がチケット内でやり取りするメッセージ履歴。Creator の音源提出も添付として本テーブルで管理。
 
@@ -258,7 +278,7 @@ Redmine のジャーナル相当。User / Admin / Creator の3者がチケット
 | `kind` | ENUM(`comment`,`status_change`,`submission`,`rejection`,`done`) | NOT NULL, DEFAULT `comment` | メッセージ種別 |
 | `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
 
-### 2.14 `download_logs`
+### 2.15 `download_logs`
 
 監査・利用統計用。初回DL/再DL/失敗試行を全て記録。
 
