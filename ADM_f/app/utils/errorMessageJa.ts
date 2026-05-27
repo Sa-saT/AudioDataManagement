@@ -17,6 +17,7 @@ const MESSAGES: Record<string, (e?: ApiError) => string> = {
   INVALID_BIT_DEPTH: () => 'ビット深度は 16/24bit のみ対応しています。',
   INVALID_CHANNELS: () => 'ステレオの音源のみ対応しています。',
   AUDIO_TOO_LONG: () => '音源が長すぎます (上限を超えています)。',
+  NO_CREATOR_PROFILE: () => 'クリエイタープロファイルが見つかりません。管理者にお問い合わせください。',
 
   // Download
   INSUFFICIENT_TOKENS: (e) => {
