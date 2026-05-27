@@ -121,6 +121,43 @@
 - FR-PAY-03: 各音源について支払いは生涯1回のみ (単発販売モデル)。
 - FR-PAY-04: 支払いレコードは Admin が「支払済」に手動でマークする (実送金は外部)。
 
+### 5.10 発注機能 — Commission (Phase 3)
+
+ユーザがオリジナル音源の制作を依頼するチケットベースの仕組み。Dashboard の DL フローとは独立しており、発注音源は Dashboard に登録されない。
+
+#### チケットの状態遷移
+
+```
+draft (ユーザが下書き中)
+  └─ open (ユーザが送信 → Admin 受信)
+       └─ recruiting (Admin が Creator を指名・送信。Creator の返信待ち)
+            └─ assigned (Admin が受注 Creator を確定)
+                 └─ reviewing (Creator が音源を添付・提出 → Admin 確認待ち)
+                      ├─ done (Admin が [Done] → User 通知 + 音源格納) ← 終端
+                      └─ assigned (差し戻し → Creator が再提出)
+cancelled (任意の段階でキャンセル可)
+```
+
+#### 機能要件
+
+- FR-ORD-01: アクティベート済みユーザはメニューの「発注」から発注チケットを作成できる。
+- FR-ORD-02: チケットには「タイトル」「依頼内容 (詳細説明)」「消費 token 量 (カスタム指定)」を記入する。token 量は admin が確認・調整できる。
+- FR-ORD-03: チケット送信時に指定 token 量分の残高を確認する。残高不足の場合は送信不可。token の実消費は Done 時点。キャンセル時は消費なし。
+- FR-ORD-04: Admin はメニューの「発注管理」から発注一覧を確認し、任意の Creator を個別指名してチケットを送信 (push) できる。同一チケットに複数の候補 Creator へ送信可 (返信を見て受注者を選ぶため)。
+- FR-ORD-05: 指名を受けた Creator は「発注」メニューでチケットを確認し、チケット内でメッセージ (受諾・辞退・提案) を返信できる。
+- FR-ORD-06: Admin は Creator からの返信を確認し、受注 Creator を1名に確定する。確定されなかった他の候補への通知は Admin が手動で行う (Phase 3 はシンプル実装)。
+- FR-ORD-07: 受注確定後、Creator はチケット内に `.wav` ファイルを添付して提出できる。差し戻し後の再提出も可。
+- FR-ORD-08: Admin は提出音源を確認し、[Done] または [差し戻し] を選択できる。差し戻し時はメッセージを付与。
+- FR-ORD-09: Admin が [Done] をマークすると次が同時実行される:
+  - 指定 token 量を購入者の当月 token から消費する
+  - Creator への支払いレコード (`creator_payouts`) を生成 (ランク単価ベース、token_cost × ランク単価)
+  - 音源ファイルを `/storage/orders/{order_id}.wav` に確定保存
+  - User に通知 (フロント側のバッジ・通知リスト)
+- FR-ORD-10: 発注音源は Dashboard に登録されない。通常 `audios` テーブルとは別の独立管理 (`orders` テーブル)。
+- FR-ORD-11: User はメニューの「発注」からチケット一覧 + 状態 + メッセージ履歴を閲覧できる。
+- FR-ORD-12: Done 済みの発注音源は「発注」セクションから何度でも再DL可能 (token 消費なし)。
+- FR-ORD-13: Creator の発注支払いはランク単価ベース。ただし token_cost が duration_sec 相当でない場合は token_cost そのものを換算基準とする (Admin の裁量で調整可)。
+
 ### 5.9 Admin機能 (Phase 3)
 
 - FR-ADM-01: 全ユーザ・全クリエイターを一覧/編集/削除できる。
@@ -143,6 +180,9 @@
 | SC-201 | Creator: 音源管理 | `/creator/audios` | creator | 自身の音源一覧 (販売中/売却済) (Phase 3) |
 | SC-202 | Creator: アップロード | `/creator/upload` | creator | `.wav` アップロード (Phase 3) |
 | SC-203 | Creator: 売上 | `/creator/payouts` | creator | 自身の支払い予定/確定一覧 (Phase 3) |
+| SC-401 | 発注一覧 (User) | `/orders` | user/creator/admin | 自身の発注チケット一覧・状態確認 (Phase 3) |
+| SC-402 | 発注詳細 | `/orders/:id` | user/creator/admin | チケット本文・メッセージ履歴・提出音源 (Phase 3) |
+| SC-403 | 発注管理 (Admin) | `/admin/orders` | admin | 全発注チケット管理・Creator 指名・Done処理 (Phase 3) |
 | SC-301 | Admin: ユーザ管理 | `/admin/users` | admin | (Phase 3) |
 | SC-302 | Admin: クリエイター管理 | `/admin/creators` | admin | ランク変更含む (Phase 3) |
 | SC-303 | Admin: 音源管理 | `/admin/audios` | admin | (Phase 3) |

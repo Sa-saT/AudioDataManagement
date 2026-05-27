@@ -23,6 +23,12 @@ erDiagram
   AUDIOS ||--o| CREATOR_PAYOUTS    : "支払い対象 (1対0..1)"
   CREATOR_PROFILES ||--o{ CREATOR_PAYOUTS : "受領"
   CREATOR_RANK_PRICES ||--o{ CREATOR_PAYOUTS : "ランク単価"
+  USERS  ||--o{ ORDERS         : "発注者"
+  ORDERS ||--o{ ORDER_CANDIDATE_CREATORS : "候補Creator"
+  CREATOR_PROFILES ||--o{ ORDER_CANDIDATE_CREATORS : "候補"
+  ORDERS ||--o{ ORDER_MESSAGES : "メッセージ履歴"
+  USERS  ||--o{ ORDER_MESSAGES : "送信者"
+  ORDERS ||--o| CREATOR_PAYOUTS : "発注支払い (Done時)"
 ```
 
 ## 2. エンティティ定義
@@ -198,7 +204,61 @@ Admin による追加 token 付与。当月分のみ有効 (FR-TKN-06)。
 | `created_at` | TIMESTAMPTZ | NOT NULL DEFAULT now() |
 | PK | (user_id, audio_id) |  |
 
-### 2.11 `download_logs`
+### 2.11 `orders` (発注チケット)
+
+ユーザが発注するカスタム制作依頼の本体。Dashboard の `audios` とは独立した管理。
+音源ファイルは Done 確定後に `/storage/orders/{id}.wav` に保存。
+
+| 列 | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `id` | UUID | PK | |
+| `user_id` | UUID | FK→users.id, NOT NULL | 依頼者 (user/creator) |
+| `title` | TEXT | NOT NULL | 依頼タイトル |
+| `description` | TEXT |  | 詳細説明・希望条件 |
+| `token_cost` | INTEGER | NOT NULL, CHECK (>0) | カスタム指定の消費 token 量 |
+| `status` | ENUM(`draft`,`open`,`recruiting`,`assigned`,`reviewing`,`done`,`cancelled`) | NOT NULL, DEFAULT `draft` | |
+| `assigned_creator_id` | UUID | FK→creator_profiles.user_id, NULLABLE | 確定した受注 Creator |
+| `assigned_by_admin_id` | UUID | FK→users.id, NULLABLE | 受注確定を行った Admin |
+| `assigned_at` | TIMESTAMPTZ |  | 受注確定日時 |
+| `done_by_admin_id` | UUID | FK→users.id, NULLABLE | Done 処理を行った Admin |
+| `done_at` | TIMESTAMPTZ |  | Done 日時 |
+| `file_path` | TEXT |  | Done確定後の音源パス (`/storage/orders/{id}.wav`) |
+| `notified_at` | TIMESTAMPTZ |  | User への通知日時 |
+| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
+
+> 状態遷移: `draft → open → recruiting → assigned → reviewing → done`。差し戻し: `reviewing → assigned`。どの段階でも `cancelled` へ移行可。
+
+### 2.12 `order_candidate_creators` (発注候補Creator)
+
+Admin が一つの発注チケットに対して複数 Creator に打診できる中間テーブル。
+
+| 列 | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `id` | UUID | PK | |
+| `order_id` | UUID | FK→orders.id, NOT NULL | |
+| `creator_id` | UUID | FK→creator_profiles.user_id, NOT NULL | 指名された Creator |
+| `sent_by_admin_id` | UUID | FK→users.id, NOT NULL | 指名した Admin |
+| `sent_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
+| `response_status` | ENUM(`pending`,`accepted`,`declined`) | NOT NULL, DEFAULT `pending` | Creator の返信状況 |
+| `response_at` | TIMESTAMPTZ |  | |
+| UNIQUE | (order_id, creator_id) |  | 同一チケットへの重複指名防止 |
+
+### 2.13 `order_messages` (チケット内メッセージ)
+
+Redmine のジャーナル相当。User / Admin / Creator の3者がチケット内でやり取りするメッセージ履歴。Creator の音源提出も添付として本テーブルで管理。
+
+| 列 | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `id` | UUID | PK | |
+| `order_id` | UUID | FK→orders.id, NOT NULL | |
+| `sender_id` | UUID | FK→users.id, NOT NULL | 送信者 (user/admin/creator いずれも) |
+| `content` | TEXT |  | メッセージ本文 |
+| `attachment_path` | TEXT |  | Creator 提出音源のパス (添付がある場合) |
+| `kind` | ENUM(`comment`,`status_change`,`submission`,`rejection`,`done`) | NOT NULL, DEFAULT `comment` | メッセージ種別 |
+| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
+
+### 2.14 `download_logs`
 
 監査・利用統計用。初回DL/再DL/失敗試行を全て記録。
 
@@ -230,6 +290,18 @@ draft
 ```
 pending → paid (Admin手動)
        → cancelled (Admin手動、例: 不正DL扱い)
+```
+
+### Order (発注チケット)
+```
+draft (ユーザ下書き)
+  └─ open (ユーザ送信 → Admin 受信)
+       └─ recruiting (Admin が Creator を指名・送信。候補Creator 返信待ち)
+            └─ assigned (Admin が受注 Creator 1名を確定)
+                 └─ reviewing (Creator が .wav を添付提出 → Admin 確認待ち)
+                      ├─ done (Admin [Done] → token消費 + payout生成 + User通知) ← 終端
+                      └─ assigned (差し戻し → Creator 再提出)
+cancelled (任意の段階で Admin/User がキャンセル可)
 ```
 
 ### License

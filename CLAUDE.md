@@ -176,7 +176,8 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 - Dashboard を実 API に接続 (mockTracks 撤去)
 - 視聴: 波形クリック → `/stream-url?start=N` 取得 → Web Audio API で10秒再生
 - 購入フロー: 確認モーダル → `/download` → 完了表示 + ファイル保存
-- My Downloads: `/download-url` 経由の再DL
+- My Downloads: `/download-url` 経由の再DL、Downloads ストレージ使用量表示・コピー削除
+- 発注 (Commission) 機能: チケット作成 / Admin 指名・管理 / Creator 提出 / Done 通知 (詳細: docs/REQUIREMENTS.md §5.10)
 - Admin 管理画面 (ランク変更 / lic 発行 / token 追加付与 / payout 承認)
 
 ## 9. 用語
@@ -187,3 +188,5 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 | peaks | 波形プレビュー用の正規化サンプル値配列 (0..1) |
 | アクティベート | licファイルを適用して guest → user/creator/admin になる操作 |
 | ランク | クリエイターの段位 (bronze/silver/gold/platinum) |
+| 発注 (Commission) | ユーザがオリジナル音源の制作依頼を出すチケットベースのフロー。Dashboard の単発DLとは独立。 |
+| 発注チケット | 発注1件を表す `orders` レコード。状態遷移と3者間のメッセージ履歴を持つ。 |
