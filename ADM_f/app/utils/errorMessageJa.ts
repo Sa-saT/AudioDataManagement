@@ -38,6 +38,12 @@ const MESSAGES: Record<string, (e?: ApiError) => string> = {
   // Stream / signed URL
   INVALID_SIGNATURE: () => 'リンクの有効期限が切れたか、署名が不正です。再度お試しください。',
 
+  // Admin
+  INVALID_RANK: () => '無効なランクです。',
+  ALREADY_PROCESSED: () => 'この支払いは既に処理済みです。',
+  INVALID_ID: () => '無効なIDです。',
+  USERNAME_TAKEN: () => 'このユーザ名は既に別のライセンスに紐付いています。',
+
   // Pagination / generic validation
   INVALID_PER_PAGE: () => '表示件数の値が不正です。',
 }
