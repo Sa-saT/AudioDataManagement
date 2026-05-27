@@ -101,20 +101,20 @@ async function save() {
           <div class="space-y-4">
             <!-- Title -->
             <div>
-              <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.07em] text-muted">
+              <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.07em] text-body-strong">
                 タイトル <span class="text-error">*</span>
               </label>
               <input
                 v-model="title"
                 type="text"
                 maxlength="120"
-                class="w-full rounded-md border border-hairline bg-white/70 px-3 py-2 text-[13px] text-ink outline-none transition-colors focus:border-primary"
+                class="w-full rounded-md border border-hairline-strong bg-white/85 px-3 py-2 text-[13px] text-ink placeholder:text-muted outline-none transition-colors focus:border-primary focus:bg-white"
               />
             </div>
 
             <!-- Description -->
             <div>
-              <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.07em] text-muted">説明</label>
+              <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.07em] text-body-strong">説明</label>
               <textarea
                 v-model="description"
                 rows="2"
@@ -125,7 +125,7 @@ async function save() {
 
             <!-- Tags -->
             <div>
-              <label class="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.07em] text-muted">イメージタグ</label>
+              <label class="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.07em] text-body-strong">イメージタグ</label>
               <div class="flex flex-wrap gap-1.5">
                 <button
                   v-for="tag in PRESET_TAGS"
@@ -134,7 +134,7 @@ async function save() {
                   class="rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors"
                   :class="selectedTags.includes(tag)
                     ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-hairline bg-white/60 text-body hover:border-primary/50'"
+                    : 'border-hairline-strong bg-surface-strong/70 text-body-strong hover:border-primary/60 hover:text-ink'"
                   @click="toggleTag(tag)"
                 >{{ tag }}</button>
               </div>

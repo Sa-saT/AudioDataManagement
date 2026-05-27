@@ -128,7 +128,7 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
 
       <div v-if="auth.isActivated" class="flex items-center gap-4">
         <div class="flex min-w-[200px] flex-col gap-1">
-          <div class="flex justify-between font-mono text-[11px] text-muted">
+          <div class="flex justify-between font-mono text-[11px] text-body">
             <span>TOKENS</span>
             <span :class="tokenLow ? 'text-accent' : ''">
               {{ tokensUsed.toLocaleString('ja-JP') }} / {{ monthlyQuota.toLocaleString('ja-JP') }}
@@ -157,8 +157,8 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
             v-model="searchInput"
             type="search"
             placeholder="タイトル / クリエイター / タグで検索…"
-            class="w-full rounded-lg border bg-white/60 py-1.5 pl-8 pr-8 text-[12px] text-ink placeholder:text-muted-soft backdrop-blur-sm outline-none transition-all"
-            :class="searchFocused ? 'border-primary bg-white/85 shadow-sm' : 'border-hairline'"
+            class="w-full rounded-lg border bg-white/75 py-1.5 pl-8 pr-8 text-[12px] text-ink placeholder:text-muted backdrop-blur-sm outline-none transition-all"
+            :class="searchFocused ? 'border-primary bg-white/90 shadow-sm' : 'border-hairline-strong'"
             @focus="searchFocused = true"
           />
           <button
@@ -176,9 +176,9 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
         <Transition name="panel">
           <div
             v-if="searchFocused"
-            class="absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-[60vh] overflow-y-auto rounded-xl border border-hairline bg-white/90 p-4 shadow-xl backdrop-blur-md"
+            class="absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-[60vh] overflow-y-auto rounded-xl border border-hairline-strong bg-white/95 p-4 shadow-xl backdrop-blur-md"
           >
-            <div class="mb-3 flex items-center justify-between text-[10px] font-semibold uppercase tracking-widest text-muted">
+            <div class="mb-3 flex items-center justify-between text-[10px] font-semibold uppercase tracking-widest text-body">
               <span>タグから絞り込み</span>
               <span class="font-mono">{{ filteredTags.length }} / {{ allTags.length }}</span>
             </div>
@@ -203,12 +203,12 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
               <button
                 v-for="([tag, count], idx) in filteredTags"
                 :key="tag"
-                class="tag-chip-anim group flex items-center gap-1.5 rounded-full border border-hairline bg-white/70 px-2.5 py-1 font-mono text-[11px] text-body transition-all hover:-translate-y-px hover:border-primary hover:bg-white"
+                class="tag-chip-anim group flex items-center gap-1.5 rounded-full border border-hairline-strong bg-surface-strong/70 px-2.5 py-1 font-mono text-[11px] text-body-strong transition-all hover:-translate-y-px hover:border-primary hover:bg-white"
                 :style="`animation-delay: ${Math.min(idx * 22, 300)}ms`"
                 @click="pickTag(tag)"
               >
                 <span v-html="highlight(tag)" />
-                <span class="rounded-full bg-hairline-soft px-1.5 py-0 text-[10px] text-muted group-hover:bg-primary/15 group-hover:text-primary-active">
+                <span class="rounded-full bg-hairline-strong/80 px-1.5 py-0 text-[10px] text-body group-hover:bg-primary/15 group-hover:text-primary-active">
                   {{ count }}
                 </span>
               </button>

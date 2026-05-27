@@ -137,9 +137,9 @@ async function executeDownload() {
         </button>
 
         <template v-if="isOwnAudio">
-          <!-- 編集ボタン -->
+          <!-- 編集ボタン: turquoise 薄め → hover で濃く -->
           <button
-            class="flex items-center justify-center rounded-md border border-hairline bg-white/60 p-1 text-muted transition-colors hover:border-primary hover:text-primary-active"
+            class="flex items-center justify-center rounded-md border border-primary/40 bg-primary/8 p-1 text-primary-active transition-colors hover:border-primary hover:bg-primary/20"
             aria-label="編集"
             @click.stop="editOpen = true"
           >
@@ -148,9 +148,9 @@ async function executeDownload() {
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4Z"/>
             </svg>
           </button>
-          <!-- 削除ボタン -->
+          <!-- 削除ボタン: 常に琥珀褐色 → hover で濃く -->
           <button
-            class="flex items-center justify-center rounded-md border border-hairline bg-white/60 p-1 text-muted transition-colors hover:border-error hover:text-error"
+            class="flex items-center justify-center rounded-md border border-amber-400/60 bg-amber-50/80 p-1 text-amber-700 transition-colors hover:border-amber-500 hover:bg-amber-100"
             aria-label="削除"
             @click.stop="deleteOpen = true"
           >
@@ -186,20 +186,20 @@ async function executeDownload() {
           class="shrink-0 rounded-[3px] border border-muted-soft px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-widest text-muted"
         >DRAFT</span>
       </div>
-      <div class="mt-0.5 flex items-center gap-2 text-[12px] text-muted">
+      <div class="mt-0.5 flex items-center gap-2 text-[12px] text-body">
         <template v-if="showCreator">
           <span>{{ track.creatorName }}</span>
-          <span class="h-1 w-1 rounded-full bg-muted-soft" />
+          <span class="h-1 w-1 rounded-full bg-muted" />
         </template>
         <span class="font-mono">{{ track.youtubeSafe ? 'YT安心' : 'YT要確認' }}</span>
-        <span class="h-1 w-1 rounded-full bg-muted-soft" />
-        <span class="font-mono">{{ track.tokenCost }} tk</span>
+        <span class="h-1 w-1 rounded-full bg-muted" />
+        <span class="font-mono font-semibold text-ink">{{ track.tokenCost }} tk</span>
       </div>
       <div v-if="track.tags?.length" class="mt-1.5 flex flex-wrap gap-1">
         <span
           v-for="tag in track.tags"
           :key="tag"
-          class="rounded-full border border-hairline bg-white/60 px-2 py-0.5 font-mono text-[10px] font-medium text-body transition-colors hover:border-primary hover:text-primary-active"
+          class="rounded-full border border-hairline-strong bg-surface-strong/80 px-2 py-0.5 font-mono text-[10px] font-semibold text-body-strong transition-colors hover:border-primary hover:text-primary-active"
         >{{ tag }}</span>
       </div>
     </div>

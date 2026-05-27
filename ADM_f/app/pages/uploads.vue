@@ -166,7 +166,7 @@ function formatBytes(bytes: number): string {
           </svg>
           <div class="flex-1 min-w-0">
             <p class="truncate text-[13px] font-medium text-ink">{{ file.name }}</p>
-            <p class="text-[11px] text-muted">{{ formatBytes(file.size) }}</p>
+            <p class="text-[11px] text-body">{{ formatBytes(file.size) }}</p>
           </div>
           <button
             class="ml-2 rounded p-1 text-muted hover:text-ink"
@@ -185,13 +185,13 @@ function formatBytes(bytes: number): string {
           class="flex cursor-pointer flex-col items-center gap-2 py-10 text-center"
           @click="fileInputRef?.click()"
         >
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#a09c92" stroke-width="1.5" stroke-linecap="round">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#807d72" stroke-width="1.5" stroke-linecap="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
           </svg>
           <p class="text-[13px] text-body">
             <span class="font-medium text-ink">クリックして選択</span>、またはここにドロップ
           </p>
-          <p class="text-[11px] text-muted">PCM .wav / 最大 48kHz · 24bit · ステレオ</p>
+          <p class="text-[11px] text-body">PCM .wav / 最大 48kHz · 24bit · ステレオ</p>
         </div>
       </div>
 
@@ -210,7 +210,7 @@ function formatBytes(bytes: number): string {
 
         <!-- Title -->
         <div>
-          <label class="mb-1.5 block text-[12px] font-semibold uppercase tracking-[0.07em] text-muted">
+          <label class="mb-1.5 block text-[12px] font-semibold uppercase tracking-[0.07em] text-body-strong">
             タイトル <span class="text-error">*</span>
           </label>
           <input
@@ -218,13 +218,13 @@ function formatBytes(bytes: number): string {
             type="text"
             placeholder="例: Morning Bloom"
             maxlength="120"
-            class="w-full rounded-md border border-hairline bg-white/70 px-3 py-2.5 text-[13px] text-ink placeholder-muted-soft outline-none transition-colors focus:border-primary"
+            class="w-full rounded-md border border-hairline-strong bg-white/85 px-3 py-2.5 text-[13px] text-ink placeholder:text-muted outline-none transition-colors focus:border-primary focus:bg-white"
           />
         </div>
 
         <!-- Description -->
         <div>
-          <label class="mb-1.5 block text-[12px] font-semibold uppercase tracking-[0.07em] text-muted">
+          <label class="mb-1.5 block text-[12px] font-semibold uppercase tracking-[0.07em] text-body-strong">
             説明 <span class="text-[10px] normal-case tracking-normal text-muted-soft">(任意)</span>
           </label>
           <textarea
@@ -232,13 +232,13 @@ function formatBytes(bytes: number): string {
             rows="3"
             placeholder="音源のイメージや使用楽器など"
             maxlength="500"
-            class="w-full resize-none rounded-md border border-hairline bg-white/70 px-3 py-2.5 text-[13px] text-ink placeholder-muted-soft outline-none transition-colors focus:border-primary"
+            class="w-full resize-none rounded-md border border-hairline-strong bg-white/85 px-3 py-2.5 text-[13px] text-ink placeholder:text-muted outline-none transition-colors focus:border-primary focus:bg-white"
           />
         </div>
 
         <!-- Tags -->
         <div>
-          <label class="mb-2 block text-[12px] font-semibold uppercase tracking-[0.07em] text-muted">
+          <label class="mb-2 block text-[12px] font-semibold uppercase tracking-[0.07em] text-body-strong">
             イメージタグ <span class="text-[10px] normal-case tracking-normal text-muted-soft">(任意・複数可)</span>
           </label>
           <div class="flex flex-wrap gap-1.5">
@@ -249,7 +249,7 @@ function formatBytes(bytes: number): string {
               class="rounded-full border px-3 py-1 text-[11px] font-medium tracking-wide transition-colors"
               :class="selectedTags.includes(tag)
                 ? 'border-primary bg-primary/10 text-primary'
-                : 'border-hairline bg-surface-card/60 text-body hover:border-primary/50 hover:text-ink'"
+                : 'border-hairline-strong bg-surface-strong/70 text-body-strong hover:border-primary/60 hover:text-ink'"
               @click="toggleTag(tag)"
             >{{ tag }}</button>
           </div>
@@ -260,7 +260,7 @@ function formatBytes(bytes: number): string {
           <label class="flex cursor-pointer items-center justify-between">
             <div>
               <p class="text-[13px] font-medium text-ink">YouTube Safe</p>
-              <p class="text-[11px] text-muted">Content ID に抵触しない素材として公開する</p>
+              <p class="text-[11px] text-body">Content ID に抵触しない素材として公開する</p>
             </div>
             <div
               class="relative h-5 w-9 shrink-0 rounded-full transition-colors"
@@ -277,7 +277,7 @@ function formatBytes(bytes: number): string {
           <label class="flex cursor-pointer items-center justify-between">
             <div>
               <p class="text-[13px] font-medium text-ink">Dashboard に公開</p>
-              <p class="text-[11px] text-muted">すぐに全ユーザへ表示する (OFF = 下書き)</p>
+              <p class="text-[11px] text-body">すぐに全ユーザへ表示する (OFF = 下書き)</p>
             </div>
             <div
               class="relative h-5 w-9 shrink-0 rounded-full transition-colors"
