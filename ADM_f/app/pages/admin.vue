@@ -40,6 +40,15 @@ interface PayoutItem {
   created_at: string
   paid_at: string | null
 }
+interface CreatorGroup {
+  creator_id: string
+  creator_name: string | null
+  rank: string
+  payouts: PayoutItem[]
+  pending_total: number
+  pending_count: number
+  paid_total: number
+}
 
 // ─── Users tab ───────────────────────────────────────────────────────────────
 const users = ref<UserItem[]>([])
@@ -81,10 +90,18 @@ const payouts = ref<PayoutItem[]>([])
 const payoutsLoading = ref(false)
 const payoutsError = ref<string | null>(null)
 const payoutFilter = ref<'pending' | 'all'>('pending')
+const expandedCreators = ref(new Set<string>())
+
+function toggleCreator(id: string) {
+  const s = new Set(expandedCreators.value)
+  s.has(id) ? s.delete(id) : s.add(id)
+  expandedCreators.value = s
+}
 
 async function fetchPayouts() {
   payoutsLoading.value = true
   payoutsError.value = null
+  expandedCreators.value = new Set()
   try {
     const q = payoutFilter.value === 'pending' ? { status_filter: 'pending' } : {}
     payouts.value = await api.get<PayoutItem[]>('/api/v1/admin/payouts', { query: q })
@@ -94,6 +111,32 @@ async function fetchPayouts() {
     payoutsLoading.value = false
   }
 }
+
+const creatorGroups = computed((): CreatorGroup[] => {
+  const map = new Map<string, CreatorGroup>()
+  for (const p of payouts.value) {
+    if (!map.has(p.creator_id)) {
+      map.set(p.creator_id, {
+        creator_id: p.creator_id,
+        creator_name: p.creator_name,
+        rank: p.rank_at_payout,
+        payouts: [],
+        pending_total: 0,
+        pending_count: 0,
+        paid_total: 0,
+      })
+    }
+    const g = map.get(p.creator_id)!
+    g.payouts.push(p)
+    if (p.status === 'pending') {
+      g.pending_total += p.amount_yen
+      g.pending_count++
+    } else if (p.status === 'paid') {
+      g.paid_total += p.amount_yen
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => b.pending_total - a.pending_total)
+})
 
 const paidLoading = ref<Record<string, boolean>>({})
 
@@ -117,6 +160,17 @@ const grantReason = ref('')
 const grantLoading = ref(false)
 const grantError = ref<string | null>(null)
 const grantSuccess = ref<string | null>(null)
+
+// token付与対象は role=user のみ
+const userOnlyList = computed(() => users.value.filter(u => u.role === 'user'))
+
+function resetGrant() {
+  grantUserId.value = ''
+  grantTokens.value = 3600
+  grantReason.value = ''
+  grantError.value = null
+  grantSuccess.value = null
+}
 
 async function submitGrant() {
   if (!grantUserId.value || grantTokens.value <= 0) return
@@ -147,6 +201,14 @@ const licExpires = ref('')
 const licLoading = ref(false)
 const licError = ref<string | null>(null)
 
+function resetLic() {
+  licUsername.value = ''
+  licRole.value = 'user'
+  licQuota.value = 18000
+  licExpires.value = ''
+  licError.value = null
+}
+
 async function issueLic() {
   if (!licUsername.value.trim()) return
   licLoading.value = true
@@ -174,7 +236,7 @@ async function issueLic() {
     a.download = `${licUsername.value.trim()}.lic`
     a.click()
     URL.revokeObjectURL(url)
-    licUsername.value = ''
+    resetLic()
   } catch (e) {
     licError.value = errorMessageJa(e)
   } finally {
@@ -184,7 +246,7 @@ async function issueLic() {
 
 // ─── Load on tab change ───────────────────────────────────────────────────────
 watch(tab, (t) => {
-  if (t === 'users' && users.value.length === 0) fetchUsers()
+  if ((t === 'users' || t === 'tokens') && users.value.length === 0) fetchUsers()
   if (t === 'payouts') fetchPayouts()
 }, { immediate: true })
 </script>
@@ -247,7 +309,7 @@ watch(tab, (t) => {
               </p>
             </div>
 
-            <!-- rank (creator only) -->
+            <!-- rank (creator / admin only) -->
             <div v-if="u.role === 'creator' || u.role === 'admin'" class="flex items-center gap-2">
               <select
                 class="rounded border border-hairline-strong bg-white/80 px-2 py-1 font-mono text-[11px] text-ink outline-none"
@@ -260,8 +322,9 @@ watch(tab, (t) => {
               <span v-if="rankError[u.id]" class="text-[10px] text-accent">{{ rankError[u.id] }}</span>
             </div>
 
-            <!-- token grant shortcut -->
+            <!-- token grant shortcut: user のみ -->
             <button
+              v-if="u.role === 'user'"
               class="shrink-0 rounded border border-hairline px-2 py-1 text-[11px] text-body hover:border-primary hover:text-primary-active"
               @click="tab = 'tokens'; grantUserId = u.id"
             >+ Token</button>
@@ -269,76 +332,120 @@ watch(tab, (t) => {
         </div>
       </div>
 
-      <!-- ② Payout -->
+      <!-- ② Payout (creator別グルーピング) -->
       <div v-if="tab === 'payouts'">
-        <div class="mb-3 flex items-center gap-3">
+        <div class="mb-3 flex items-center gap-4">
           <span class="text-[11px] font-semibold uppercase tracking-widest text-body-strong">Creator 支払い</span>
-          <div class="flex gap-1">
+          <!-- フィルター: 黒文字統一、選択は浮き文字 -->
+          <div class="flex gap-3">
             <button
               v-for="f in (['pending','all'] as const)"
               :key="f"
-              class="rounded-full border px-2.5 py-0.5 text-[11px] transition-colors"
-              :class="payoutFilter === f
-                ? 'border-primary bg-primary/10 text-primary-active'
-                : 'border-hairline text-muted hover:text-ink'"
+              class="text-[12px] font-semibold text-ink transition-all"
+              :class="payoutFilter === f ? 'filter-active' : 'opacity-40 hover:opacity-70'"
               @click="payoutFilter = f; fetchPayouts()"
             >{{ f === 'pending' ? '未払い' : '全件' }}</button>
           </div>
           <button class="ml-auto text-[11px] text-muted hover:text-ink" @click="fetchPayouts">↻ 更新</button>
         </div>
+
         <div v-if="payoutsLoading" class="py-8 text-center text-[12px] text-muted">読み込み中…</div>
         <div v-else-if="payoutsError" class="py-4 text-center text-[12px] text-accent">{{ payoutsError }}</div>
-        <div v-else-if="payouts.length === 0" class="py-8 text-center text-[12px] text-muted">
+        <div v-else-if="creatorGroups.length === 0" class="py-8 text-center text-[12px] text-muted">
           {{ payoutFilter === 'pending' ? '未払いの支払いはありません。' : '支払い記録がありません。' }}
         </div>
+
         <div v-else class="space-y-1.5">
-          <div
-            v-for="p in payouts"
-            :key="p.id"
-            class="card flex items-center gap-4 px-4 py-3"
-          >
-            <div class="min-w-0 flex-1">
-              <p class="truncate text-[13px] font-medium text-ink">{{ p.audio_title ?? '(不明)' }}</p>
-              <p class="text-[11px] text-body">
-                {{ p.creator_name ?? '—' }}
-                <span class="mx-1 text-muted">·</span>
-                <span class="font-mono">{{ p.rank_at_payout }}</span>
-              </p>
-            </div>
-            <span class="shrink-0 font-mono text-[13px] font-semibold text-ink">¥{{ p.amount_yen.toLocaleString() }}</span>
-            <span
-              class="shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold"
-              :class="p.status === 'paid'
-                ? 'bg-primary/15 text-primary-active'
-                : p.status === 'cancelled'
-                  ? 'bg-hairline-soft text-muted'
-                  : 'bg-accent/15 text-accent'"
-            >{{ p.status }}</span>
+          <div v-for="g in creatorGroups" :key="g.creator_id">
+            <!-- Creator 行 -->
             <button
-              v-if="p.status === 'pending'"
-              class="shrink-0 rounded border border-primary/40 bg-primary/10 px-3 py-1 text-[11px] font-medium text-primary-active transition-colors hover:bg-primary/20 disabled:opacity-40"
-              :disabled="!!paidLoading[p.id]"
-              @click="markPaid(p.id)"
-            >支払済にする</button>
+              class="card w-full cursor-pointer px-4 py-3 text-left transition-colors hover:border-primary"
+              :class="expandedCreators.has(g.creator_id) ? 'border-primary' : ''"
+              @click="toggleCreator(g.creator_id)"
+            >
+              <div class="flex items-center gap-4">
+                <!-- 展開アイコン -->
+                <svg
+                  width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                  class="shrink-0 text-muted transition-transform"
+                  :class="expandedCreators.has(g.creator_id) ? 'rotate-90' : ''"
+                ><path d="m9 18 6-6-6-6"/></svg>
+
+                <!-- rank chip -->
+                <span class="shrink-0 rounded border border-hairline-strong bg-surface-strong/80 px-2 py-0.5 font-mono text-[10px] font-semibold text-body-strong">{{ g.rank }}</span>
+
+                <!-- creator name -->
+                <span class="flex-1 text-[13px] font-medium text-ink">{{ g.creator_name ?? '(不明)' }}</span>
+
+                <!-- pending summary -->
+                <span v-if="g.pending_count > 0" class="shrink-0 font-mono text-[12px] font-semibold text-accent">
+                  ¥{{ g.pending_total.toLocaleString() }}
+                  <span class="ml-1 text-[10px] font-normal text-muted">未払い {{ g.pending_count }}件</span>
+                </span>
+                <span v-else class="shrink-0 font-mono text-[11px] text-muted">
+                  支払済 ¥{{ g.paid_total.toLocaleString() }}
+                </span>
+              </div>
+            </button>
+
+            <!-- 音源内訳 (展開時) -->
+            <div v-if="expandedCreators.has(g.creator_id)" class="ml-4 mt-1 space-y-1">
+              <div
+                v-for="p in g.payouts"
+                :key="p.id"
+                class="flex items-center gap-3 rounded-lg border border-hairline-soft bg-white/50 px-4 py-2.5"
+              >
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-[12px] font-medium text-ink">{{ p.audio_title ?? '(不明)' }}</p>
+                  <p class="font-mono text-[10px] text-muted">{{ new Date(p.created_at).toLocaleDateString('ja-JP') }}</p>
+                </div>
+                <span class="shrink-0 font-mono text-[12px] font-semibold text-ink">¥{{ p.amount_yen.toLocaleString() }}</span>
+                <span
+                  class="shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold"
+                  :class="p.status === 'paid'
+                    ? 'bg-primary/15 text-primary-active'
+                    : p.status === 'cancelled'
+                      ? 'bg-hairline-soft text-muted'
+                      : 'bg-accent/15 text-accent'"
+                >{{ p.status }}</span>
+                <button
+                  v-if="p.status === 'pending'"
+                  class="shrink-0 rounded border border-primary/40 bg-primary/10 px-3 py-1 text-[11px] font-medium text-primary-active transition-colors hover:bg-primary/20 disabled:opacity-40"
+                  :disabled="!!paidLoading[p.id]"
+                  @click.stop="markPaid(p.id)"
+                >支払済にする</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- ③ Token 付与 -->
+      <!-- ③ Token 付与 (role=user のみ) -->
       <div v-if="tab === 'tokens'" class="max-w-[480px]">
         <p class="mb-4 text-[11px] font-semibold uppercase tracking-widest text-body-strong">Token 追加付与</p>
         <div class="card space-y-4 p-5">
           <div>
             <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.07em] text-body-strong">
-              対象ユーザ ID <span class="text-accent">*</span>
+              対象ユーザ <span class="text-accent">*</span>
+              <span class="ml-1 font-normal normal-case tracking-normal text-muted">(role=user のみ)</span>
             </label>
-            <input
+            <div v-if="usersLoading" class="py-2 text-[12px] text-muted">読み込み中…</div>
+            <div v-else-if="userOnlyList.length === 0" class="rounded-md border border-hairline-soft bg-surface-strong/40 px-3 py-2 text-[12px] text-muted">
+              role=user のアカウントがまだありません。
+            </div>
+            <select
+              v-else
               v-model="grantUserId"
-              type="text"
-              placeholder="UUID を貼り付け (ユーザ管理の + Token から自動入力)"
-              class="w-full rounded-md border border-hairline-strong bg-white/85 px-3 py-2 font-mono text-[12px] text-ink placeholder:text-muted outline-none transition-colors focus:border-primary"
-            />
+              class="w-full rounded-md border border-hairline-strong bg-white/85 px-3 py-2 text-[12px] text-ink outline-none transition-colors focus:border-primary"
+            >
+              <option value="" disabled>ユーザを選択…</option>
+              <option v-for="u in userOnlyList" :key="u.id" :value="u.id">
+                {{ u.username }}
+                <template v-if="u.monthly_quota_tokens !== null">（月{{ u.monthly_quota_tokens.toLocaleString() }}tk）</template>
+              </option>
+            </select>
           </div>
+
           <div>
             <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.07em] text-body-strong">付与 token 量</label>
             <div class="flex items-center gap-2">
@@ -351,6 +458,7 @@ watch(tab, (t) => {
               <span class="text-[11px] text-muted">tk ({{ Math.floor(grantTokens / 3600) }}h {{ Math.floor((grantTokens % 3600) / 60) }}m)</span>
             </div>
           </div>
+
           <div>
             <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.07em] text-body-strong">理由 (任意)</label>
             <input
@@ -360,16 +468,25 @@ watch(tab, (t) => {
               class="w-full rounded-md border border-hairline-strong bg-white/85 px-3 py-2 text-[12px] text-ink placeholder:text-muted outline-none transition-colors focus:border-primary"
             />
           </div>
+
           <p v-if="grantError" class="rounded-md border border-accent/30 bg-accent/5 px-3 py-2 text-[12px] text-accent">{{ grantError }}</p>
           <p v-if="grantSuccess" class="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-[12px] text-primary-active">{{ grantSuccess }}</p>
-          <button
-            class="flex items-center gap-1.5 rounded-md bg-ink px-4 py-2 text-[12px] font-medium text-canvas transition-colors hover:bg-primary disabled:opacity-50"
-            :disabled="!grantUserId || grantTokens <= 0 || grantLoading"
-            @click="submitGrant"
-          >
-            <svg v-if="grantLoading" class="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-            付与する
-          </button>
+
+          <div class="flex gap-2">
+            <button
+              class="rounded-md border border-hairline bg-white/60 px-4 py-2 text-[12px] text-body hover:text-ink disabled:opacity-40"
+              :disabled="grantLoading"
+              @click="resetGrant"
+            >キャンセル</button>
+            <button
+              class="flex items-center gap-1.5 rounded-md bg-ink px-4 py-2 text-[12px] font-medium text-canvas transition-colors hover:bg-primary disabled:opacity-50"
+              :disabled="!grantUserId || grantTokens <= 0 || grantLoading"
+              @click="submitGrant"
+            >
+              <svg v-if="grantLoading" class="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+              付与する
+            </button>
+          </div>
         </div>
       </div>
 
@@ -389,6 +506,7 @@ watch(tab, (t) => {
               class="w-full rounded-md border border-hairline-strong bg-white/85 px-3 py-2 text-[12px] text-ink placeholder:text-muted outline-none transition-colors focus:border-primary"
             />
           </div>
+
           <div>
             <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.07em] text-body-strong">ロール</label>
             <div class="flex gap-2">
@@ -404,6 +522,7 @@ watch(tab, (t) => {
               >{{ r }}</button>
             </div>
           </div>
+
           <div>
             <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.07em] text-body-strong">月間 token</label>
             <div class="flex items-center gap-2">
@@ -416,6 +535,7 @@ watch(tab, (t) => {
               <span class="text-[11px] text-muted">tk / 月</span>
             </div>
           </div>
+
           <div>
             <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.07em] text-body-strong">有効期限 (省略=無期限)</label>
             <input
@@ -424,18 +544,27 @@ watch(tab, (t) => {
               class="rounded-md border border-hairline-strong bg-white/85 px-3 py-2 text-[12px] text-ink outline-none transition-colors focus:border-primary"
             />
           </div>
+
           <p v-if="licError" class="rounded-md border border-accent/30 bg-accent/5 px-3 py-2 text-[12px] text-accent">{{ licError }}</p>
-          <button
-            class="flex items-center gap-1.5 rounded-md bg-ink px-4 py-2 text-[12px] font-medium text-canvas transition-colors hover:bg-primary disabled:opacity-50"
-            :disabled="!licUsername.trim() || licLoading"
-            @click="issueLic"
-          >
-            <svg v-if="licLoading" class="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-            <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>
-            </svg>
-            .lic を発行してダウンロード
-          </button>
+
+          <div class="flex gap-2">
+            <button
+              class="rounded-md border border-hairline bg-white/60 px-4 py-2 text-[12px] text-body hover:text-ink disabled:opacity-40"
+              :disabled="licLoading"
+              @click="resetLic"
+            >キャンセル</button>
+            <button
+              class="flex items-center gap-1.5 rounded-md bg-ink px-4 py-2 text-[12px] font-medium text-canvas transition-colors hover:bg-primary disabled:opacity-50"
+              :disabled="!licUsername.trim() || licLoading"
+              @click="issueLic"
+            >
+              <svg v-if="licLoading" class="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+              <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>
+              </svg>
+              .lic を発行してダウンロード
+            </button>
+          </div>
         </div>
       </div>
 
@@ -446,4 +575,10 @@ watch(tab, (t) => {
 <style scoped>
 .overflow-y-auto::-webkit-scrollbar { display: none; }
 .overflow-y-auto { scrollbar-width: none; }
+
+/* 選択フィルターの浮きエフェクト */
+.filter-active {
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.22), 0 0 1px rgba(0, 0, 0, 0.08);
+  letter-spacing: 0.01em;
+}
 </style>
