@@ -128,3 +128,14 @@ def save_original(src: Path, audio_id: uuid.UUID) -> Path:
     dest = storage / f"{audio_id}.wav"
     shutil.copy2(src, dest)
     return dest
+
+
+def get_copy_path(user_id: uuid.UUID, audio_id: uuid.UUID) -> Path:
+    return Path(settings.DOWNLOADS_DIR) / str(user_id) / f"{audio_id}.wav"
+
+
+def copy_to_downloads(src_path: Path, user_id: uuid.UUID, audio_id: uuid.UUID) -> Path:
+    dest = get_copy_path(user_id, audio_id)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src_path, dest)
+    return dest

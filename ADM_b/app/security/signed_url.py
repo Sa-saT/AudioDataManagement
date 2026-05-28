@@ -57,3 +57,31 @@ def verify_download(audio_id: str, exp: int, sig: str) -> None:
         raise SignedURLError("INVALID_SIGNATURE", "invalid or tampered signature")
     if int(time.time()) > exp:
         raise SignedURLError("URL_EXPIRED", "download URL has expired")
+
+
+def issue_order_download(order_id: str, user_id: str) -> dict:
+    exp = int(time.time()) + _DOWNLOAD_TTL_SECONDS
+    sig = _sign("order_download", order_id, user_id, str(exp))
+    return {"order_id": order_id, "user_id": user_id, "exp": exp, "sig": sig}
+
+
+def verify_order_download(order_id: str, user_id: str, exp: int, sig: str) -> None:
+    expected = _sign("order_download", order_id, user_id, str(exp))
+    if not hmac.compare_digest(expected, sig):
+        raise SignedURLError("INVALID_SIGNATURE", "invalid or tampered signature")
+    if int(time.time()) > exp:
+        raise SignedURLError("URL_EXPIRED", "download URL has expired")
+
+
+def issue_copy_download(audio_id: str, user_id: str) -> dict:
+    exp = int(time.time()) + _DOWNLOAD_TTL_SECONDS
+    sig = _sign("copy_download", audio_id, user_id, str(exp))
+    return {"audio_id": audio_id, "user_id": user_id, "exp": exp, "sig": sig}
+
+
+def verify_copy_download(audio_id: str, user_id: str, exp: int, sig: str) -> None:
+    expected = _sign("copy_download", audio_id, user_id, str(exp))
+    if not hmac.compare_digest(expected, sig):
+        raise SignedURLError("INVALID_SIGNATURE", "invalid or tampered signature")
+    if int(time.time()) > exp:
+        raise SignedURLError("URL_EXPIRED", "download URL has expired")

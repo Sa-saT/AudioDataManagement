@@ -12,8 +12,30 @@ const api = useApi()
 const playerRef = ref<{ isPlaying: boolean } | null>(null)
 const isPlaying = computed(() => playerRef.value?.isPlaying ?? false)
 
-const isFav = ref(false)
-const toggleFav = () => { isFav.value = !isFav.value }
+const isFav = ref(props.track.isFavorited ?? false)
+const favCount = ref(props.track.favoriteCount ?? 0)
+const favLoading = ref(false)
+
+async function toggleFav() {
+  if (!auth.isActivated) return
+  if (favLoading.value) return
+  favLoading.value = true
+  const prev = isFav.value
+  isFav.value = !prev
+  favCount.value += isFav.value ? 1 : -1
+  try {
+    const res = await api.post<{ is_favorited: boolean; favorite_count: number }>(
+      `/api/v1/audios/${props.track.id}/favorite`,
+    )
+    isFav.value = res.is_favorited
+    favCount.value = res.favorite_count
+  } catch {
+    isFav.value = prev
+    favCount.value = props.track.favoriteCount ?? 0
+  } finally {
+    favLoading.value = false
+  }
+}
 
 const isNew = computed(() => {
   if (!props.track.publishedAt) return false
@@ -139,17 +161,19 @@ async function executeDownload() {
       <template #actions>
         <button
           class="flex items-center gap-1 transition-colors"
-          :class="isFav ? 'text-accent' : 'text-muted hover:text-accent'"
+          :class="[
+            isFav ? 'text-accent' : 'text-muted hover:text-accent',
+            !auth.isActivated ? 'cursor-default opacity-40' : '',
+          ]"
           :aria-label="isFav ? 'お気に入り解除' : 'お気に入り'"
+          :disabled="!auth.isActivated || favLoading"
           @click.stop="toggleFav"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"
             :fill="isFav ? 'currentColor' : 'none'">
             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
           </svg>
-          <span v-if="showFavCount" class="font-mono text-[11px]">
-            {{ (track.favoriteCount ?? 0) + (isFav ? 1 : 0) }}
-          </span>
+          <span v-if="showFavCount" class="font-mono text-[11px]">{{ favCount }}</span>
         </button>
 
         <!-- DL ボタン: user=常時 / creator=自分の音源のみ / admin=常時 -->

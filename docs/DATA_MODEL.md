@@ -146,34 +146,36 @@ platinum = 800
 
 ### 2.7 `creator_payouts`
 
-音源の DL に対する Creator 支払いレコード。FR-PAY-03 により音源1件につき1行。
+音源 DL または Commission 発注 Done に対する Creator 支払いレコード。
 
 | 列 | 型 | 制約 | 説明 |
 |---|---|---|---|
 | `id` | UUID | PK | |
-| `audio_id` | UUID | FK→audios.id, UNIQUE, NOT NULL | 1音源 = 1支払い |
+| `audio_id` | UUID | FK→audios.id, UNIQUE, **NULLABLE** | 音源DL由来: 設定。Commission由来: NULL |
 | `creator_id` | UUID | FK→creator_profiles.user_id, NOT NULL | |
-| `rank_at_payout` | ENUM | NOT NULL | DL時点のランクをスナップショット |
-| `unit_price_yen` | INTEGER | NOT NULL | DL時点の単価をスナップショット |
-| `amount_yen` | INTEGER | NOT NULL | = unit_price_yen × 1 |
+| `rank_at_payout` | ENUM | NOT NULL | DL/Done時点のランクをスナップショット |
+| `unit_price_yen` | INTEGER | NOT NULL | DL/Done時点の単価をスナップショット |
+| `amount_yen` | INTEGER | NOT NULL | 音源DL: unit_price × 1。Commission: unit_price × token_cost |
 | `status` | ENUM(`pending`,`paid`,`cancelled`) | NOT NULL, DEFAULT `pending` | |
 | `paid_at` | TIMESTAMPTZ |  | |
 | `paid_by_admin_id` | UUID | FK→users.id |  |
-| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | DL成立と同時に作成 |
+| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
+
+> `audio_id` は UNIQUE 制約があるが NULLABLE のため、NULL 値は複数行持てる (PostgreSQL の挙動)。
 
 ### 2.8 `token_consumptions`
 
-DL時の token 消費履歴。再DLは記録しない (`download_logs` に残す)。
+DL または Commission Done 時の token 消費履歴。再DLは記録しない (`download_logs` に残す)。
 `period_yyyymm` 列により当月消費量の集計が定数時間で可能。
 
 | 列 | 型 | 制約 | 説明 |
 |---|---|---|---|
 | `id` | UUID | PK | |
 | `user_id` | UUID | FK→users.id, NOT NULL | |
-| `audio_id` | UUID | FK→audios.id, NOT NULL | |
-| `license_id` | UUID | FK→licenses.id, NOT NULL | DL時に有効だったlic |
-| `tokens` | INTEGER | NOT NULL, CHECK (>0) | = audio.duration_sec |
-| `period_yyyymm` | INTEGER | NOT NULL | DL時刻(JST)の YYYYMM (例: 202605) |
+| `audio_id` | UUID | FK→audios.id, **NULLABLE** | 音源DL由来: 設定。Commission由来: NULL |
+| `license_id` | UUID | FK→licenses.id, NOT NULL | 消費時に有効だったlic |
+| `tokens` | INTEGER | NOT NULL, CHECK (>0) | 音源DL: duration_sec。Commission: token_cost |
+| `period_yyyymm` | INTEGER | NOT NULL | 消費時刻(JST)の YYYYMM (例: 202605) |
 | `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
 
 > インデックス: `idx_tc_user_period (user_id, period_yyyymm)` で残量計算が高速。

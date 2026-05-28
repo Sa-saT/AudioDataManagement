@@ -154,31 +154,32 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 
 | Phase | 内容 | 状態 |
 |---|---|---|
-| 1 | フロント基礎 (Dashboard / Activate / Pinia / 擬似波形) | 完了 |
+| 1 | フロント基礎 (Dashboard / Activate / Pinia / 擬似波形) | ✅ 完了 |
 | 2 | FastAPI + PostgreSQL 接続、`/audios` `/auth/activate`、実 wav 配信 | ✅ 完了 |
-| 3 | Creator: アップロード UI / Admin: 管理画面 / 購入 / 検索 | **次着手** |
+| 3 | Creator: アップロード UI / Admin: 管理画面 / 購入 / 検索 / Commission | **実装中 (ローカル完了)** |
 | 4 | 本番運用 (CDN, 監視, バックアップ) | 未着手 |
 
-### Phase 2 タスク進捗 (バックエンド)
+### Phase 3 タスク進捗
 
 | # | 内容 | 状態 |
 |---|---|---|
-| 7 | DB 基盤 (SQLAlchemy / Alembic / init_db.sh) | ✅ 完了 |
-| 8 | POST /auth/activate (.lic 検証 + JWT) | ✅ 完了 |
-| 9 | GET /audios, GET /audios/{id} | ✅ 完了 |
-| 10 | POST /audios (ffprobe + peaks + 原本保存) | ✅ 完了 |
-| 11 | 視聴: GET /audios/{id}/stream-url + /stream (10秒動的切り出し + signed URL) | ✅ 完了 |
-| 12 | DL: POST /audios/{id}/download (排他tx) + /download-url + /download-file (Range対応) | ✅ 完了 |
+| 31 | Admin 管理画面 (ユーザ一覧・ランク変更) | ✅ 完了 |
+| 32 | Admin: lic 発行 / token 追加付与 / payout 承認 | ✅ 完了 |
+| 33 | Creator: アップロード UI (`/uploads`) | ✅ 完了 |
+| 34 | Dashboard を実 API 接続 (mockTracks 撤去・購入フロー・ページャー) | ✅ 完了 |
+| 35 | お気に入り: POST `/audios/{id}/favorite` (toggle) + AudioCard UI | ✅ 完了 |
+| 36 | タグ検索: GET `/audios/tags` + `?tags=` クエリ (OR) + Dashboard チップ UI | ✅ 完了 |
+| 37 | My Downloads: GET `/me/downloads` + 再DL + コピー削除 + ストレージ表示 | ✅ 完了 |
+| 38 | Admin: クリエイター統計 / グループ / ユーザ role フィルタ | ✅ 完了 |
+| 39 | Commission バックエンド (orders API 全エンドポイント + migration) | ✅ 完了 |
+| 40 | Commission フロントエンド (`/orders`, `/orders/[id]`, Admin タブ) | ✅ 完了 |
 
-### Phase 3 次着手スコープ
+### Phase 3 残スコープ (ローカル開発終了後 → Phase 4 前に整備)
 
-- Creator アップロード UI (エラーポップアップで `INVALID_CODEC` 等を日本語表示)
-- Dashboard を実 API に接続 (mockTracks 撤去)
-- 視聴: 波形クリック → `/stream-url?start=N` 取得 → Web Audio API で10秒再生
-- 購入フロー: 確認モーダル → `/download` → 完了表示 + ファイル保存
-- My Downloads: `/download-url` 経由の再DL、Downloads ストレージ使用量表示・コピー削除
-- 発注 (Commission) 機能: チケット作成 / Admin 指名・管理 / Creator 提出 / Done 通知 (詳細: docs/REQUIREMENTS.md §5.10)
-- Admin 管理画面 (ランク変更 / lic 発行 / token 追加付与 / payout 承認)
+- 視聴: 波形クリック → `/stream-url?start=N` 取得 → Web Audio API で10秒再生 (wavesurfer + Web Audio 連携)
+- Creator アップロード: `INVALID_CODEC` 等のエラーコードを日本語ポップアップ表示
+- Commission: 発注完了通知バッジ (TopNav に未読 done 件数表示)
+- 本番: S3互換ストレージ切替 / CDN / 監視 / バックアップ
 
 ## 9. 用語
 

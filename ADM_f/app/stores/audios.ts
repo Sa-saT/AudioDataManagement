@@ -16,6 +16,8 @@ interface AudiosState {
   page: number
   searchQuery: string
   mineOnly: boolean
+  activeTags: string[]
+  tagCounts: { name: string; count: number }[]
 }
 
 const STEP = 5
@@ -47,6 +49,8 @@ export const useAudiosStore = defineStore('audios', {
     page: 1,
     searchQuery: '',
     mineOnly: false,
+    activeTags: [],
+    tagCounts: [],
   }),
   getters: {
     sorted(state): AudioTrack[] {
@@ -90,6 +94,7 @@ export const useAudiosStore = defineStore('audios', {
           per_page: this.perPage,
         }
         if (this.mineOnly) query.mine = true
+        if (this.activeTags.length > 0) query.tags = this.activeTags
         const res = await api.get<ApiAudioListResponse>('/api/v1/audios', { query })
         this.items = res.items.map(mapApiAudio)
         this.total = res.total
@@ -138,6 +143,30 @@ export const useAudiosStore = defineStore('audios', {
     },
     setSearch(q: string) {
       this.searchQuery = q
+    },
+    async fetchTags() {
+      try {
+        const api = useApi()
+        this.tagCounts = await api.get<{ name: string; count: number }[]>('/api/v1/audios/tags')
+      } catch {
+        // non-critical: tag panel stays empty
+      }
+    },
+    toggleTag(tag: string) {
+      const idx = this.activeTags.indexOf(tag)
+      if (idx >= 0) {
+        this.activeTags.splice(idx, 1)
+      } else {
+        this.activeTags.push(tag)
+      }
+      this.page = 1
+      this.fetch()
+    },
+    clearTags() {
+      if (this.activeTags.length === 0) return
+      this.activeTags = []
+      this.page = 1
+      this.fetch()
     },
     setMine(enabled: boolean) {
       if (this.mineOnly === enabled) return

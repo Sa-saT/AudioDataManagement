@@ -19,6 +19,8 @@ class AudioListItem(BaseModel):
     youtube_safe: bool
     published_at: datetime | None
     tags: list[str] = []
+    favorite_count: int = 0
+    is_favorited: bool = False
 
 
 class AudioDetail(AudioListItem):

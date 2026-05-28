@@ -16,6 +16,8 @@ export interface ApiAudioListItem {
   tags?: string[]
   is_public?: boolean
   description?: string | null
+  favorite_count?: number
+  is_favorited?: boolean
 }
 
 export interface ApiAudioListResponse {
@@ -45,8 +47,10 @@ export interface AudioTrack {
   tags?: string[]
   isPublic?: boolean
   description?: string | null
-  /** Number of users who favorited (Phase 3 backend extension) */
+  /** Number of users who favorited */
   favoriteCount?: number
+  /** Whether the current user has favorited this audio */
+  isFavorited?: boolean
   /** For client-side fallback sort */
   recommendScore?: number
 }
@@ -95,6 +99,7 @@ export function mapApiAudio(api: ApiAudioListItem): AudioTrack {
     tags: api.tags ?? [],
     isPublic: api.is_public,
     description: api.description,
-    favoriteCount: 0,
+    favoriteCount: api.favorite_count ?? 0,
+    isFavorited: api.is_favorited ?? false,
   }
 }

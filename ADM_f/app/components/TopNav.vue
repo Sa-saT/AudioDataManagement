@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { useAuthStore } from '~/stores/auth'
+import { useSystemStore } from '~/stores/system'
 
 const auth = useAuthStore()
+const system = useSystemStore()
+
+onMounted(() => system.fetchCommissionStatus())
 const route = useRoute()
 const router = useRouter()
 
@@ -96,6 +100,16 @@ const isAdmin = computed(() => auth.role === 'admin')
           >
             Dashboard
             <span v-if="isActive('/dashboard')" class="absolute inset-x-0 -bottom-px h-0.5 rounded-sm bg-primary" />
+          </NuxtLink>
+
+          <NuxtLink
+            v-if="auth.isActivated && system.commissionEnabled"
+            to="/orders"
+            class="relative flex h-12 items-center text-[13px] font-medium text-ink transition-opacity"
+            :class="route.path.startsWith('/orders') ? 'opacity-100' : 'opacity-[0.55] hover:opacity-100'"
+          >
+            発注
+            <span v-if="route.path.startsWith('/orders')" class="absolute inset-x-0 -bottom-px h-0.5 rounded-sm bg-primary" />
           </NuxtLink>
         </nav>
       </div>

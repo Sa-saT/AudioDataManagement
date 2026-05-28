@@ -10,7 +10,7 @@ const auth = useAuthStore()
 
 onMounted(async () => {
   auth.hydrate()
-  await audios.fetch()
+  await Promise.all([audios.fetch(), audios.fetchTags()])
 })
 
 // per-page options は store で動的計算 (total に応じた 5 の倍数)
@@ -36,19 +36,9 @@ watch(searchInput, (v) => audios.setSearch(v))
 const searchFocused = ref(false)
 const searchBoxRef = ref<HTMLDivElement | null>(null)
 
-const allTags = computed(() => {
-  const map = new Map<string, number>()
-  for (const t of audios.items) {
-    if (!t.tags) continue
-    for (const tag of t.tags) {
-      map.set(tag, (map.get(tag) ?? 0) + 1)
-    }
-  }
-  return Array.from(map.entries()).sort((a, b) => {
-    if (b[1] !== a[1]) return b[1] - a[1]
-    return a[0].localeCompare(b[0])
-  })
-})
+const allTags = computed(() =>
+  audios.tagCounts.map(({ name, count }) => [name, count] as [string, number]),
+)
 
 const filteredTags = computed(() => {
   const q = searchInput.value.trim().toLowerCase()
@@ -72,7 +62,7 @@ function highlight(tag: string): string {
 
 function pickTag(tag: string) {
   audios.setMine(false)
-  searchInput.value = tag
+  audios.toggleTag(tag)
   searchFocused.value = false
 }
 
@@ -203,14 +193,20 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
               <button
                 v-for="([tag, count], idx) in filteredTags"
                 :key="tag"
-                class="tag-chip-anim group flex items-center gap-1.5 rounded-full border border-hairline-strong bg-surface-strong/70 px-2.5 py-1 font-mono text-[11px] text-body-strong transition-all hover:-translate-y-px hover:border-primary hover:bg-white"
+                class="tag-chip-anim group flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[11px] transition-all hover:-translate-y-px"
+                :class="audios.activeTags.includes(tag)
+                  ? 'border-primary bg-primary/10 text-primary-active'
+                  : 'border-hairline-strong bg-surface-strong/70 text-body-strong hover:border-primary hover:bg-white'"
                 :style="`animation-delay: ${Math.min(idx * 22, 300)}ms`"
                 @click="pickTag(tag)"
               >
                 <span v-html="highlight(tag)" />
-                <span class="rounded-full bg-hairline-strong/80 px-1.5 py-0 text-[10px] text-body group-hover:bg-primary/15 group-hover:text-primary-active">
-                  {{ count }}
-                </span>
+                <span
+                  class="rounded-full px-1.5 py-0 text-[10px]"
+                  :class="audios.activeTags.includes(tag)
+                    ? 'bg-primary/15 text-primary-active'
+                    : 'bg-hairline-strong/80 text-body group-hover:bg-primary/15 group-hover:text-primary-active'"
+                >{{ count }}</span>
               </button>
             </div>
             <div v-else class="py-4 text-center text-[12px] text-muted">
@@ -220,6 +216,30 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
           </div>
         </Transition>
       </div>
+
+      <!-- Active tag chips -->
+      <TransitionGroup
+        v-if="audios.activeTags.length > 0"
+        tag="div"
+        name="chip"
+        class="flex shrink-0 items-center gap-1"
+      >
+        <button
+          v-for="tag in audios.activeTags"
+          :key="tag"
+          class="flex items-center gap-1 rounded-full border border-primary bg-primary/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-primary-active transition-colors hover:bg-primary/20"
+          @click="audios.toggleTag(tag)"
+        >
+          {{ tag }}
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M18 6 6 18M6 6l12 12"/>
+          </svg>
+        </button>
+        <button
+          class="rounded-full border border-hairline-strong px-2 py-0.5 font-mono text-[10px] text-muted transition-colors hover:border-accent hover:text-accent"
+          @click="audios.clearTags()"
+        >全解除</button>
+      </TransitionGroup>
 
       <!-- Per-page + 全件: ◀ count ▶ / 全 N 件 (プレーンテキスト、黒統一) -->
       <div class="flex shrink-0 items-center gap-1 font-mono text-[12px] font-semibold text-ink">
@@ -336,4 +356,10 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
 /* hide scrollbar inside panel */
 .overflow-y-auto::-webkit-scrollbar { display: none; }
 .overflow-y-auto { scrollbar-width: none; }
+
+/* Active tag chip enter/leave */
+.chip-enter-active, .chip-leave-active { transition: opacity 180ms, transform 180ms; }
+.chip-enter-from { opacity: 0; transform: scale(0.8); }
+.chip-leave-to   { opacity: 0; transform: scale(0.8); }
+.chip-leave-active { position: absolute; }
 </style>

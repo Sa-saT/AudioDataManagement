@@ -15,7 +15,7 @@ onMounted(() => {
 })
 
 // ─── Tab ─────────────────────────────────────────────────────────────────────
-type Tab = 'users' | 'payouts' | 'tokens' | 'licenses'
+type Tab = 'users' | 'payouts' | 'tokens' | 'licenses' | 'orders' | 'settings'
 const tab = ref<Tab>('users')
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -338,10 +338,89 @@ async function issueLic() {
   }
 }
 
+// ─── Orders tab ──────────────────────────────────────────────────────────────
+interface AdminOrderItem {
+  id: string
+  title: string
+  token_cost: number
+  status: string
+  user_name: string
+  assigned_creator_name: string | null
+  notified_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+const adminOrders = ref<AdminOrderItem[]>([])
+const adminOrdersLoading = ref(false)
+const adminOrdersError = ref<string | null>(null)
+
+async function fetchAdminOrders() {
+  adminOrdersLoading.value = true
+  adminOrdersError.value = null
+  try {
+    adminOrders.value = await api.get<AdminOrderItem[]>('/api/v1/orders')
+  } catch (e) {
+    adminOrdersError.value = errorMessageJa(e)
+  } finally {
+    adminOrdersLoading.value = false
+  }
+}
+
+const ORDER_STATUS_LABEL: Record<string, string> = {
+  draft: 'Draft', open: 'Open', recruiting: '募集中',
+  assigned: 'アサイン済', reviewing: 'レビュー中', done: '完了', cancelled: 'キャンセル',
+}
+const ORDER_STATUS_CLASS: Record<string, string> = {
+  draft: 'bg-hairline-soft text-body',
+  open: 'bg-primary/15 text-primary-active',
+  recruiting: 'bg-primary/20 text-primary-active',
+  assigned: 'bg-[#20b2aa22] text-[#0e7a74]',
+  reviewing: 'bg-[#f0a84022] text-[#b07000]',
+  done: 'bg-[#2ecc7122] text-[#1a9950]',
+  cancelled: 'bg-accent/15 text-accent',
+}
+
+// ─── Settings tab ─────────────────────────────────────────────────────────────
+interface SystemSettingItem { key: string; value: string; description: string | null }
+
+const settings = ref<SystemSettingItem[]>([])
+const settingsLoading = ref(false)
+const settingsError = ref<string | null>(null)
+const settingSaving = ref<Record<string, boolean>>({})
+
+async function fetchSettings() {
+  settingsLoading.value = true
+  settingsError.value = null
+  try {
+    settings.value = await api.get<SystemSettingItem[]>('/api/v1/admin/settings')
+  } catch (e) {
+    settingsError.value = errorMessageJa(e)
+  } finally {
+    settingsLoading.value = false
+  }
+}
+
+async function toggleSetting(key: string, current: string) {
+  const newVal = current === 'true' ? 'false' : 'true'
+  settingSaving.value[key] = true
+  try {
+    await api.patch(`/api/v1/admin/settings/${key}`, { body: { value: newVal } })
+    const s = settings.value.find(s => s.key === key)
+    if (s) s.value = newVal
+  } catch (e) {
+    settingsError.value = errorMessageJa(e)
+  } finally {
+    settingSaving.value[key] = false
+  }
+}
+
 // ─── Load on tab change ───────────────────────────────────────────────────────
 watch(tab, (t) => {
   if ((t === 'users' || t === 'tokens') && users.value.length === 0) fetchUsers()
   if (t === 'payouts') fetchPayouts()
+  if (t === 'orders') fetchAdminOrders()
+  if (t === 'settings') fetchSettings()
 }, { immediate: true })
 </script>
 
@@ -354,9 +433,9 @@ watch(tab, (t) => {
     </div>
 
     <!-- Tabs -->
-    <div class="flex shrink-0 gap-4 border-b border-hairline-soft pb-0">
+    <div class="flex shrink-0 flex-wrap gap-4 border-b border-hairline-soft pb-0">
       <button
-        v-for="t in ([['users','ユーザ管理'],['payouts','Payout'],['tokens','Token付与'],['licenses','lic発行']] as [Tab, string][])"
+        v-for="t in ([['users','ユーザ管理'],['payouts','Payout'],['tokens','Token付与'],['licenses','lic発行'],['orders','発注管理'],['settings','設定']] as [Tab, string][])"
         :key="t[0]"
         class="relative pb-2 text-[12px] font-semibold text-ink transition-all"
         :class="tab === t[0] ? 'filter-active' : 'opacity-40 hover:opacity-70'"
@@ -440,14 +519,14 @@ watch(tab, (t) => {
                 <!-- quick stats summary (loaded state) -->
                 <div v-if="creatorStats[u.id]" class="shrink-0 text-right">
                   <p class="font-mono text-[11px] text-ink">
-                    {{ creatorStats[u.id].total_uploads }}UP
+                    {{ creatorStats[u.id]!.total_uploads }}UP
                     <span class="mx-1 text-muted">·</span>
-                    {{ creatorStats[u.id].total_sold }}DL
+                    {{ creatorStats[u.id]!.total_sold }}DL
                   </p>
-                  <p class="font-mono text-[10px]" :class="creatorStats[u.id].payout_pending_yen > 0 ? 'text-accent' : 'text-muted'">
-                    {{ creatorStats[u.id].payout_pending_yen > 0
-                      ? `未払 ¥${creatorStats[u.id].payout_pending_yen.toLocaleString()}`
-                      : `累計 ¥${creatorStats[u.id].payout_total_yen.toLocaleString()}` }}
+                  <p class="font-mono text-[10px]" :class="creatorStats[u.id]!.payout_pending_yen > 0 ? 'text-accent' : 'text-muted'">
+                    {{ creatorStats[u.id]!.payout_pending_yen > 0
+                      ? `未払 ¥${creatorStats[u.id]!.payout_pending_yen.toLocaleString()}`
+                      : `累計 ¥${creatorStats[u.id]!.payout_total_yen.toLocaleString()}` }}
                   </p>
                 </div>
 
@@ -474,15 +553,15 @@ watch(tab, (t) => {
                   <!-- 累計サマリ -->
                   <div class="grid grid-cols-3 gap-3">
                     <div class="rounded-lg border border-hairline-soft bg-surface-strong/40 px-3 py-2.5 text-center">
-                      <p class="font-mono text-[18px] font-semibold text-ink">{{ creatorStats[u.id].total_uploads }}</p>
+                      <p class="font-mono text-[18px] font-semibold text-ink">{{ creatorStats[u.id]!.total_uploads }}</p>
                       <p class="mt-0.5 font-mono text-[10px] text-muted uppercase tracking-wider">Total UP</p>
                     </div>
                     <div class="rounded-lg border border-hairline-soft bg-surface-strong/40 px-3 py-2.5 text-center">
-                      <p class="font-mono text-[18px] font-semibold text-ink">{{ creatorStats[u.id].total_sold }}</p>
+                      <p class="font-mono text-[18px] font-semibold text-ink">{{ creatorStats[u.id]!.total_sold }}</p>
                       <p class="mt-0.5 font-mono text-[10px] text-muted uppercase tracking-wider">Total DL</p>
                     </div>
                     <div class="rounded-lg border border-hairline-soft bg-surface-strong/40 px-3 py-2.5 text-center">
-                      <p class="font-mono text-[18px] font-semibold text-ink">{{ creatorStats[u.id].total_unsold }}</p>
+                      <p class="font-mono text-[18px] font-semibold text-ink">{{ creatorStats[u.id]!.total_unsold }}</p>
                       <p class="mt-0.5 font-mono text-[10px] text-muted uppercase tracking-wider">残</p>
                     </div>
                   </div>
@@ -491,25 +570,25 @@ watch(tab, (t) => {
                   <div class="flex items-center gap-4 rounded-lg border border-hairline-soft bg-surface-strong/40 px-4 py-2.5">
                     <div>
                       <p class="font-mono text-[10px] uppercase tracking-wider text-muted">支払累計</p>
-                      <p class="font-mono text-[14px] font-semibold text-ink">¥{{ creatorStats[u.id].payout_total_yen.toLocaleString() }}</p>
+                      <p class="font-mono text-[14px] font-semibold text-ink">¥{{ creatorStats[u.id]!.payout_total_yen.toLocaleString() }}</p>
                     </div>
                     <div class="h-6 w-px bg-hairline-soft" />
                     <div>
                       <p class="font-mono text-[10px] uppercase tracking-wider text-muted">未払い</p>
-                      <p class="font-mono text-[14px] font-semibold" :class="creatorStats[u.id].payout_pending_yen > 0 ? 'text-accent' : 'text-muted'">
-                        ¥{{ creatorStats[u.id].payout_pending_yen.toLocaleString() }}
+                      <p class="font-mono text-[14px] font-semibold" :class="creatorStats[u.id]!.payout_pending_yen > 0 ? 'text-accent' : 'text-muted'">
+                        ¥{{ creatorStats[u.id]!.payout_pending_yen.toLocaleString() }}
                       </p>
                     </div>
                     <button
-                      v-if="creatorStats[u.id].payout_pending_yen > 0"
+                      v-if="creatorStats[u.id]!.payout_pending_yen > 0"
                       class="ml-auto rounded border border-primary/40 bg-primary/10 px-3 py-1 text-[11px] font-medium text-primary-active hover:bg-primary/20"
                       @click="tab = 'payouts'"
                     >Payout 確認 →</button>
                   </div>
 
                   <!-- 月次テーブル -->
-                  <div v-if="creatorStats[u.id].monthly.length > 0">
-                    <p class="mb-2 font-mono text-[10px] uppercase tracking-wider text-muted">月次 (直近 {{ creatorStats[u.id].monthly.length }} ヶ月)</p>
+                  <div v-if="creatorStats[u.id]!.monthly.length > 0">
+                    <p class="mb-2 font-mono text-[10px] uppercase tracking-wider text-muted">月次 (直近 {{ creatorStats[u.id]!.monthly.length }} ヶ月)</p>
                     <table class="w-full border-collapse font-mono text-[11px]">
                       <thead>
                         <tr class="border-b border-hairline-soft text-left text-muted">
@@ -520,7 +599,7 @@ watch(tab, (t) => {
                       </thead>
                       <tbody>
                         <tr
-                          v-for="m in [...creatorStats[u.id].monthly].reverse()"
+                          v-for="m in [...creatorStats[u.id]!.monthly].reverse()"
                           :key="m.yyyymm"
                           class="border-b border-hairline-soft/50 last:border-0"
                         >
@@ -782,6 +861,97 @@ watch(tab, (t) => {
               .lic を発行してダウンロード
             </button>
           </div>
+        </div>
+      </div>
+
+      <!-- ⑤ 発注管理 -->
+      <div v-if="tab === 'orders'">
+        <div class="mb-3 flex items-center gap-4">
+          <span class="text-[11px] font-semibold uppercase tracking-widest text-body-strong">発注チケット一覧</span>
+          <button class="ml-auto text-[11px] text-muted hover:text-ink" @click="fetchAdminOrders">↻ 更新</button>
+        </div>
+
+        <div v-if="adminOrdersLoading" class="py-8 text-center text-[12px] text-muted">読み込み中…</div>
+        <div v-else-if="adminOrdersError" class="py-4 text-center text-[12px] text-accent">{{ adminOrdersError }}</div>
+        <div v-else-if="adminOrders.length === 0" class="py-8 text-center text-[12px] text-muted">発注チケットはまだありません。</div>
+
+        <div v-else class="space-y-1.5">
+          <NuxtLink
+            v-for="order in adminOrders"
+            :key="order.id"
+            :to="`/orders/${order.id}`"
+            class="card flex items-center gap-3 px-4 py-3 transition-colors hover:border-primary/40"
+          >
+            <span
+              class="shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold"
+              :class="ORDER_STATUS_CLASS[order.status] ?? 'bg-hairline-soft text-body'"
+            >{{ ORDER_STATUS_LABEL[order.status] ?? order.status }}</span>
+
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2">
+                <span class="truncate text-[13px] font-medium text-ink">{{ order.title }}</span>
+              </div>
+              <div class="mt-0.5 flex items-center gap-2 text-[10px] text-muted font-mono">
+                <span>{{ order.user_name }}</span>
+                <template v-if="order.assigned_creator_name">
+                  <span>→</span><span>{{ order.assigned_creator_name }}</span>
+                </template>
+                <span class="h-1 w-1 rounded-full bg-muted" />
+                <span>{{ order.token_cost }} tk</span>
+                <span class="h-1 w-1 rounded-full bg-muted" />
+                <span>{{ new Date(order.updated_at).toLocaleDateString('ja-JP') }}</span>
+              </div>
+            </div>
+
+            <svg class="shrink-0 text-muted" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </NuxtLink>
+        </div>
+      </div>
+
+      <!-- ⑥ 設定 -->
+      <div v-if="tab === 'settings'" class="max-w-[480px]">
+        <p class="mb-4 text-[11px] font-semibold uppercase tracking-widest text-body-strong">システム設定</p>
+
+        <div v-if="settingsLoading" class="py-4 text-[12px] text-muted">読み込み中…</div>
+        <div v-else-if="settingsError" class="text-[12px] text-accent">{{ settingsError }}</div>
+
+        <div v-else class="card space-y-0 overflow-hidden p-0">
+          <div
+            v-for="(s, idx) in settings"
+            :key="s.key"
+            class="flex items-center gap-4 px-4 py-3"
+            :class="idx > 0 ? 'border-t border-hairline-soft' : ''"
+          >
+            <div class="min-w-0 flex-1">
+              <p class="font-mono text-[12px] font-semibold text-ink">{{ s.key }}</p>
+              <p v-if="s.description" class="mt-0.5 text-[11px] text-muted">{{ s.description }}</p>
+            </div>
+
+            <!-- Boolean toggle -->
+            <template v-if="s.value === 'true' || s.value === 'false'">
+              <span class="font-mono text-[11px]" :class="s.value === 'true' ? 'text-[#1a9950]' : 'text-muted'">
+                {{ s.value === 'true' ? '有効' : '無効' }}
+              </span>
+              <button
+                class="relative h-5 w-9 rounded-full transition-colors"
+                :class="s.value === 'true' ? 'bg-[#2ecc71]' : 'bg-hairline-strong'"
+                :disabled="settingSaving[s.key]"
+                @click="toggleSetting(s.key, s.value)"
+              >
+                <span
+                  class="absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform"
+                  :class="s.value === 'true' ? 'translate-x-4' : 'translate-x-0.5'"
+                />
+              </button>
+            </template>
+
+            <!-- Raw value fallback -->
+            <span v-else class="font-mono text-[11px] text-body">{{ s.value }}</span>
+          </div>
+
+          <p v-if="settings.length === 0" class="px-4 py-3 text-[12px] text-muted">設定がありません。</p>
         </div>
       </div>
 

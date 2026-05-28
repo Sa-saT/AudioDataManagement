@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     # Storage
     STORAGE_BACKEND: str = "local"
     STORAGE_DIR: str = "/tmp/adm_storage/sounds"
+    DOWNLOADS_DIR: str = "/tmp/adm_storage/downloads"
+    ORDERS_DIR: str = "/tmp/adm_storage/orders"
 
     # Audio
     PREVIEW_DURATION_SEC: int = 10

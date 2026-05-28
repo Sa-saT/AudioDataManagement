@@ -21,6 +21,7 @@ from app.models import (
     CreatorRankPrice,
     DownloadKind,
     DownloadLog,
+    Favorite,
     PayoutStatus,
     TokenConsumption,
 )
@@ -69,7 +70,11 @@ def _client_ip(request: Request) -> str | None:
     return request.client.host if request.client else None
 
 
-def _to_list_item(audio: Audio) -> AudioListItem:
+def _to_list_item(
+    audio: Audio,
+    favorite_count: int = 0,
+    is_favorited: bool = False,
+) -> AudioListItem:
     return AudioListItem(
         id=str(audio.id),
         title=audio.title,
@@ -83,7 +88,22 @@ def _to_list_item(audio: Audio) -> AudioListItem:
         youtube_safe=audio.youtube_safe,
         published_at=audio.published_at,
         tags=[t.name for t in audio.tags],
+        favorite_count=favorite_count,
+        is_favorited=is_favorited,
     )
+
+
+@router.get("/tags")
+def list_tags(db: Session = Depends(get_db)) -> list[dict]:
+    rows = db.execute(
+        select(Tag.name, func.count(AudioTag.audio_id).label("cnt"))
+        .join(AudioTag, AudioTag.tag_id == Tag.id)
+        .join(Audio, Audio.id == AudioTag.audio_id)
+        .where(Audio.is_public.is_(True), Audio.downloaded_by_user_id.is_(None))
+        .group_by(Tag.name)
+        .order_by(func.count(AudioTag.audio_id).desc())
+    ).all()
+    return [{"name": r.name, "count": r.cnt} for r in rows]
 
 
 @router.get("", response_model=AudioListResponse)
@@ -92,6 +112,7 @@ def list_audios(
     page: int = Query(1, ge=1),
     per_page: int = Query(10),
     mine: bool = Query(False),
+    tags: list[str] = Query(default=[]),
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ) -> AudioListResponse:
@@ -124,6 +145,15 @@ def list_audios(
         )
         order = Audio.recommend_score.desc() if sort == "recommended" else Audio.published_at.desc()
 
+    if tags:
+        tag_audio_ids = (
+            select(AudioTag.audio_id)
+            .join(Tag, Tag.id == AudioTag.tag_id)
+            .where(Tag.name.in_(tags))
+            .distinct()
+        )
+        base = base.where(Audio.id.in_(tag_audio_ids))
+
     total: int = db.execute(
         select(func.count()).select_from(base.subquery())
     ).scalar_one()
@@ -132,11 +162,32 @@ def list_audios(
         base.order_by(order).offset((page - 1) * per_page).limit(per_page)
     ).scalars().all()
 
+    audio_ids = [a.id for a in rows]
+    fav_counts: dict = {}
+    favorited_ids: set = set()
+    if audio_ids:
+        for row in db.execute(
+            select(Favorite.audio_id, func.count().label("cnt"))
+            .where(Favorite.audio_id.in_(audio_ids))
+            .group_by(Favorite.audio_id)
+        ).all():
+            fav_counts[row.audio_id] = row.cnt
+        if current_user:
+            favorited_ids = set(
+                db.execute(
+                    select(Favorite.audio_id)
+                    .where(Favorite.user_id == current_user.id, Favorite.audio_id.in_(audio_ids))
+                ).scalars().all()
+            )
+
     return AudioListResponse(
         total=total,
         page=page,
         per_page=per_page,
-        items=[_to_list_item(a) for a in rows],
+        items=[
+            _to_list_item(a, fav_counts.get(a.id, 0), a.id in favorited_ids)
+            for a in rows
+        ],
     )
 
 
@@ -450,6 +501,12 @@ def download_audio(
     ))
     db.commit()
 
+    # Non-critical: copy to user's downloads storage for re-download
+    try:
+        audio_file.copy_to_downloads(Path(audio.file_path), current_user.id, parsed_id)
+    except Exception:
+        pass
+
     params = issue_download(str(parsed_id))
     return DownloadResponse(
         download_url=_build_url("/api/v1/audios/download-file", params),
@@ -601,6 +658,42 @@ def update_audio(
     db.commit()
     db.refresh(audio)
     return _to_detail(audio)
+
+
+@router.post("/{audio_id}/favorite")
+def toggle_favorite(
+    audio_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    try:
+        parsed_id = uuid.UUID(audio_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "audio not found"})
+
+    audio = db.execute(select(Audio.id).where(Audio.id == parsed_id)).scalar_one_or_none()
+    if audio is None:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "audio not found"})
+
+    existing = db.execute(
+        select(Favorite).where(
+            Favorite.user_id == current_user.id,
+            Favorite.audio_id == parsed_id,
+        )
+    ).scalar_one_or_none()
+
+    if existing:
+        db.delete(existing)
+        is_favorited = False
+    else:
+        db.add(Favorite(user_id=current_user.id, audio_id=parsed_id))
+        is_favorited = True
+    db.commit()
+
+    count: int = db.execute(
+        select(func.count()).select_from(Favorite).where(Favorite.audio_id == parsed_id)
+    ).scalar_one()
+    return {"is_favorited": is_favorited, "favorite_count": count}
 
 
 @router.delete("/{audio_id}", status_code=status.HTTP_204_NO_CONTENT)

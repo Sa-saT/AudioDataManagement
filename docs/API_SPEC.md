@@ -86,8 +86,8 @@ Response 200:
 | `sort` | `recommended`/`newest` | `recommended` | |
 | `page` | int | 1 | |
 | `per_page` | 25/50/100/200 | 50 | |
-| `q` | string |  | 全文検索 (Phase 3) |
-| `tag` | string |  | タグID (Phase 3) |
+| `q` | string |  | 全文検索 (Phase 4) |
+| `tags` | string[] |  | タグ名 OR フィルタ。`?tags=jazz&tags=piano` で 1つ以上マッチする音源を返す |
 
 Response 200:
 ```json
@@ -103,11 +103,33 @@ Response 200:
       "duration_sec": 354,
       "token_cost": 354,
       "peaks": [0.12, 0.34, "..."],
+      "tags": ["jazz", "fusion"],
       "youtube_safe": true,
-      "published_at": "2026-05-20T00:00:00Z"
+      "published_at": "2026-05-20T00:00:00Z",
+      "favorite_count": 12,
+      "is_favorited": false
     }
   ]
 }
+```
+
+### GET `/audios/tags`
+販売中の音源に付けられているタグ一覧をカウント降順で返す。認証不要。
+
+Response 200:
+```json
+[
+  { "name": "jazz", "count": 24 },
+  { "name": "piano", "count": 18 }
+]
+```
+
+### POST `/audios/{id}/favorite`
+お気に入りをトグル。JWT 必須 (アクティベート済み)。
+
+Response 200:
+```json
+{ "is_favorited": true, "favorite_count": 13 }
 ```
 
 ### GET `/audios/{id}`
@@ -185,16 +207,37 @@ Errors: 401 / 402 `INSUFFICIENT_TOKENS` / 403 `NOT_ACTIVATED` / 409 `ALREADY_SOL
 Response 200:
 ```json
 {
+  "storage_used_bytes": 52428800,
   "items": [
     {
       "id": "trk_0001",
       "title": "...",
+      "creator": { "id": "...", "display_name": "..." },
+      "duration_sec": 354,
+      "token_cost": 354,
+      "tags": ["jazz"],
+      "peaks": [...],
       "downloaded_at": "2026-05-21T03:12:00Z",
-      "tokens_consumed": 354
+      "tokens_consumed": 354,
+      "file_size_bytes": 26214400,
+      "copy_exists": true
     }
   ]
 }
 ```
+
+### GET `/me/downloads/{audio_id}/copy-url`
+再ダウンロード用 signed URL を発行 (token 消費なし)。コピーが存在しない場合は原本にフォールバック。
+
+Response 200: `{ "url": "/api/v1/me/downloads/copy-file?audio_id=...&sig=...&exp=..." }`
+
+### GET `/me/downloads/copy-file`
+signed URL で保護されたファイル配信 (Range 対応)。
+
+### DELETE `/me/downloads/{audio_id}`
+ダウンロードコピー (`/storage/downloads/{user_id}/{audio_id}.wav`) を削除。削除後は再DL不可。
+
+Response 204
 
 ### GET `/me/downloads/{audio_id}/file`
 再ダウンロード。token消費なし、payout生成なし、`download_logs.kind=redownload` を記録。要 JWT、自身が買い手のとき 200、そうでなければ 403。
@@ -271,7 +314,107 @@ Response 200:
 }
 ```
 
-## 5. Admin API (role=admin 必須)
+## 5. Commission (発注) API
+
+発注機能は `system_settings.commission_enabled = "true"` のときのみ有効。無効時は 503 `COMMISSION_DISABLED`。
+
+### GET `/system/commission`
+機能フラグ確認。認証不要。
+
+Response 200: `{ "enabled": true }`
+
+### GET `/orders`
+ロールに応じた発注一覧。
+- user: 自分が作成した発注
+- creator: 自分が候補または受注者の発注
+- admin: 全発注
+
+Response 200: `OrderListItem[]`
+
+```json
+[
+  {
+    "id": "uuid",
+    "title": "ゲーム用 SE 3種",
+    "token_cost": 300,
+    "status": "assigned",
+    "user_name": "alice",
+    "assigned_creator_name": "モくろろ",
+    "notified_at": null,
+    "created_at": "...",
+    "updated_at": "..."
+  }
+]
+```
+
+### POST `/orders`
+下書き作成 (user/creator/admin)。JWT 必須。
+
+Request: `{ "title": "...", "description": "...", "token_cost": 300 }`
+
+Response 201: `OrderOut` (詳細オブジェクト、candidates/messages 含む)
+
+### GET `/orders/{order_id}`
+チケット詳細。アクセス権確認あり。
+
+Response 200: `OrderOut`
+
+### POST `/orders/{order_id}/submit`
+draft → open。ユーザが送信。残 token 確認 (不足で 402)。
+
+### POST `/orders/{order_id}/cancel`
+任意ステータス → cancelled (done/cancelled からは不可)。
+
+### POST `/orders/{order_id}/message`
+コメント追加。Request: `{ "content": "..." }`
+
+### POST `/orders/{order_id}/respond`
+Creator が候補返信 (recruiting 状態のみ)。
+
+Request: `{ "response": "accepted" | "declined", "content": "..." }`
+
+### POST `/orders/{order_id}/submit-file`
+Creator が .wav を提出 → assigned → reviewing。multipart: `file` + `note`。
+
+### GET `/orders/{order_id}/file-url`
+Done 済み音源の signed URL 発行 (user/admin のみ)。
+
+Response 200: `{ "url": "/api/v1/orders/download-file?order_id=...&sig=...&exp=..." }`
+
+### GET `/orders/download-file`
+signed URL で保護されたファイル配信 (静的パス、`/{order_id}` より前に定義)。
+
+### POST `/orders/{order_id}/nominate` (admin のみ)
+Creator 候補追加。open/recruiting 状態のみ。
+
+Request: `{ "creator_ids": ["uuid", ...] }`
+
+### POST `/orders/{order_id}/assign` (admin のみ)
+受注 Creator 確定 → assigned。
+
+Request: `{ "creator_id": "uuid", "token_cost": 300 }`  ※ `token_cost` は任意 (変更時のみ)
+
+### POST `/orders/{order_id}/reject` (admin のみ)
+差し戻し reviewing → assigned。
+
+Request: `{ "reason": "..." }`
+
+### POST `/orders/{order_id}/done` (admin のみ)
+reviewing → done。同時実行:
+1. 提出 .wav を `/storage/orders/{id}.wav` にコピー
+2. token_cost 分を user の当月 token から消費
+3. Creator への `creator_payouts` 行を生成 (rank_at_payout × token_cost)
+4. `notified_at` を設定
+
+### GET `/admin/settings` (admin のみ)
+`system_settings` 全件取得。
+
+Response 200: `[{ "key": "commission_enabled", "value": "false", "description": "..." }]`
+
+### PATCH `/admin/settings/{key}` (admin のみ)
+値を更新。Request: `{ "value": "true" }`
+
+## 6. Admin API (role=admin 必須)
 
 ### GET `/admin/users` / `/admin/users/{id}`
 ユーザ一覧 / 詳細。

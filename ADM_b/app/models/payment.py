@@ -36,8 +36,8 @@ class CreatorPayout(Base):
     __tablename__ = "creator_payouts"
 
     id: Mapped[uuid.UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=new_uuid)
-    audio_id: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("audios.id"), unique=True, nullable=False
+    audio_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("audios.id"), unique=True, nullable=True
     )
     creator_id: Mapped[uuid.UUID] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("creator_profiles.user_id"), nullable=False
@@ -73,8 +73,8 @@ class TokenConsumption(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
-    audio_id: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("audios.id"), nullable=False
+    audio_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("audios.id"), nullable=True
     )
     license_id: Mapped[uuid.UUID] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("licenses.id"), nullable=False
