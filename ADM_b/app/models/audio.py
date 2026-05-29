@@ -48,7 +48,8 @@ class Audio(Base, TimestampMixin):
     sample_rate: Mapped[int] = mapped_column(Integer, nullable=False)
     bit_depth: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     channels: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=2)
-    peaks: Mapped[list] = mapped_column(JSONB, nullable=False)
+    # v1: list[float] / v2: {"n","max","min","rms"} (改訂2 / WAVEFORM_SHADER_SPEC §3)
+    peaks: Mapped[list | dict] = mapped_column(JSONB, nullable=False)
 
     is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     youtube_safe: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

@@ -9,10 +9,7 @@ import { drawWaveformFallback, type Fallback2DColors } from './fallback2d'
 import { packPeaksRGB, toPeaksV2, type PeaksAny, type PeaksV2 } from './peaks'
 
 export interface WaveformColors {
-  wave: [number, number, number]      // 0..1 RGB
-  progress: [number, number, number]
-  rms: [number, number, number]
-  hoverGlow: [number, number, number]
+  wave: [number, number, number]      // 単一色 (0..1 RGB)
 }
 
 interface UseWaveformGLOptions {
@@ -22,15 +19,12 @@ interface UseWaveformGLOptions {
   isPlaying: Ref<boolean>
   colors: Ref<WaveformColors>
   gamma?: number                       // default 0.4
-  reducedMotion?: Ref<boolean>
 }
 
 type RenderMode = 'webgl2' | 'webgl' | 'canvas2d' | 'none'
 
 export function useWaveformGL(opts: UseWaveformGLOptions) {
   const mode = ref<RenderMode>('none')
-  const hoverPos = ref<number>(-1)
-  const startTime = performance.now()
   let raf = 0
 
   // WebGL state
@@ -89,8 +83,8 @@ export function useWaveformGL(opts: UseWaveformGLOptions) {
     ctx.enableVertexAttribArray(loc)
     ctx.vertexAttribPointer(loc, 2, ctx.FLOAT, false, 0, 0)
 
-    // Uniform locations
-    for (const name of ['uPeaks', 'uPlayPos', 'uHoverPos', 'uTime', 'uGamma', 'uWaveColor', 'uProgressColor', 'uRmsColor', 'uHoverGlow']) {
+    // Uniform locations (簡略化済み: 単一色 + 再生位置 + ガンマ)
+    for (const name of ['uPeaks', 'uPlayPos', 'uGamma', 'uWaveColor']) {
       uniforms[name] = ctx.getUniformLocation(prog, name)
     }
 
@@ -159,15 +153,10 @@ export function useWaveformGL(opts: UseWaveformGLOptions) {
     ctx.bindTexture(ctx.TEXTURE_2D, peaksTex.value)
     ctx.uniform1i(uniforms.uPeaks!, 0)
     ctx.uniform1f(uniforms.uPlayPos!, opts.playPos.value)
-    ctx.uniform1f(uniforms.uHoverPos!, opts.reducedMotion?.value ? -1 : hoverPos.value)
-    ctx.uniform1f(uniforms.uTime!, (performance.now() - startTime) / 1000)
     ctx.uniform1f(uniforms.uGamma!, opts.gamma ?? 0.4)
 
     const c = opts.colors.value
     ctx.uniform3f(uniforms.uWaveColor!, c.wave[0], c.wave[1], c.wave[2])
-    ctx.uniform3f(uniforms.uProgressColor!, c.progress[0], c.progress[1], c.progress[2])
-    ctx.uniform3f(uniforms.uRmsColor!, c.rms[0], c.rms[1], c.rms[2])
-    ctx.uniform3f(uniforms.uHoverGlow!, c.hoverGlow[0], c.hoverGlow[1], c.hoverGlow[2])
 
     ctx.clearColor(0, 0, 0, 0)
     ctx.clear(ctx.COLOR_BUFFER_BIT)
@@ -187,12 +176,7 @@ export function useWaveformGL(opts: UseWaveformGLOptions) {
     const c = opts.colors.value
     const toCss = (rgb: [number, number, number], a = 1) =>
       `rgba(${Math.round(rgb[0] * 255)},${Math.round(rgb[1] * 255)},${Math.round(rgb[2] * 255)},${a})`
-    const fallbackColors: Fallback2DColors = {
-      wave: toCss(c.wave),
-      progress: toCss(c.progress),
-      rms: toCss(c.rms),
-      cursor: toCss(c.progress, 0.9),
-    }
+    const fallbackColors: Fallback2DColors = { wave: toCss(c.wave) }
     drawWaveformFallback(canvas, peaks, opts.playPos.value, fallbackColors, { gamma: opts.gamma ?? 0.4 })
   }
 
@@ -203,10 +187,8 @@ export function useWaveformGL(opts: UseWaveformGLOptions) {
 
   function loop() {
     render()
-    // 再生中 / ホバー中だけ次フレーム継続 (idle で 0%)
-    const wantsAnim = opts.isPlaying.value
-      || (!opts.reducedMotion?.value && hoverPos.value >= 0)
-    if (wantsAnim) raf = requestAnimationFrame(loop)
+    // 再生中だけ次フレーム継続 (ホバー演出は削除済 → idle で 0%)
+    if (opts.isPlaying.value) raf = requestAnimationFrame(loop)
     else raf = 0
   }
 
@@ -227,11 +209,6 @@ export function useWaveformGL(opts: UseWaveformGLOptions) {
       if (p) uploadPeaks(toPeaksV2(p))
     }
     render()
-  }
-
-  function setHover(pos: number | null) {
-    hoverPos.value = pos ?? -1
-    kick()
   }
 
   // peaks 変更で再アップロード + 再描画
@@ -256,5 +233,5 @@ export function useWaveformGL(opts: UseWaveformGLOptions) {
     }
   })
 
-  return { mode, setHover, init, kick }
+  return { mode, init, kick }
 }

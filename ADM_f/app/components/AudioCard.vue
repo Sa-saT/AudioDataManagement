@@ -150,7 +150,7 @@ async function executeDownload() {
   <div
     class="card grid items-start gap-4 px-4 py-3 transition-all duration-200 hover:-translate-y-px"
     :class="isPlaying ? 'border-primary' : 'hover:border-primary'"
-    style="grid-template-columns: 260px 1fr"
+    style="grid-template-columns: 344px 1fr"
   >
     <WaveformPlayer
       ref="playerRef"

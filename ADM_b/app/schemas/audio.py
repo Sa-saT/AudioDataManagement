@@ -15,7 +15,8 @@ class AudioListItem(BaseModel):
     creator: CreatorBrief
     duration_sec: int
     token_cost: int
-    peaks: list[Any]
+    # v1: list[float] (legacy) / v2: {"n", "max", "min", "rms"} (WAVEFORM_SHADER_SPEC §3.1)
+    peaks: list[Any] | dict[str, Any]
     youtube_safe: bool
     published_at: datetime | None
     tags: list[str] = []

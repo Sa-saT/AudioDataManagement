@@ -1,18 +1,18 @@
-// Canvas 2D フォールバック。WebGL/WebGL2 が取れない環境向け。
-// RMS 帯 + ガンマ補正は維持し、Shader 版の見た目に近づける。
+// Canvas 2D フォールバック (WebGL 未対応時)。
+// 改訂: 単一色 + 再生済みは alpha を下げて視覚的に dim。
 
 import type { PeaksV2 } from './peaks'
 
 export interface Fallback2DColors {
-  wave: string         // 未再生側 (washi)
-  progress: string     // 再生済側 (turquoise)
-  rms: string          // RMS 帯
-  cursor: string       // 再生位置線
+  wave: string         // 単一色 (rgb / rgba)
 }
 
 export interface Fallback2DOptions {
   gamma?: number       // default 0.4
 }
+
+const DIM_ALPHA = 0.35    // 再生済み部分の透明度
+const RMS_BOOST = 0.35    // RMS 帯の上乗せ濃度
 
 export function drawWaveformFallback(
   canvas: HTMLCanvasElement,
@@ -24,7 +24,6 @@ export function drawWaveformFallback(
   const ctx = canvas.getContext('2d')
   if (!ctx) return
 
-  const dpr = window.devicePixelRatio || 1
   const W = canvas.width
   const H = canvas.height
   const gamma = opts.gamma ?? 0.4
@@ -36,33 +35,24 @@ export function drawWaveformFallback(
 
   const playX = Math.round(playPos * W)
   const half = H / 2
-
-  // 各 bucket を縦 1〜2px の細い帯として描画
   const stepX = W / n
+
   for (let i = 0; i < n; i++) {
     const x = i * stepX
     const mx = Math.pow(Math.max(0, peaks.max[i] ?? 0), gamma)
     const mn = Math.pow(Math.max(0, -(peaks.min[i] ?? 0)), gamma)
     const rms = Math.pow(Math.max(0, peaks.rms[i] ?? 0), gamma)
 
-    const topY = half - mx * half
-    const botY = half + mn * half
-    const rmsTop = half - rms * half
-    const rmsBot = half + rms * half
+    const isPlayed = x < playX
+    ctx.globalAlpha = isPlayed ? DIM_ALPHA : 1.0
 
-    // 再生位置を境に色切替
-    const isProgress = x < playX
-    ctx.fillStyle = isProgress ? colors.progress : colors.wave
-    ctx.fillRect(x, topY, Math.max(1, stepX), botY - topY)
+    // 包絡 (上端〜下端)
+    ctx.fillStyle = colors.wave
+    ctx.fillRect(x, half - mx * half, Math.max(1, stepX), (mx + mn) * half)
 
-    // RMS 帯 (中央濃色)
-    ctx.fillStyle = colors.rms
-    ctx.globalAlpha = 0.7
-    ctx.fillRect(x, rmsTop, Math.max(1, stepX), rmsBot - rmsTop)
-    ctx.globalAlpha = 1.0
+    // RMS 中央帯 (同色を重ねて濃度アップ)
+    ctx.globalAlpha = (isPlayed ? DIM_ALPHA : 1.0) * RMS_BOOST
+    ctx.fillRect(x, half - rms * half, Math.max(1, stepX), rms * 2 * half)
   }
-
-  // 再生位置カーソル
-  ctx.fillStyle = colors.cursor
-  ctx.fillRect(playX, 0, Math.max(1, dpr), H)
+  ctx.globalAlpha = 1.0
 }

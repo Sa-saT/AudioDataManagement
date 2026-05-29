@@ -41,7 +41,8 @@ class MyDownloadItem(BaseModel):
     duration_sec: int
     token_cost: int
     tags: list[str] = []
-    peaks: list[Any] = []
+    # v1: list[float] / v2: {"n","max","min","rms"} — 改訂2 で v2 に統一
+    peaks: list[Any] | dict[str, Any] = []
     downloaded_at: Any  # datetime | None
     tokens_consumed: int
     file_size_bytes: int
