@@ -148,6 +148,8 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 - データモデル: [docs/DATA_MODEL.md](docs/DATA_MODEL.md)
 - API設計: [docs/API_SPEC.md](docs/API_SPEC.md)
 - licファイル: [docs/LICENSE_FILE_SPEC.md](docs/LICENSE_FILE_SPEC.md)
+- **Commission発注**: [docs/ORDER_SPEC.md](docs/ORDER_SPEC.md)
+- **Admin ログ**: [docs/LOG_SPEC.md](docs/LOG_SPEC.md)
 - UIデザイン: [DESIGN.md](DESIGN.md)
 
 ## 8. 進捗フェーズ
@@ -173,12 +175,14 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 | 38 | Admin: クリエイター統計 / グループ / ユーザ role フィルタ | ✅ 完了 |
 | 39 | Commission バックエンド (orders API 全エンドポイント + migration) | ✅ 完了 |
 | 40 | Commission フロントエンド (`/orders`, `/orders/[id]`, Admin タブ) | ✅ 完了 |
+| 41 | Commission 通知バッジ (金ドット + オレンジ変色 + action-required カウント) | ✅ 完了 |
+| 42 | Admin ログ仕様策定 (docs/LOG_SPEC.md) | ✅ 完了 |
 
 ### Phase 3 残スコープ (ローカル開発終了後 → Phase 4 前に整備)
 
 - 視聴: 波形クリック → `/stream-url?start=N` 取得 → Web Audio API で10秒再生 (wavesurfer + Web Audio 連携)
 - Creator アップロード: `INVALID_CODEC` 等のエラーコードを日本語ポップアップ表示
-- Commission: 発注完了通知バッジ (TopNav に未読 done 件数表示)
+- Admin ログ: LOG_SPEC.md に基づき実装 (BarChart コンポーネント + ログタブ + 4 API エンドポイント)
 - 本番: S3互換ストレージ切替 / CDN / 監視 / バックアップ
 
 ## 9. 用語

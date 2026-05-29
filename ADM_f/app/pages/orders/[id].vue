@@ -30,10 +30,45 @@ interface Message {
   created_at: string
 }
 
+interface OrderBrief {
+  // Step 1
+  sound_type?: string
+  purpose?: string
+  purpose_note?: string
+  length_sec?: number
+  // Step 2 BGM
+  bgm_scenes?: string[]
+  bgm_loop?: boolean
+  bgm_note?: string
+  // Step 2 SE
+  se_trigger?: string
+  se_functions?: string[]
+  // Step 3 Emotional
+  emotions_target?: string[]
+  emotions_avoid?: string[]
+  memory_impression?: string
+  // Step 4 Texture
+  tx_organic_electronic?: string
+  tx_melody_rhythm?: string
+  tx_warm_cold?: string
+  tx_sparse_dense?: string
+  tx_static_dynamic?: string
+  // Step 5 Reference
+  reference_urls?: string
+  reference_elements?: string[]
+  reference_avoid?: string
+  // Step 6 Technical
+  delivery_format?: string
+  deadline?: string
+  budget_range?: string
+  note?: string
+}
+
 interface OrderDetail {
   id: string
   title: string
   description: string | null
+  brief: OrderBrief | null
   token_cost: int
   status: string
   user_id: string
@@ -338,6 +373,145 @@ const myCandidate = computed(() =>
         <!-- Description -->
         <div v-if="order.description" class="card px-4 py-3">
           <p class="whitespace-pre-wrap text-[13px] text-body">{{ order.description }}</p>
+        </div>
+
+        <!-- Brief (structured hearing) -->
+        <div v-if="order.brief" class="card px-4 py-4 space-y-4 text-[12px]">
+          <p class="text-[10px] font-semibold text-ink/40 tracking-widest uppercase">サウンドブリーフ</p>
+
+          <!-- 基本 -->
+          <div class="space-y-1">
+            <p class="text-[10px] font-semibold text-ink/30 tracking-widest uppercase">基本</p>
+            <div class="grid grid-cols-[80px_1fr] gap-y-1.5">
+              <template v-if="order.brief.sound_type">
+                <span class="text-muted">タイプ</span>
+                <span class="text-body font-medium">{{ { bgm: 'BGM', se: 'SE', both: 'BGM + SE' }[order.brief.sound_type] ?? order.brief.sound_type }}</span>
+              </template>
+              <template v-if="order.brief.purpose">
+                <span class="text-muted">用途</span>
+                <span class="text-body">{{ { game: 'ゲーム', video: '映像', podcast: 'ポッドキャスト', other: 'その他' }[order.brief.purpose] ?? order.brief.purpose }}{{ order.brief.purpose_note ? ` — ${order.brief.purpose_note}` : '' }}</span>
+              </template>
+              <template v-if="order.brief.length_sec">
+                <span class="text-muted">長さ</span>
+                <span class="text-body">{{ order.brief.length_sec }}秒</span>
+              </template>
+            </div>
+          </div>
+
+          <!-- シーン (BGM) -->
+          <div v-if="order.brief.bgm_scenes?.length" class="space-y-1">
+            <p class="text-[10px] font-semibold text-ink/30 tracking-widest uppercase">BGM シーン</p>
+            <div class="flex flex-wrap gap-1">
+              <span
+                v-for="s in order.brief.bgm_scenes"
+                :key="s"
+                class="rounded-full bg-surface-2 px-2.5 py-0.5 text-[11px] text-body border border-white/10"
+              >{{ { battle: 'バトル/戦闘', boss: 'ボス戦', explore: '探索/フィールド', menu: 'メニュー/UI', title: 'タイトル', event: 'イベント/ムービー', ending: 'エンディング', ambient: 'アンビエント', other: 'その他' }[s] ?? s }}</span>
+            </div>
+            <p v-if="order.brief.bgm_loop !== undefined" class="text-muted mt-1">ループ: <span class="text-body">{{ order.brief.bgm_loop ? '必要' : '不要' }}</span></p>
+            <p v-if="order.brief.bgm_note" class="text-body mt-1 whitespace-pre-wrap">{{ order.brief.bgm_note }}</p>
+          </div>
+
+          <!-- SE -->
+          <div v-if="order.brief.se_trigger" class="space-y-1">
+            <p class="text-[10px] font-semibold text-ink/30 tracking-widest uppercase">SE 設計</p>
+            <p><span class="text-muted">トリガー</span><span class="ml-2 text-body">{{ order.brief.se_trigger }}</span></p>
+            <div v-if="order.brief.se_functions?.length" class="flex flex-wrap gap-1 mt-1">
+              <span
+                v-for="f in order.brief.se_functions"
+                :key="f"
+                class="rounded-full bg-surface-2 px-2.5 py-0.5 text-[11px] text-body border border-white/10"
+              >{{ { success: '成功/達成', danger: '危険/警告', ui: 'UI操作', operation: '操作の手応え', immersion: '没入/演出', character: 'キャラクター感情' }[f] ?? f }}</span>
+            </div>
+          </div>
+
+          <!-- 感情設計 -->
+          <div v-if="order.brief.emotions_target?.length || order.brief.memory_impression" class="space-y-2">
+            <p class="text-[10px] font-semibold text-ink/30 tracking-widest uppercase">感情設計</p>
+            <div v-if="order.brief.emotions_target?.length">
+              <p class="text-muted mb-1">狙う感情</p>
+              <div class="flex flex-wrap gap-1">
+                <span
+                  v-for="e in order.brief.emotions_target"
+                  :key="e"
+                  class="rounded-full bg-accent/15 px-2.5 py-0.5 text-[11px] text-accent border border-accent/20"
+                >{{ { excitement: '高揚感/興奮', tension: '緊張感', fear: '恐怖/不安', relief: '安らぎ/安心', loneliness: '孤独感', grandeur: '壮大さ/圧倒感', speed: '疾走感', sadness: '哀愁/切なさ', mystery: '神秘/異世界感', achievement: '達成感', heaviness: '重厚感/威圧感', comfort: '心地よさ', euphoria: '爽快感', dread: 'じわじわとした恐怖', wonder: '驚き/発見の喜び' }[e] ?? e }}</span>
+              </div>
+            </div>
+            <div v-if="order.brief.emotions_avoid?.length">
+              <p class="text-muted mb-1">避けたい感情</p>
+              <div class="flex flex-wrap gap-1">
+                <span
+                  v-for="e in order.brief.emotions_avoid"
+                  :key="e"
+                  class="rounded-full bg-surface-2 px-2.5 py-0.5 text-[11px] text-muted border border-white/10 line-through"
+                >{{ { excitement: '高揚感/興奮', tension: '緊張感', fear: '恐怖/不安', relief: '安らぎ/安心', loneliness: '孤独感', grandeur: '壮大さ/圧倒感', speed: '疾走感', sadness: '哀愁/切なさ', mystery: '神秘/異世界感', achievement: '達成感', heaviness: '重厚感/威圧感', comfort: '心地よさ', euphoria: '爽快感', dread: 'じわじわとした恐怖', wonder: '驚き/発見の喜び' }[e] ?? e }}</span>
+              </div>
+            </div>
+            <p v-if="order.brief.memory_impression" class="mt-2 rounded-lg bg-surface-2/60 border border-white/10 px-3 py-2 text-[12px] text-body italic whitespace-pre-wrap">「{{ order.brief.memory_impression }}」</p>
+          </div>
+
+          <!-- テクスチャ -->
+          <div v-if="[order.brief.tx_organic_electronic, order.brief.tx_melody_rhythm, order.brief.tx_warm_cold, order.brief.tx_sparse_dense, order.brief.tx_static_dynamic].some(v => v && v !== '')" class="space-y-1">
+            <p class="text-[10px] font-semibold text-ink/30 tracking-widest uppercase">テクスチャ方向</p>
+            <div class="grid grid-cols-[120px_1fr] gap-y-1 text-[11px]">
+              <template v-if="order.brief.tx_organic_electronic">
+                <span class="text-muted">有機的 ↔ 電子的</span>
+                <span class="text-body">{{ { organic: '← 有機的 / 生楽器', mid: 'どちらでも', electronic: '電子的 / シンセ →' }[order.brief.tx_organic_electronic] }}</span>
+              </template>
+              <template v-if="order.brief.tx_melody_rhythm">
+                <span class="text-muted">メロディ ↔ リズム</span>
+                <span class="text-body">{{ { melody: '← メロディ重視', mid: 'どちらでも', rhythm: 'リズム重視 →' }[order.brief.tx_melody_rhythm] }}</span>
+              </template>
+              <template v-if="order.brief.tx_warm_cold">
+                <span class="text-muted">温かい ↔ 冷たい</span>
+                <span class="text-body">{{ { warm: '← 温かい / 柔らかい', mid: 'どちらでも', cold: '冷たい / 無機質 →' }[order.brief.tx_warm_cold] }}</span>
+              </template>
+              <template v-if="order.brief.tx_sparse_dense">
+                <span class="text-muted">シンプル ↔ 重厚</span>
+                <span class="text-body">{{ { sparse: '← シンプル / 余白', mid: 'どちらでも', dense: '重厚 / 音多い →' }[order.brief.tx_sparse_dense] }}</span>
+              </template>
+              <template v-if="order.brief.tx_static_dynamic">
+                <span class="text-muted">静的 ↔ 激しい</span>
+                <span class="text-body">{{ { static: '← 静的 / 落ち着いた', mid: 'どちらでも', dynamic: '激しい / 展開多い →' }[order.brief.tx_static_dynamic] }}</span>
+              </template>
+            </div>
+          </div>
+
+          <!-- 参考音源 -->
+          <div v-if="order.brief.reference_urls || order.brief.reference_elements?.length || order.brief.reference_avoid" class="space-y-1.5">
+            <p class="text-[10px] font-semibold text-ink/30 tracking-widest uppercase">参考音源</p>
+            <p v-if="order.brief.reference_urls" class="text-body whitespace-pre-wrap text-[11px] break-all">{{ order.brief.reference_urls }}</p>
+            <div v-if="order.brief.reference_elements?.length" class="flex flex-wrap gap-1">
+              <span class="text-muted mr-1">参考要素:</span>
+              <span
+                v-for="r in order.brief.reference_elements"
+                :key="r"
+                class="rounded-full bg-surface-2 px-2.5 py-0.5 text-[11px] text-body border border-white/10"
+              >{{ { atmosphere: '空気感/雰囲気', bass: '低音/ベース感', progression: '展開/構成', tempo: 'テンポ/グルーヴ', timbre: '音色/サウンドデザイン', melody: 'メロディライン', rhythm: 'リズムパターン', density: '音の密度/空間感' }[r] ?? r }}</span>
+            </div>
+            <p v-if="order.brief.reference_avoid" class="text-muted">避けたい要素: <span class="text-body">{{ order.brief.reference_avoid }}</span></p>
+          </div>
+
+          <!-- 技術仕様 -->
+          <div v-if="order.brief.delivery_format || order.brief.deadline || order.brief.budget_range || order.brief.note" class="space-y-1">
+            <p class="text-[10px] font-semibold text-ink/30 tracking-widest uppercase">技術仕様</p>
+            <div class="grid grid-cols-[80px_1fr] gap-y-1">
+              <template v-if="order.brief.delivery_format">
+                <span class="text-muted">納品形式</span>
+                <span class="text-body">{{ { wav48k24b: '48kHz / 24bit', wav44k16b: '44.1kHz / 16bit', any: 'どちらでも可' }[order.brief.delivery_format] ?? order.brief.delivery_format }}</span>
+              </template>
+              <template v-if="order.brief.deadline">
+                <span class="text-muted">締切</span>
+                <span class="text-body">{{ order.brief.deadline }}</span>
+              </template>
+              <template v-if="order.brief.budget_range">
+                <span class="text-muted">予算感</span>
+                <span class="text-body">{{ { '5000': '〜¥5,000', '10000': '〜¥10,000', negotiable: '要相談' }[order.brief.budget_range] ?? order.brief.budget_range }}</span>
+              </template>
+            </div>
+            <p v-if="order.brief.note" class="mt-1 text-body whitespace-pre-wrap">{{ order.brief.note }}</p>
+          </div>
         </div>
 
         <!-- Messages -->

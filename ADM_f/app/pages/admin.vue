@@ -931,18 +931,18 @@ watch(tab, (t) => {
 
             <!-- Boolean toggle -->
             <template v-if="s.value === 'true' || s.value === 'false'">
-              <span class="font-mono text-[11px]" :class="s.value === 'true' ? 'text-[#1a9950]' : 'text-muted'">
+              <span class="shrink-0 font-mono text-[11px]" :class="s.value === 'true' ? 'text-[#1a9950]' : 'text-muted'">
                 {{ s.value === 'true' ? '有効' : '無効' }}
               </span>
               <button
-                class="relative h-5 w-9 rounded-full transition-colors"
-                :class="s.value === 'true' ? 'bg-[#2ecc71]' : 'bg-hairline-strong'"
+                class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center overflow-hidden rounded-full transition-colors"
+                :class="[s.value === 'true' ? 'bg-[#2ecc71]' : 'bg-hairline-strong', settingSaving[s.key] ? 'opacity-50' : '']"
                 :disabled="settingSaving[s.key]"
                 @click="toggleSetting(s.key, s.value)"
               >
                 <span
-                  class="absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform"
-                  :class="s.value === 'true' ? 'translate-x-4' : 'translate-x-0.5'"
+                  class="absolute left-0 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform"
+                  :class="s.value === 'true' ? 'translate-x-[18px]' : 'translate-x-0.5'"
                 />
               </button>
             </template>

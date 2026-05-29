@@ -5,11 +5,16 @@ import { useSystemStore } from '~/stores/system'
 const auth = useAuthStore()
 const system = useSystemStore()
 
-onMounted(() => system.fetchCommissionStatus())
+onMounted(async () => {
+  auth.hydrate()
+  await system.fetchCommissionStatus()
+  if (auth.isActivated && system.commissionEnabled) {
+    system.fetchCommissionUnread()
+  }
+})
+
 const route = useRoute()
 const router = useRouter()
-
-onMounted(() => auth.hydrate())
 
 const isActive = (path: string) => route.path === path
 
@@ -17,7 +22,10 @@ const isActive = (path: string) => route.path === path
 const menuOpen = ref(false)
 const menuRef = ref<HTMLDivElement | null>(null)
 const toggleMenu = () => { menuOpen.value = !menuOpen.value }
-const closeMenu = () => { menuOpen.value = false }
+const closeMenu = () => {
+  menuOpen.value = false
+  infoOpen.value = null
+}
 
 function onDocClick(e: MouseEvent) {
   if (!menuRef.value) return
@@ -25,6 +33,25 @@ function onDocClick(e: MouseEvent) {
 }
 onMounted(() => document.addEventListener('click', onDocClick))
 onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
+
+// ─── (i) info panel ───────────────────────────────
+const infoOpen = ref<string | null>(null)
+function toggleInfo(key: string) {
+  infoOpen.value = infoOpen.value === key ? null : key
+}
+
+// Close info when menu closes
+watch(menuOpen, (v) => { if (!v) infoOpen.value = null })
+
+// ─── Menu item definitions ────────────────────────
+const INFO: Record<string, string> = {
+  activate:    'ライセンスファイル (.lic) を適用してユーザーロールを有効化します',
+  deactivate:  'ロールを解除してゲストモードに戻ります。再アクティベートは .lic ファイルから行えます',
+  commission:  'オリジナル音源の制作依頼フロー。発注 → クリエイター選定 → 制作 → 承認まで一元管理します',
+  downloads:   '購入済み音源の管理。ストレージ内のファイルを再ダウンロード・削除できます',
+  uploads:     '音源のアップロード・公開設定・編集・削除ができます (creator / admin)',
+  admin:       'ユーザー管理・payout 承認・lic 発行・token 付与・システム設定 (admin)',
+}
 
 // ─── Activate modal ────────────────────────────────
 const showModal = ref(false)
@@ -76,6 +103,8 @@ function goTo(path: string) {
 
 const isCreator = computed(() => auth.role === 'creator' || auth.role === 'admin')
 const isAdmin = computed(() => auth.role === 'admin')
+const showCommission = computed(() => auth.isActivated && system.commissionEnabled)
+const hasUnread = computed(() => system.commissionUnreadCount > 0)
 </script>
 
 <template>
@@ -101,27 +130,24 @@ const isAdmin = computed(() => auth.role === 'admin')
             Dashboard
             <span v-if="isActive('/dashboard')" class="absolute inset-x-0 -bottom-px h-0.5 rounded-sm bg-primary" />
           </NuxtLink>
-
-          <NuxtLink
-            v-if="auth.isActivated && system.commissionEnabled"
-            to="/orders"
-            class="relative flex h-12 items-center text-[13px] font-medium text-ink transition-opacity"
-            :class="route.path.startsWith('/orders') ? 'opacity-100' : 'opacity-[0.55] hover:opacity-100'"
-          >
-            発注
-            <span v-if="route.path.startsWith('/orders')" class="absolute inset-x-0 -bottom-px h-0.5 rounded-sm bg-primary" />
-          </NuxtLink>
         </nav>
       </div>
 
       <!-- Right: dropdown menu -->
       <div ref="menuRef" class="relative">
         <button
-          class="flex items-center gap-2 px-1 py-1.5 text-[12px] text-ink transition-colors hover:text-primary-active"
+          class="relative flex items-center gap-2 px-1 py-1.5 text-[12px]"
+          :class="hasUnread ? 'text-[#ffa500]' : 'text-ink'"
           style="text-shadow:0 1px 3px rgba(255,255,255,0.8);"
           aria-label="メニュー"
           @click.stop="toggleMenu"
         >
+          <!-- Gold notification dot (top-left of button) -->
+          <span
+            v-if="hasUnread"
+            class="absolute -left-0.5 -top-0.5 h-2 w-2 rounded-full"
+            style="background:#ffd700;box-shadow:0 0 4px #ffd700cc;"
+          />
           <span v-if="auth.isActivated" class="rounded px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-widest"
             :style="auth.role === 'admin'
               ? 'background:#ff634722;color:#c0392b;border:1px solid #ff634755'
@@ -129,7 +155,7 @@ const isAdmin = computed(() => auth.role === 'admin')
                 ? 'background:#20b2aa22;color:#0e7a74;border:1px solid #20b2aa55'
                 : 'background:#26251e18;color:#26251e;border:1px solid #26251e30'"
           >{{ auth.role }}</span>
-          <span v-if="auth.isActivated" class="text-[12px] font-medium text-ink">{{ auth.displayName }}</span>
+          <span v-if="auth.isActivated" class="text-[12px] font-medium" :class="hasUnread ? 'text-[#ffa500]' : 'text-ink'">{{ auth.displayName }}</span>
           <span class="hamburger" :class="{ open: menuOpen }">
             <span class="line line-top"></span>
             <span class="line line-bot"></span>
@@ -140,66 +166,171 @@ const isAdmin = computed(() => auth.role === 'admin')
         <Transition name="menu">
           <div
             v-if="menuOpen"
-            class="absolute right-0 top-[calc(100%+6px)] w-56 overflow-hidden rounded-lg border border-hairline bg-white/85 shadow-lg backdrop-blur-md"
+            class="absolute right-0 top-[calc(100%+6px)] w-60 overflow-hidden rounded-lg border border-hairline bg-white/85 shadow-lg backdrop-blur-md"
           >
-            <!-- Activate / Deactivate -->
-            <button
-              v-if="!auth.isActivated"
-              class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-[13px] text-ink transition-colors hover:bg-white"
-              @click="openActivate"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>
-              </svg>
-              Activate
-            </button>
-            <button
-              v-else
-              class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-[13px] text-ink transition-colors hover:bg-white"
-              @click="deactivate"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 5 12 10 7"/><line x1="5" y1="12" x2="15" y2="12"/>
-              </svg>
-              Deactivate
-            </button>
 
-            <!-- Downloads (all roles) -->
-            <button
-              class="flex w-full items-center gap-2 border-t border-hairline-soft px-4 py-2.5 text-left text-[13px] text-ink transition-colors hover:bg-white"
-              @click="goTo('/downloads')"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-              Downloads
-            </button>
+            <!-- Commission -->
+            <div v-if="showCommission">
+              <div
+                class="flex cursor-pointer items-center gap-2 px-4 py-2.5 transition-colors hover:bg-white/80"
+                @click="goTo('/orders')"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                  :stroke="hasUnread ? '#ffa500' : 'currentColor'"
+                  stroke-width="1.8" class="shrink-0"
+                >
+                  <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+                  <rect x="9" y="3" width="6" height="4" rx="1"/>
+                  <line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>
+                </svg>
+                <span class="flex-1 text-[13px] font-medium" :class="hasUnread ? 'text-[#ffa500]' : 'text-ink'">Commission</span>
+                <!-- Unread count badge -->
+                <span
+                  v-if="hasUnread"
+                  class="mr-1 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 font-mono text-[10px] font-bold text-white"
+                  style="background:#ffa500;"
+                >{{ system.commissionUnreadCount }}</span>
+                <span
+                  v-else-if="route.path.startsWith('/orders')"
+                  class="mr-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
+                />
+                <button
+                  class="group rounded-full p-0.5 transition-opacity"
+                  :class="infoOpen === 'commission' ? 'text-ink' : ''"
+                  @click.stop="toggleInfo('commission')"
+                  aria-label="説明"
+                >
+                  <img src="/information.png" alt="info" class="h-[18px] w-[18px] opacity-50 transition-opacity group-hover:opacity-80" />
+                </button>
+              </div>
+              <div v-if="infoOpen === 'commission'" class="border-t border-hairline-soft bg-white/40 px-4 pb-2.5 pt-2 text-[11px] leading-relaxed text-muted">
+                {{ INFO.commission }}
+              </div>
+            </div>
 
             <!-- Uploads (creator / admin) -->
-            <button
-              v-if="isCreator"
-              class="flex w-full items-center gap-2 border-t border-hairline-soft px-4 py-2.5 text-left text-[13px] text-ink transition-colors hover:bg-white"
-              @click="goTo('/uploads')"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-              </svg>
-              Uploads
-              <span class="ml-auto rounded bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] text-primary-active">creator</span>
-            </button>
+            <div v-if="isCreator" class="border-t border-hairline-soft">
+              <div
+                class="flex cursor-pointer items-center gap-2 px-4 py-2.5 transition-colors hover:bg-white/80"
+                @click="goTo('/uploads')"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shrink-0">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <span class="flex-1 text-[13px] text-ink">Uploads</span>
+                <span class="mr-1 rounded bg-primary/15 px-1.5 py-0.5 font-mono text-[9px] text-primary-active">creator</span>
+                <button
+                  class="group rounded-full p-0.5 transition-opacity"
+                  :class="infoOpen === 'uploads' ? 'text-ink' : ''"
+                  @click.stop="toggleInfo('uploads')"
+                  aria-label="説明"
+                >
+                  <img src="/information.png" alt="info" class="h-[18px] w-[18px] opacity-50 transition-opacity group-hover:opacity-80" />
+                </button>
+              </div>
+              <div v-if="infoOpen === 'uploads'" class="border-t border-hairline-soft bg-white/40 px-4 pb-2.5 pt-2 text-[11px] leading-relaxed text-muted">
+                {{ INFO.uploads }}
+              </div>
+            </div>
 
-            <!-- Admin (admin のみ) -->
-            <button
-              v-if="isAdmin"
-              class="flex w-full items-center gap-2 border-t border-hairline-soft px-4 py-2.5 text-left text-[13px] text-ink transition-colors hover:bg-white"
-              @click="goTo('/admin')"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-              </svg>
-              Admin
-              <span class="ml-auto rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[10px] text-accent">admin</span>
-            </button>
+            <!-- Downloads -->
+            <div class="border-t border-hairline-soft">
+              <div
+                class="flex cursor-pointer items-center gap-2 px-4 py-2.5 transition-colors hover:bg-white/80"
+                @click="goTo('/downloads')"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shrink-0">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                <span class="flex-1 text-[13px] text-ink">Downloads</span>
+                <button
+                  class="group rounded-full p-0.5 transition-opacity"
+                  :class="infoOpen === 'downloads' ? 'text-ink' : ''"
+                  @click.stop="toggleInfo('downloads')"
+                  aria-label="説明"
+                >
+                  <img src="/information.png" alt="info" class="h-[18px] w-[18px] opacity-50 transition-opacity group-hover:opacity-80" />
+                </button>
+              </div>
+              <div v-if="infoOpen === 'downloads'" class="border-t border-hairline-soft bg-white/40 px-4 pb-2.5 pt-2 text-[11px] leading-relaxed text-muted">
+                {{ INFO.downloads }}
+              </div>
+            </div>
+
+            <!-- Admin -->
+            <div v-if="isAdmin" class="border-t border-hairline-soft">
+              <div
+                class="flex cursor-pointer items-center gap-2 px-4 py-2.5 transition-colors hover:bg-white/80"
+                @click="goTo('/admin')"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shrink-0">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+                <span class="flex-1 text-[13px] text-ink">Admin</span>
+                <span class="mr-1 rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[9px] text-accent">admin</span>
+                <button
+                  class="group rounded-full p-0.5 transition-opacity"
+                  :class="infoOpen === 'admin' ? 'text-ink' : ''"
+                  @click.stop="toggleInfo('admin')"
+                  aria-label="説明"
+                >
+                  <img src="/information.png" alt="info" class="h-[18px] w-[18px] opacity-50 transition-opacity group-hover:opacity-80" />
+                </button>
+              </div>
+              <div v-if="infoOpen === 'admin'" class="border-t border-hairline-soft bg-white/40 px-4 pb-2.5 pt-2 text-[11px] leading-relaxed text-muted">
+                {{ INFO.admin }}
+              </div>
+            </div>
+
+            <!-- Activate / Deactivate — 常に最下段・視覚的に分離 -->
+            <div class="border-t-2 border-hairline-strong">
+              <!-- Activate (未アクティベート時・警告色) -->
+              <div v-if="!auth.isActivated">
+                <div
+                  class="flex cursor-pointer items-center gap-2 bg-[#fff8f0] px-4 py-2.5 transition-colors hover:bg-[#fff0e0]"
+                  @click="openActivate"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c0600a" stroke-width="1.8" class="shrink-0">
+                    <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>
+                  </svg>
+                  <span class="flex-1 text-[13px] font-semibold text-[#c0600a]">Activate</span>
+                  <button
+                    class="group rounded-full p-0.5 transition-opacity"
+                    @click.stop="toggleInfo('activate')"
+                    aria-label="説明"
+                  >
+                    <img src="/information.png" alt="info" class="h-[18px] w-[18px] opacity-50 transition-opacity group-hover:opacity-80" />
+                  </button>
+                </div>
+                <div v-if="infoOpen === 'activate'" class="border-t border-[#f0c090] bg-[#fff8f0] px-4 pb-2.5 pt-2 text-[11px] leading-relaxed text-[#c0600a]/80">
+                  {{ INFO.activate }}
+                </div>
+              </div>
+
+              <!-- Deactivate (アクティベート済み) -->
+              <div v-else>
+                <div
+                  class="flex cursor-pointer items-center gap-2 px-4 py-2.5 transition-colors hover:bg-white/80"
+                  @click="deactivate"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shrink-0 text-muted">
+                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 5 12 10 7"/><line x1="5" y1="12" x2="15" y2="12"/>
+                  </svg>
+                  <span class="flex-1 text-[13px] text-muted">Deactivate</span>
+                  <button
+                    class="group rounded-full p-0.5 transition-opacity"
+                    @click.stop="toggleInfo('deactivate')"
+                    aria-label="説明"
+                  >
+                    <img src="/information.png" alt="info" class="h-[18px] w-[18px] opacity-50 transition-opacity group-hover:opacity-80" />
+                  </button>
+                </div>
+                <div v-if="infoOpen === 'deactivate'" class="border-t border-hairline-soft bg-white/40 px-4 pb-2.5 pt-2 text-[11px] leading-relaxed text-muted">
+                  {{ INFO.deactivate }}
+                </div>
+              </div>
+            </div>
+
           </div>
         </Transition>
       </div>
@@ -253,7 +384,6 @@ const isAdmin = computed(() => auth.role === 'admin')
 .menu-enter-active, .menu-leave-active { transition: opacity 150ms, transform 150ms; }
 .menu-enter-from, .menu-leave-to { opacity: 0; transform: translateY(-4px); }
 
-/* 2-line hamburger → X (transform-only animation, 参考: helloworld753315/vue_hamburger) */
 .hamburger {
   position: relative;
   display: inline-block;

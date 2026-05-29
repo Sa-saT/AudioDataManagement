@@ -111,9 +111,9 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
 
     <!-- ① Status row: activation warning / token info のみ (件数は controls 行へ統合) -->
     <div class="flex shrink-0 flex-wrap items-center justify-between gap-4 pb-3 pt-5 min-h-[28px]">
-      <p v-if="!auth.isActivated" class="text-[13px] text-accent">
-        * アクティベートされていません。ダウンロードは不可。
-      </p>
+      <div v-if="!auth.isActivated" class="w-full rounded-lg border border-[#20b2aa]/50 bg-[#afeeee]/40 px-4 py-2.5">
+        <p class="text-[15px] font-bold text-[#0e6060]">アクティベートされていません。ダウンロードは不可。</p>
+      </div>
       <span v-else />
 
       <div v-if="auth.isActivated" class="flex items-center gap-4">
@@ -146,7 +146,7 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
           <input
             v-model="searchInput"
             type="search"
-            placeholder="タイトル / クリエイター / タグで検索…"
+            placeholder="タイトル / タグで検索…"
             class="w-full rounded-lg border bg-white/75 py-1.5 pl-8 pr-8 text-[12px] text-ink placeholder:text-muted backdrop-blur-sm outline-none transition-all"
             :class="searchFocused ? 'border-primary bg-white/90 shadow-sm' : 'border-hairline-strong'"
             @focus="searchFocused = true"

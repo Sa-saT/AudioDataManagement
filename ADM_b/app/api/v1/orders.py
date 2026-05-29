@@ -97,6 +97,7 @@ class OrderOut(BaseModel):
     id: str
     title: str
     description: str | None
+    brief: dict | None
     token_cost: int
     status: str
     user_id: str
@@ -149,6 +150,7 @@ def _to_order_out(order: Order) -> OrderOut:
         id=str(order.id),
         title=order.title,
         description=order.description,
+        brief=order.brief,
         token_cost=order.token_cost,
         status=order.status.value,
         user_id=str(order.user_id),
@@ -217,6 +219,38 @@ def commission_status(db: Session = Depends(get_db)) -> dict:
     return {"enabled": _commission_enabled(db)}
 
 
+# ─── Unread / action-required count (per role) ────────────────────────────────
+
+@router.get("/me/commission/unread")
+def commission_unread(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Return count of Commission items that require the current user's action."""
+    role = current_user.role.value
+
+    if role == "user":
+        # Orders submitted by this user that are awaiting their review/approval
+        q = select(func.count()).select_from(Order).where(
+            Order.user_id == current_user.id,
+            Order.status.in_([OrderStatus.reviewing]),
+        )
+    elif role == "creator":
+        # Nominations sent to this creator that haven't been answered yet
+        q = select(func.count()).select_from(OrderCandidateCreator).where(
+            OrderCandidateCreator.creator_id == current_user.id,
+            OrderCandidateCreator.response_status == CandidateResponseStatus.pending,
+        )
+    else:  # admin
+        # Orders waiting for admin action (nominate creators or mark done/reject)
+        q = select(func.count()).select_from(Order).where(
+            Order.status.in_([OrderStatus.open, OrderStatus.reviewing]),
+        )
+
+    count = db.execute(q).scalar_one()
+    return {"count": int(count)}
+
+
 # ─── Orders list ──────────────────────────────────────────────────────────────
 
 @router.get("/orders", response_model=list[OrderListItem])
@@ -256,6 +290,7 @@ def list_orders(
 class CreateOrderRequest(BaseModel):
     title: str
     description: str | None = None
+    brief: dict | None = None
     token_cost: int
 
 
@@ -275,6 +310,7 @@ def create_order(
         user_id=current_user.id,
         title=body.title,
         description=body.description,
+        brief=body.brief,
         token_cost=body.token_cost,
         status=OrderStatus.draft,
     )

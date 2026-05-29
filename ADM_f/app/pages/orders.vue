@@ -32,6 +32,8 @@ onMounted(async () => {
   await system.fetchCommissionStatus()
   if (auth.isActivated && system.commissionEnabled) {
     await fetchOrders()
+    // Refresh unread count (visiting this page serves as "seen")
+    system.fetchCommissionUnread()
   }
 })
 
@@ -47,29 +49,26 @@ async function fetchOrders() {
   }
 }
 
-// ─── Create order ─────────────────────────────────
+// ─── Create order (wizard) ────────────────────────
 const showCreate = ref(false)
-const form = ref({ title: '', description: '', token_cost: 100 })
 const createLoading = ref(false)
 const createError = ref<string | null>(null)
 
 function openCreate() {
-  form.value = { title: '', description: '', token_cost: 100 }
   createError.value = null
   showCreate.value = true
 }
 
-async function submitCreate() {
-  if (!form.value.title.trim()) { createError.value = 'タイトルを入力してください。'; return }
-  if (form.value.token_cost <= 0) { createError.value = 'token数は1以上にしてください。'; return }
+async function submitCreate(payload: { title: string; token_cost: number; brief: Record<string, unknown> }) {
+  if (payload.token_cost <= 0) { createError.value = 'token数は1以上にしてください。'; return }
   createLoading.value = true
   createError.value = null
   try {
     const res = await api.post<OrderListItem>('/api/v1/orders', {
       body: {
-        title: form.value.title.trim(),
-        description: form.value.description.trim() || null,
-        token_cost: form.value.token_cost,
+        title: payload.title,
+        brief: payload.brief,
+        token_cost: payload.token_cost,
       },
     })
     showCreate.value = false
@@ -213,16 +212,16 @@ const isUser = computed(() => auth.role === 'user')
       </div>
     </div>
 
-    <!-- Create modal -->
+    <!-- Create modal (wizard) -->
     <Teleport to="body">
       <Transition name="modal">
         <div
           v-if="showCreate"
-          class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-20 backdrop-blur-sm"
+          class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-12 pb-6 backdrop-blur-sm overflow-y-auto"
           @click.self="showCreate = false"
         >
-          <div class="card mx-4 w-full max-w-[520px] p-6">
-            <div class="mb-4 flex items-center justify-between">
+          <div class="card mx-4 w-full max-w-[540px] p-6">
+            <div class="mb-5 flex items-center justify-between">
               <h2 class="text-[15px] font-semibold text-ink">新規発注</h2>
               <button class="text-muted hover:text-ink" @click="showCreate = false">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -231,51 +230,12 @@ const isUser = computed(() => auth.role === 'user')
               </button>
             </div>
 
-            <div class="space-y-4">
-              <div>
-                <label class="mb-1 block text-[12px] font-medium text-body-strong">タイトル <span class="text-accent">*</span></label>
-                <input
-                  v-model="form.title"
-                  type="text"
-                  placeholder="例: ゲーム用 SE 3種"
-                  class="w-full rounded-md border border-hairline-strong bg-white/60 px-3 py-2 text-[13px] text-ink outline-none placeholder:text-muted focus:border-primary"
-                  maxlength="100"
-                />
-              </div>
-              <div>
-                <label class="mb-1 block text-[12px] font-medium text-body-strong">詳細説明</label>
-                <textarea
-                  v-model="form.description"
-                  rows="4"
-                  placeholder="音源の用途、雰囲気、参考などを記入してください。"
-                  class="w-full resize-none rounded-md border border-hairline-strong bg-white/60 px-3 py-2 text-[13px] text-ink outline-none placeholder:text-muted focus:border-primary"
-                />
-              </div>
-              <div>
-                <label class="mb-1 block text-[12px] font-medium text-body-strong">希望 token 数 <span class="text-accent">*</span></label>
-                <input
-                  v-model.number="form.token_cost"
-                  type="number"
-                  min="1"
-                  class="w-40 rounded-md border border-hairline-strong bg-white/60 px-3 py-2 font-mono text-[13px] text-ink outline-none focus:border-primary"
-                />
-                <p class="mt-1 text-[11px] text-muted">残 {{ auth.tokensRemaining }} tk</p>
-              </div>
-            </div>
+            <OrderBriefWizard
+              @submit="submitCreate"
+              @cancel="showCreate = false"
+            />
 
             <p v-if="createError" class="mt-3 text-[12px] text-accent">{{ createError }}</p>
-
-            <div class="mt-5 flex justify-end gap-2">
-              <button
-                class="rounded-md border border-hairline-strong px-4 py-1.5 text-[12px] font-medium text-body-strong hover:border-primary hover:text-ink"
-                @click="showCreate = false"
-              >やめる</button>
-              <button
-                class="rounded-md bg-ink px-4 py-1.5 text-[12px] font-medium text-canvas hover:bg-primary disabled:opacity-50"
-                :disabled="createLoading"
-                @click="submitCreate"
-              >{{ createLoading ? '作成中…' : '下書き保存' }}</button>
-            </div>
           </div>
         </div>
       </Transition>

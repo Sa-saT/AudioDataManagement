@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Integer, Text, func
-from sqlalchemy.dialects.postgresql import UUID as PgUUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, new_uuid
@@ -59,6 +59,7 @@ class Order(Base):
     )
     title: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
+    brief: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     token_cost: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[OrderStatus] = mapped_column(
         Enum(OrderStatus, name="order_status", native_enum=True, create_type=False),
