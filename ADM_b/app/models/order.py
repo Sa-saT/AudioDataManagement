@@ -1,8 +1,8 @@
 import enum
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Integer, Text, func
+from sqlalchemy import CheckConstraint, Date, DateTime, Enum, ForeignKey, Integer, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -51,16 +51,21 @@ class Order(Base):
     __tablename__ = "orders"
     __table_args__ = (
         CheckConstraint("token_cost > 0", name="ck_orders_token_cost_positive"),
+        UniqueConstraint("serial", name="uq_orders_serial"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=new_uuid)
     user_id: Mapped[uuid.UUID] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
+    # 改訂2 (改修): Commission Order 全体の通し番号。sequence で採番、cancel しても再利用しない
+    serial: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     brief: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     token_cost: Mapped[int] = mapped_column(Integer, nullable=False)
+    # 改訂2: 希望締切日 (default = created_at + 7日)
+    desired_deadline: Mapped[date] = mapped_column(Date, nullable=False)
     status: Mapped[OrderStatus] = mapped_column(
         Enum(OrderStatus, name="order_status", native_enum=True, create_type=False),
         nullable=False,

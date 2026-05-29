@@ -9,6 +9,8 @@ onMounted(async () => {
   auth.hydrate()
   await system.fetchCommissionStatus()
   if (auth.isActivated && system.commissionEnabled) {
+    // 改訂2: 主要ページ訪問時に session ping (30分dedupはサーバ側)
+    system.sessionPing()
     system.fetchCommissionUnread()
   }
 })
@@ -104,7 +106,14 @@ function goTo(path: string) {
 const isCreator = computed(() => auth.role === 'creator' || auth.role === 'admin')
 const isAdmin = computed(() => auth.role === 'admin')
 const showCommission = computed(() => auth.isActivated && system.commissionEnabled)
-const hasUnread = computed(() => system.commissionUnreadCount > 0)
+// 改訂2: 通知二系統
+//   要対応 (action_count > 0) → 橙 + 件数バッジ + 金ドット
+//   情報のみ (action_count == 0 && has_info) → 橙のみ (件数なし)
+//   両方ゼロ → デフォルト
+const actionCount = computed(() => system.commissionActionCount)
+const hasInfo = computed(() => system.commissionHasInfo)
+const hasAction = computed(() => actionCount.value > 0)
+const isHighlighted = computed(() => hasAction.value || hasInfo.value)
 </script>
 
 <template>
@@ -137,14 +146,14 @@ const hasUnread = computed(() => system.commissionUnreadCount > 0)
       <div ref="menuRef" class="relative">
         <button
           class="relative flex items-center gap-2 px-1 py-1.5 text-[12px]"
-          :class="hasUnread ? 'text-[#ffa500]' : 'text-ink'"
+          :class="isHighlighted ? 'text-[#ffa500]' : 'text-ink'"
           style="text-shadow:0 1px 3px rgba(255,255,255,0.8);"
           aria-label="メニュー"
           @click.stop="toggleMenu"
         >
-          <!-- Gold notification dot (top-left of button) -->
+          <!-- Gold notification dot (top-left of button) — 要対応がある時のみ -->
           <span
-            v-if="hasUnread"
+            v-if="hasAction"
             class="absolute -left-0.5 -top-0.5 h-2 w-2 rounded-full"
             style="background:#ffd700;box-shadow:0 0 4px #ffd700cc;"
           />
@@ -155,7 +164,7 @@ const hasUnread = computed(() => system.commissionUnreadCount > 0)
                 ? 'background:#20b2aa22;color:#0e7a74;border:1px solid #20b2aa55'
                 : 'background:#26251e18;color:#26251e;border:1px solid #26251e30'"
           >{{ auth.role }}</span>
-          <span v-if="auth.isActivated" class="text-[12px] font-medium" :class="hasUnread ? 'text-[#ffa500]' : 'text-ink'">{{ auth.displayName }}</span>
+          <span v-if="auth.isActivated" class="text-[12px] font-medium" :class="isHighlighted ? 'text-[#ffa500]' : 'text-ink'">{{ auth.displayName }}</span>
           <span class="hamburger" :class="{ open: menuOpen }">
             <span class="line line-top"></span>
             <span class="line line-bot"></span>
@@ -176,20 +185,27 @@ const hasUnread = computed(() => system.commissionUnreadCount > 0)
                 @click="goTo('/orders')"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                  :stroke="hasUnread ? '#ffa500' : 'currentColor'"
+                  :stroke="isHighlighted ? '#ffa500' : 'currentColor'"
                   stroke-width="1.8" class="shrink-0"
                 >
                   <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
                   <rect x="9" y="3" width="6" height="4" rx="1"/>
                   <line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>
                 </svg>
-                <span class="flex-1 text-[13px] font-medium" :class="hasUnread ? 'text-[#ffa500]' : 'text-ink'">Commission</span>
-                <!-- Unread count badge -->
+                <span class="flex-1 text-[13px] font-medium" :class="isHighlighted ? 'text-[#ffa500]' : 'text-ink'">Commission</span>
+                <!-- 要対応: 件数バッジ -->
                 <span
-                  v-if="hasUnread"
+                  v-if="hasAction"
                   class="mr-1 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 font-mono text-[10px] font-bold text-white"
                   style="background:#ffa500;"
-                >{{ system.commissionUnreadCount }}</span>
+                >{{ actionCount }}</span>
+                <!-- 情報のみ: ドット (件数なし) -->
+                <span
+                  v-else-if="hasInfo"
+                  class="mr-1 h-1.5 w-1.5 shrink-0 rounded-full"
+                  style="background:#ffa500;"
+                  title="確認が必要な情報があります"
+                />
                 <span
                   v-else-if="route.path.startsWith('/orders')"
                   class="mr-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"

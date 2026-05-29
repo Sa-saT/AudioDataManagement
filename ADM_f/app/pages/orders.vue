@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { OrderBrief } from '~/components/OrderBriefWizard.vue'
 import { useAuthStore } from '~/stores/auth'
 import { useSystemStore } from '~/stores/system'
 import { errorMessageJa } from '~/utils/errorMessageJa'
@@ -14,13 +15,20 @@ const router = useRouter()
 interface OrderListItem {
   id: string
   title: string
+  serial: number
   token_cost: number
+  desired_deadline: string
   status: string
   user_name: string
   assigned_creator_name: string | null
   notified_at: string | null
   created_at: string
   updated_at: string
+}
+
+interface OrderDetail extends OrderListItem {
+  brief: OrderBrief | null
+  description: string | null
 }
 
 const orders = ref<OrderListItem[]>([])
@@ -49,30 +57,82 @@ async function fetchOrders() {
   }
 }
 
-// ─── Create order (wizard) ────────────────────────
+// draft 一覧 (改訂2: 先頭に表示)
+const drafts = computed(() => orders.value.filter(o => o.status === 'draft'))
+const activeOrders = computed(() => orders.value.filter(o => o.status !== 'draft'))
+
+// ─── Create / Resume draft ────────────────────────
 const showCreate = ref(false)
 const createLoading = ref(false)
 const createError = ref<string | null>(null)
+// 編集中の draft id (null = 新規作成)
+const editingDraftId = ref<string | null>(null)
+const initialBrief = ref<Partial<OrderBrief> | undefined>(undefined)
+const initialDeadline = ref<string | undefined>(undefined)
 
 function openCreate() {
+  editingDraftId.value = null
+  initialBrief.value = undefined
+  initialDeadline.value = undefined
   createError.value = null
   showCreate.value = true
 }
 
-async function submitCreate(payload: { title: string; token_cost: number; brief: Record<string, unknown> }) {
-  if (payload.token_cost <= 0) { createError.value = 'token数は1以上にしてください。'; return }
+async function openResume(draftId: string) {
+  createError.value = null
+  try {
+    const detail = await api.get<OrderDetail>(`/api/v1/orders/${draftId}`)
+    editingDraftId.value = draftId
+    initialBrief.value = (detail.brief ?? undefined) as Partial<OrderBrief> | undefined
+    initialDeadline.value = detail.desired_deadline ?? undefined
+    showCreate.value = true
+  } catch (err) {
+    createError.value = errorMessageJa(err)
+  }
+}
+
+async function submitCreate(payload: { brief: OrderBrief; desired_deadline: string }) {
   createLoading.value = true
   createError.value = null
   try {
-    const res = await api.post<OrderListItem>('/api/v1/orders', {
-      body: {
-        title: payload.title,
-        brief: payload.brief,
-        token_cost: payload.token_cost,
-      },
-    })
+    // 編集中 draft があれば事前に PATCH で内容を上書き、その後 submit
+    let id = editingDraftId.value
+    if (id) {
+      await api.patch(`/api/v1/orders/${id}/draft`, {
+        body: { brief: payload.brief, desired_deadline: payload.desired_deadline },
+      })
+    } else {
+      const created = await api.post<OrderListItem>('/api/v1/orders', {
+        body: { brief: payload.brief, desired_deadline: payload.desired_deadline },
+      })
+      id = created.id
+    }
+    await api.post(`/api/v1/orders/${id}/submit`, { body: {} })
     showCreate.value = false
-    router.push(`/orders/${res.id}`)
+    router.push(`/orders/${id}`)
+  } catch (err) {
+    createError.value = errorMessageJa(err)
+  } finally {
+    createLoading.value = false
+  }
+}
+
+async function saveDraft(payload: { brief: OrderBrief; desired_deadline: string }) {
+  createLoading.value = true
+  createError.value = null
+  try {
+    if (editingDraftId.value) {
+      await api.patch(`/api/v1/orders/${editingDraftId.value}/draft`, {
+        body: { brief: payload.brief, desired_deadline: payload.desired_deadline },
+      })
+    } else {
+      const created = await api.post<OrderListItem>('/api/v1/orders', {
+        body: { brief: payload.brief, desired_deadline: payload.desired_deadline },
+      })
+      editingDraftId.value = created.id
+    }
+    showCreate.value = false
+    await fetchOrders()
   } catch (err) {
     createError.value = errorMessageJa(err)
   } finally {
@@ -167,48 +227,80 @@ const isUser = computed(() => auth.role === 'user')
       </div>
 
       <!-- List -->
-      <div v-else class="space-y-2">
-        <NuxtLink
-          v-for="order in orders"
-          :key="order.id"
-          :to="`/orders/${order.id}`"
-          class="card flex items-center gap-4 px-4 py-3 transition-colors hover:border-primary/40"
-        >
-          <!-- Status badge -->
-          <span
-            class="shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold"
-            :class="STATUS_CLASS[order.status] ?? 'bg-hairline-soft text-body'"
-          >{{ STATUS_LABEL[order.status] ?? order.status }}</span>
+      <div v-else class="space-y-4">
 
-          <!-- Title + meta -->
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2">
-              <span class="truncate text-[14px] font-medium text-ink">{{ order.title }}</span>
-              <!-- Done notification dot -->
-              <span
-                v-if="order.status === 'done' && order.notified_at"
-                class="h-1.5 w-1.5 shrink-0 rounded-full bg-[#2ecc71]"
-                title="完了"
-              />
-            </div>
-            <div class="mt-0.5 flex items-center gap-2 text-[11px] text-muted">
-              <span>{{ order.user_name }}</span>
-              <template v-if="order.assigned_creator_name">
-                <span class="h-1 w-1 rounded-full bg-muted" />
-                <span>{{ order.assigned_creator_name }}</span>
-              </template>
-              <span class="h-1 w-1 rounded-full bg-muted" />
-              <span class="font-mono">{{ order.token_cost }} tk</span>
-              <span class="h-1 w-1 rounded-full bg-muted" />
-              <span>{{ formatDate(order.updated_at) }}</span>
+        <!-- Drafts セクション (改訂2: 一時保存中) -->
+        <section v-if="drafts.length > 0">
+          <p class="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-widest text-muted">
+            一時保存中 ({{ drafts.length }})
+          </p>
+          <div class="space-y-2">
+            <div
+              v-for="draft in drafts"
+              :key="draft.id"
+              class="card flex items-center gap-4 border-dashed border-primary/30 bg-primary/5 px-4 py-3"
+            >
+              <span class="shrink-0 rounded-full bg-hairline-soft px-2 py-0.5 font-mono text-[10px] font-semibold text-body">Draft</span>
+              <div class="min-w-0 flex-1">
+                <div class="truncate text-[14px] font-medium text-ink">{{ draft.title }}</div>
+                <div class="mt-0.5 flex items-center gap-2 text-[11px] text-muted">
+                  <span class="font-mono">{{ draft.token_cost }} tk</span>
+                  <span class="h-1 w-1 rounded-full bg-muted" />
+                  <span>締切 {{ formatDate(draft.desired_deadline) }}</span>
+                  <span class="h-1 w-1 rounded-full bg-muted" />
+                  <span>{{ formatDate(draft.updated_at) }} 更新</span>
+                </div>
+              </div>
+              <button
+                class="shrink-0 rounded-md border border-primary/50 bg-white px-3 py-1 text-[11px] font-medium text-primary-active hover:bg-primary/10"
+                @click="openResume(draft.id)"
+              >続きから入力</button>
             </div>
           </div>
+        </section>
 
-          <!-- Arrow -->
-          <svg class="shrink-0 text-muted" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="9 18 15 12 9 6"/>
-          </svg>
-        </NuxtLink>
+        <!-- Active orders -->
+        <section v-if="activeOrders.length > 0">
+          <div class="space-y-2">
+            <NuxtLink
+              v-for="order in activeOrders"
+              :key="order.id"
+              :to="`/orders/${order.id}`"
+              class="card flex items-center gap-4 px-4 py-3 transition-colors hover:border-primary/40"
+            >
+              <span
+                class="shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold"
+                :class="STATUS_CLASS[order.status] ?? 'bg-hairline-soft text-body'"
+              >{{ STATUS_LABEL[order.status] ?? order.status }}</span>
+
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2">
+                  <span class="truncate text-[14px] font-medium text-ink">{{ order.title }}</span>
+                  <span
+                    v-if="order.status === 'done' && order.notified_at"
+                    class="h-1.5 w-1.5 shrink-0 rounded-full bg-[#2ecc71]"
+                    title="完了"
+                  />
+                </div>
+                <div class="mt-0.5 flex items-center gap-2 text-[11px] text-muted">
+                  <span>{{ order.user_name }}</span>
+                  <template v-if="order.assigned_creator_name">
+                    <span class="h-1 w-1 rounded-full bg-muted" />
+                    <span>{{ order.assigned_creator_name }}</span>
+                  </template>
+                  <span class="h-1 w-1 rounded-full bg-muted" />
+                  <span class="font-mono">{{ order.token_cost }} tk</span>
+                  <span class="h-1 w-1 rounded-full bg-muted" />
+                  <span>締切 {{ formatDate(order.desired_deadline) }}</span>
+                </div>
+              </div>
+
+              <svg class="shrink-0 text-muted" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </NuxtLink>
+          </div>
+        </section>
       </div>
     </div>
 
@@ -222,7 +314,9 @@ const isUser = computed(() => auth.role === 'user')
         >
           <div class="card mx-4 w-full max-w-[540px] p-6">
             <div class="mb-5 flex items-center justify-between">
-              <h2 class="text-[15px] font-semibold text-ink">新規発注</h2>
+              <h2 class="text-[15px] font-semibold text-ink">
+                {{ editingDraftId ? '続きから入力' : '新規発注' }}
+              </h2>
               <button class="text-muted hover:text-ink" @click="showCreate = false">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M18 6 6 18M6 6l12 12"/>
@@ -231,7 +325,10 @@ const isUser = computed(() => auth.role === 'user')
             </div>
 
             <OrderBriefWizard
+              :initial-brief="initialBrief"
+              :initial-deadline="initialDeadline"
               @submit="submitCreate"
+              @save-draft="saveDraft"
               @cancel="showCreate = false"
             />
 

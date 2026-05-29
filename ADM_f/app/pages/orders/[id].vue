@@ -67,9 +67,11 @@ interface OrderBrief {
 interface OrderDetail {
   id: string
   title: string
+  serial: int
   description: string | null
   brief: OrderBrief | null
   token_cost: int
+  desired_deadline: string
   status: string
   user_id: string
   user_name: string
@@ -95,6 +97,12 @@ const fetchError = ref<string | null>(null)
 onMounted(async () => {
   auth.hydrate()
   await fetchOrder()
+  // 改訂2: チケット閲覧を記録 (通知バッジの既読判定に使う)
+  if (order.value) {
+    try {
+      await api.post(`/api/v1/orders/${orderId.value}/view`, { body: {} })
+    } catch { /* silent: 通知精度を落とすだけ */ }
+  }
 })
 
 async function fetchOrder() {
@@ -107,6 +115,43 @@ async function fetchOrder() {
   } finally {
     loading.value = false
   }
+}
+
+// ─── Deadline edit (改訂2) ─────────────────────────
+const editingDeadline = ref(false)
+const deadlineDraft = ref('')
+const deadlineLoading = ref(false)
+
+function startEditDeadline() {
+  if (!order.value) return
+  deadlineDraft.value = order.value.desired_deadline
+  editingDeadline.value = true
+}
+
+async function saveDeadline() {
+  if (!deadlineDraft.value || !order.value) return
+  deadlineLoading.value = true
+  try {
+    order.value = await api.patch<OrderDetail>(`/api/v1/orders/${orderId.value}/deadline`, {
+      body: { desired_deadline: deadlineDraft.value },
+    })
+    editingDeadline.value = false
+  } catch (err) {
+    alert(errorMessageJa(err))
+  } finally {
+    deadlineLoading.value = false
+  }
+}
+
+const canEditDeadline = computed(() => {
+  if (!order.value) return false
+  if (order.value.status === 'done' || order.value.status === 'cancelled') return false
+  return isAdmin.value || isOwner.value
+})
+
+function formatDeadline(d: string | null | undefined): string {
+  if (!d) return '-'
+  return new Date(d).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' })
 }
 
 // ─── Role helpers ─────────────────────────────────
@@ -345,11 +390,43 @@ const myCandidate = computed(() =>
             :class="STATUS_CLASS[order.status] ?? 'bg-hairline-soft text-body'"
           >{{ STATUS_LABEL[order.status] ?? order.status }}</span>
         </div>
-        <p v-if="order" class="mt-0.5 text-[11px] text-muted">
-          {{ order.user_name }}
-          <template v-if="order.assigned_creator_name"> → {{ order.assigned_creator_name }}</template>
-          <span class="ml-2 font-mono">{{ order.token_cost }} tk</span>
-          <span class="ml-2">{{ formatDate(order.created_at) }}</span>
+        <p v-if="order" class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted">
+          <span>{{ order.user_name }}</span>
+          <template v-if="order.assigned_creator_name">
+            <span>→</span>
+            <span>{{ order.assigned_creator_name }}</span>
+          </template>
+          <span class="font-mono">{{ order.token_cost }} tk</span>
+          <span>·</span>
+          <span>作成 {{ formatDate(order.created_at) }}</span>
+          <span>·</span>
+
+          <!-- 希望締切 (改訂2: 編集可) -->
+          <template v-if="editingDeadline">
+            <input
+              v-model="deadlineDraft"
+              type="date"
+              class="rounded border border-hairline-strong bg-white px-1.5 py-0.5 font-mono text-[10px] text-ink focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <button
+              class="rounded bg-primary px-1.5 py-0.5 text-[10px] text-white hover:bg-primary/80 disabled:opacity-50"
+              :disabled="deadlineLoading"
+              @click="saveDeadline"
+            >保存</button>
+            <button
+              class="rounded px-1.5 py-0.5 text-[10px] text-muted hover:text-ink"
+              @click="editingDeadline = false"
+            >×</button>
+          </template>
+          <template v-else>
+            <span>締切 <span class="font-mono">{{ formatDeadline(order.desired_deadline) }}</span></span>
+            <button
+              v-if="canEditDeadline"
+              class="text-[10px] text-primary-active hover:underline"
+              @click="startEditDeadline"
+              title="希望締切日を変更"
+            >編集</button>
+          </template>
         </p>
       </div>
     </div>

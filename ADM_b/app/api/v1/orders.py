@@ -10,6 +10,7 @@ from __future__ import annotations
 import shutil
 import tempfile
 import uuid
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -31,6 +32,8 @@ from sqlalchemy.orm import Session, joinedload
 from app.config import get_settings
 from app.db import get_db
 from app.models import (
+    ActivityKind,
+    ActivityLog,
     CreatorPayout,
     CreatorProfile,
     CreatorRankPrice,
@@ -96,9 +99,11 @@ class MessageOut(BaseModel):
 class OrderOut(BaseModel):
     id: str
     title: str
+    serial: int
     description: str | None
     brief: dict | None
     token_cost: int
+    desired_deadline: Any  # date
     status: str
     user_id: str
     user_name: str
@@ -114,7 +119,9 @@ class OrderOut(BaseModel):
 class OrderListItem(BaseModel):
     id: str
     title: str
+    serial: int
     token_cost: int
+    desired_deadline: Any  # date
     status: str
     user_name: str
     assigned_creator_name: str | None
@@ -149,9 +156,11 @@ def _to_order_out(order: Order) -> OrderOut:
     return OrderOut(
         id=str(order.id),
         title=order.title,
+        serial=order.serial,
         description=order.description,
         brief=order.brief,
         token_cost=order.token_cost,
+        desired_deadline=order.desired_deadline,
         status=order.status.value,
         user_id=str(order.user_id),
         user_name=order.user.username,
@@ -172,7 +181,9 @@ def _to_list_item(order: Order) -> OrderListItem:
     return OrderListItem(
         id=str(order.id),
         title=order.title,
+        serial=order.serial,
         token_cost=order.token_cost,
+        desired_deadline=order.desired_deadline,
         status=order.status.value,
         user_name=order.user.username,
         assigned_creator_name=(
@@ -219,36 +230,167 @@ def commission_status(db: Session = Depends(get_db)) -> dict:
     return {"enabled": _commission_enabled(db)}
 
 
-# ─── Unread / action-required count (per role) ────────────────────────────────
+# ─── Unread notification (改訂2 = 二系統) ──────────────────────────────────────
+
+# 情報通知 (選ばれなかった候補など) の自動解除期間
+INFO_NOTIFICATION_TTL_DAYS = 7
+
+
+def _count_action_required(db: Session, user: User) -> int:
+    """要対応 (ステータス遷移ベース)。完了するまで残る。"""
+    role = user.role.value
+    if role == "user":
+        # 自分の発注で reviewing (納品をレビューする番)
+        q = select(func.count()).select_from(Order).where(
+            Order.user_id == user.id,
+            Order.status == OrderStatus.reviewing,
+        )
+    elif role == "creator":
+        # 未回答のノミネーション + assigned で作業中 (音源提出する番)
+        pending_q = select(func.count()).select_from(OrderCandidateCreator).where(
+            OrderCandidateCreator.creator_id == user.id,
+            OrderCandidateCreator.response_status == CandidateResponseStatus.pending,
+        )
+        assigned_q = select(func.count()).select_from(Order).where(
+            Order.assigned_creator_id == user.id,
+            Order.status == OrderStatus.assigned,
+        )
+        return int(db.execute(pending_q).scalar_one()) + int(db.execute(assigned_q).scalar_one())
+    else:  # admin
+        q = select(func.count()).select_from(Order).where(
+            Order.status.in_([OrderStatus.open, OrderStatus.reviewing]),
+        )
+    return int(db.execute(q).scalar_one())
+
+
+def _participant_order_ids_subq(user: User):
+    """自分がチケットに参加している order_id 集合を返すサブクエリ。"""
+    role = user.role.value
+    if role == "user":
+        return select(Order.id).where(Order.user_id == user.id)
+    if role == "creator":
+        # 候補 or assigned の order
+        candidate_orders = select(OrderCandidateCreator.order_id).where(
+            OrderCandidateCreator.creator_id == user.id
+        )
+        return select(Order.id).where(
+            (Order.assigned_creator_id == user.id) |
+            Order.id.in_(candidate_orders)
+        )
+    # admin は全 order
+    return select(Order.id)
+
+
+def _count_message_unread(db: Session, user: User) -> int:
+    """チケット内メッセージ未読数。
+    自分以外が送信した最新メッセージが、自分の最終 order_view より新しい order の数。
+    """
+    participant_subq = _participant_order_ids_subq(user).subquery()
+
+    # 自分が最後に order_view した時刻 (per order)
+    last_view = (
+        select(
+            ActivityLog.target_id.label("order_id"),
+            func.max(ActivityLog.created_at).label("last_view_at"),
+        )
+        .where(
+            ActivityLog.user_id == user.id,
+            ActivityLog.kind == ActivityKind.order_view,
+        )
+        .group_by(ActivityLog.target_id)
+        .subquery()
+    )
+
+    # 自分以外が送った最新メッセージ時刻 (per order)
+    last_msg = (
+        select(
+            OrderMessage.order_id.label("order_id"),
+            func.max(OrderMessage.created_at).label("last_msg_at"),
+        )
+        .where(OrderMessage.sender_id != user.id)
+        .group_by(OrderMessage.order_id)
+        .subquery()
+    )
+
+    # 参加 order && メッセージあり && (未閲覧 OR メッセージ > 閲覧)
+    q = (
+        select(func.count())
+        .select_from(last_msg)
+        .join(participant_subq, participant_subq.c.id == last_msg.c.order_id)
+        .outerjoin(last_view, last_view.c.order_id == last_msg.c.order_id)
+        .where(
+            (last_view.c.last_view_at.is_(None)) |
+            (last_msg.c.last_msg_at > last_view.c.last_view_at)
+        )
+    )
+    return int(db.execute(q).scalar_one())
+
+
+def _count_info_only(db: Session, user: User) -> int:
+    """情報通知。creator のみ。
+    自分が accepted で「できる」と返したが、別の creator が選ばれた order。
+    `updated_at` が 7日以内 かつ 自分が「結果が確定してから」一度も order_view していないもの。
+    """
+    if user.role.value != "creator":
+        return 0
+    cutoff = datetime.now(timezone.utc) - timedelta(days=INFO_NOTIFICATION_TTL_DAYS)
+
+    last_view = (
+        select(
+            ActivityLog.target_id.label("order_id"),
+            func.max(ActivityLog.created_at).label("last_view_at"),
+        )
+        .where(
+            ActivityLog.user_id == user.id,
+            ActivityLog.kind == ActivityKind.order_view,
+        )
+        .group_by(ActivityLog.target_id)
+        .subquery()
+    )
+
+    q = (
+        select(func.count())
+        .select_from(OrderCandidateCreator)
+        .join(Order, Order.id == OrderCandidateCreator.order_id)
+        .outerjoin(last_view, last_view.c.order_id == Order.id)
+        .where(
+            OrderCandidateCreator.creator_id == user.id,
+            OrderCandidateCreator.response_status == CandidateResponseStatus.accepted,
+            Order.assigned_creator_id.is_not(None),
+            Order.assigned_creator_id != user.id,
+            Order.updated_at >= cutoff,
+            (last_view.c.last_view_at.is_(None)) |
+            (Order.updated_at > last_view.c.last_view_at),
+        )
+    )
+    return int(db.execute(q).scalar_one())
+
 
 @router.get("/me/commission/unread")
 def commission_unread(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    """Return count of Commission items that require the current user's action."""
-    role = current_user.role.value
+    """改訂2: 要対応 / メッセージ未読 / 情報通知 を二系統に分けて返す。
 
-    if role == "user":
-        # Orders submitted by this user that are awaiting their review/approval
-        q = select(func.count()).select_from(Order).where(
-            Order.user_id == current_user.id,
-            Order.status.in_([OrderStatus.reviewing]),
-        )
-    elif role == "creator":
-        # Nominations sent to this creator that haven't been answered yet
-        q = select(func.count()).select_from(OrderCandidateCreator).where(
-            OrderCandidateCreator.creator_id == current_user.id,
-            OrderCandidateCreator.response_status == CandidateResponseStatus.pending,
-        )
-    else:  # admin
-        # Orders waiting for admin action (nominate creators or mark done/reject)
-        q = select(func.count()).select_from(Order).where(
-            Order.status.in_([OrderStatus.open, OrderStatus.reviewing]),
-        )
-
-    count = db.execute(q).scalar_one()
-    return {"count": int(count)}
+    TopNav は以下の判定で表示:
+      - action_count > 0 → 橙 + 件数バッジ + 金ドット
+      - action_count == 0 && has_info → 橙のみ (件数なし) + 金ドット
+      - 両方ゼロ → デフォルト色
+    """
+    action_required = _count_action_required(db, current_user)
+    message_unread = _count_message_unread(db, current_user)
+    info_only = _count_info_only(db, current_user)
+    action_count = action_required + message_unread
+    return {
+        "action_count": action_count,
+        "has_info": info_only > 0,
+        "breakdown": {
+            "action_required": action_required,
+            "message_unread": message_unread,
+            "info_only": info_only,
+        },
+    }
 
 
 # ─── Orders list ──────────────────────────────────────────────────────────────
@@ -287,11 +429,53 @@ def list_orders(
 
 # ─── Create order ─────────────────────────────────────────────────────────────
 
+# 改訂2: タイトル/token_cost は手入力廃止。brief.length_sec から自動算出
+# desired_deadline は default = 作成日 + 7日、user が指定すれば優先
 class CreateOrderRequest(BaseModel):
-    title: str
     description: str | None = None
     brief: dict | None = None
-    token_cost: int
+    desired_deadline: date | None = None
+
+
+DEFAULT_DEADLINE_DAYS = 7
+
+
+def _next_global_serial(db: Session) -> int:
+    """Commission Order 全体の通し番号を採番する。
+    キャンセル/削除された番号は再利用しない (Postgres sequence で担保)。
+    """
+    return int(db.execute(select(func.nextval("orders_serial_seq"))).scalar_one())
+
+
+def _generate_title(username: str, serial: int, when: datetime | None = None) -> str:
+    """改訂2: 自動タイトル生成 `YYYYMMDD_<username>_Order #<serial>` (serial は global)。"""
+    when = when or datetime.now(timezone.utc)
+    return f"{when:%Y%m%d}_{username}_Order #{serial}"
+
+
+def _extract_length_sec(brief: dict | None) -> int:
+    """brief.length_sec を取り出して token_cost として返す。
+    未指定/不正な場合は INVALID_TOKEN_COST。
+    """
+    if not brief or not isinstance(brief, dict):
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "INVALID_TOKEN_COST", "message": "brief.length_sec is required"},
+        )
+    raw = brief.get("length_sec")
+    try:
+        length = int(raw)
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "INVALID_TOKEN_COST", "message": "brief.length_sec must be integer"},
+        )
+    if length <= 0:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "INVALID_TOKEN_COST", "message": "brief.length_sec must be > 0"},
+        )
+    return length
 
 
 @router.post("/orders", response_model=OrderOut, status_code=status.HTTP_201_CREATED)
@@ -301,17 +485,18 @@ def create_order(
     current_user: User = Depends(get_current_user),
     _: None = Depends(_require_commission),
 ) -> OrderOut:
-    if body.token_cost <= 0:
-        raise HTTPException(
-            status_code=422,
-            detail={"code": "INVALID_TOKEN_COST", "message": "token_cost must be > 0"},
-        )
+    token_cost = _extract_length_sec(body.brief)
+    serial = _next_global_serial(db)
+    title = _generate_title(current_user.username, serial)
+    deadline = body.desired_deadline or (date.today() + timedelta(days=DEFAULT_DEADLINE_DAYS))
     order = Order(
         user_id=current_user.id,
-        title=body.title,
+        serial=serial,
+        title=title,
         description=body.description,
         brief=body.brief,
-        token_cost=body.token_cost,
+        token_cost=token_cost,
+        desired_deadline=deadline,
         status=OrderStatus.draft,
     )
     db.add(order)
@@ -335,6 +520,30 @@ def get_order(
     order = _load_order(db, parsed)
     _check_access(order, current_user)
     return _to_order_out(order)
+
+
+# ─── View tracking (改訂2) ─────────────────────────────────────────────────────
+
+@router.post("/orders/{order_id}/view", status_code=status.HTTP_201_CREATED)
+def record_order_view(
+    order_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(_require_commission),
+) -> dict:
+    """発注詳細を開いた時に呼び出し、`activity_logs` に order_view を記録する。
+    既読時刻として通知バッジ計算に使用される。
+    """
+    parsed = _parse_uuid(order_id)
+    order = _load_order(db, parsed)
+    _check_access(order, current_user)
+    db.add(ActivityLog(
+        user_id=current_user.id,
+        kind=ActivityKind.order_view,
+        target_id=parsed,
+    ))
+    db.commit()
+    return {"recorded": True}
 
 
 def _check_access(order: Order, user: User) -> None:
@@ -387,6 +596,88 @@ def submit_order(
     order.status = OrderStatus.open
     order.updated_at = func.now()
     _add_status_message(db, parsed, current_user.id, "open")
+    db.commit()
+    return _to_order_out(_load_order(db, parsed))
+
+
+# ─── Update draft (改訂2: 一時保存編集) ────────────────────────────────────────
+
+class UpdateDraftRequest(BaseModel):
+    brief: dict | None = None
+    description: str | None = None
+    desired_deadline: date | None = None
+
+
+@router.patch("/orders/{order_id}/draft", response_model=OrderOut)
+def update_draft(
+    order_id: str,
+    body: UpdateDraftRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(_require_commission),
+) -> OrderOut:
+    """draft 状態の発注を編集する (改訂2: 一時保存からの続き入力)。
+    発注者本人のみ。status≠draft の場合は INVALID_STATE。
+    brief を渡した場合は token_cost = brief.length_sec で再計算。
+    """
+    parsed = _parse_uuid(order_id)
+    order = db.execute(select(Order).where(Order.id == parsed).with_for_update()).scalar_one_or_none()
+    _check_order_exists(order)
+    if order.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "FORBIDDEN", "message": "not your order"},
+        )
+    if order.status != OrderStatus.draft:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "INVALID_STATE", "message": f"draft 以外は編集不可 (current: {order.status.value})"},
+        )
+    if body.brief is not None:
+        order.brief = body.brief
+        order.token_cost = _extract_length_sec(body.brief)
+    if body.description is not None:
+        order.description = body.description
+    if body.desired_deadline is not None:
+        order.desired_deadline = body.desired_deadline
+    order.updated_at = func.now()
+    db.commit()
+    return _to_order_out(_load_order(db, parsed))
+
+
+# ─── Update deadline (改訂2) ───────────────────────────────────────────────────
+
+class UpdateDeadlineRequest(BaseModel):
+    desired_deadline: date
+
+
+@router.patch("/orders/{order_id}/deadline", response_model=OrderOut)
+def update_deadline(
+    order_id: str,
+    body: UpdateDeadlineRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(_require_commission),
+) -> OrderOut:
+    """発注者本人または admin が希望締切日を変更する。
+    done/cancelled 後は不可。
+    """
+    parsed = _parse_uuid(order_id)
+    order = db.execute(select(Order).where(Order.id == parsed).with_for_update()).scalar_one_or_none()
+    _check_order_exists(order)
+    role = current_user.role.value
+    if role != "admin" and order.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "FORBIDDEN", "message": "not your order"},
+        )
+    if order.status in (OrderStatus.done, OrderStatus.cancelled):
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "INVALID_STATE", "message": "cannot change deadline after done/cancelled"},
+        )
+    order.desired_deadline = body.desired_deadline
+    order.updated_at = func.now()
     db.commit()
     return _to_order_out(_load_order(db, parsed))
 

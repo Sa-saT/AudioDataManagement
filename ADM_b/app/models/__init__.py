@@ -9,7 +9,13 @@ from app.models.payment import (
     TokenConsumption,
     TokenGrant,
 )
-from app.models.log import DownloadLog, DownloadKind, Favorite
+from app.models.log import (
+    ActivityKind,
+    ActivityLog,
+    DownloadLog,
+    DownloadKind,
+    Favorite,
+)
 from app.models.order import (
     SystemSetting,
     Order,
@@ -38,6 +44,8 @@ __all__ = [
     "DownloadLog",
     "DownloadKind",
     "Favorite",
+    "ActivityKind",
+    "ActivityLog",
     "SystemSetting",
     "Order",
     "OrderStatus",

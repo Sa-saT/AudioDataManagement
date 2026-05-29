@@ -90,10 +90,11 @@ draft ──[submit by user]──→ open ──[nominate by admin]──→ re
 | `desired_deadline` | string (ISO date) | 希望締切日。**デフォルト: 作成日 + 7日**。user が変更可能 |
 
 **タイトル:** 入力フィールドは廃止 (改訂2)。サーバ側で自動生成:  
-形式: `YYYYMMDD_<username>_Order #<per-user-serial>`  
+形式: `YYYYMMDD_<username>_Order #<serial>`  
 例: `20260529_alice_Order #12`  
 - `username` は `users.username` をそのまま使用
-- serial はユーザごとの通し番号 (alice の #1, bob の #1 ...)
+- serial は **Commission Order 全体の通し番号** (Postgres sequence `orders_serial_seq` で採番)
+- **キャンセル/削除された番号は再利用しない** (sequence の単調増加で担保)
 - 編集は不可
 
 #### Step 2: シーン/機能設計 (必須)
@@ -201,8 +202,8 @@ melody (メロディライン), rhythm (リズムパターン), density (音の�
 |---|---|---|
 | `id` | UUID PK | |
 | `user_id` | UUID FK → users | 発注者 |
-| `user_serial` | INT NOT NULL | ユーザごとの通し番号 (改訂2で追加)。`user_id` 単位で 1 から採番 |
-| `title` | TEXT NOT NULL | 発注タイトル。**改訂2 で自動生成 (`YYYYMMDD_<username>_Order #<user_serial>`)** |
+| `serial` | INT NOT NULL | **Commission Order 全体の通し番号** (改訂2で追加 / 0010で global 化)。Postgres sequence `orders_serial_seq` で採番。キャンセル番号は再利用しない |
+| `title` | TEXT NOT NULL | 発注タイトル。**改訂2 で自動生成 (`YYYYMMDD_<username>_Order #<serial>`)** |
 | `description` | TEXT | 自由記述 (レガシー。brief 導入後は主に brief を使用) |
 | `brief` | JSONB | サウンドブリーフ (§3 参照) |
 | `token_cost` | INT > 0 | 消費 token 数 = `brief.length_sec` (改訂2で自動算出)。Admin の手動調整は廃止 |
@@ -217,7 +218,7 @@ melody (メロディライン), rhythm (リズムパターン), density (音の�
 | `notified_at` | TIMESTAMPTZ | done になった時刻 (通知バッジ用) |
 | `created_at` / `updated_at` | TIMESTAMPTZ | |
 
-**改訂2 で追加するインデックス:** `UNIQUE (user_id, user_serial)`
+**改訂2 で追加するインデックス:** `UNIQUE (serial)` (0010 で per-user → global へ変更済み)
 
 ### `order_candidate_creators` テーブル
 
@@ -466,7 +467,7 @@ Step 2 は `sound_type` (BGM/SE/both) によって表示項目が変わる。
 
 | # | 変更 | 影響範囲 |
 |---|---|---|
-| R2-01 | **発注タイトル入力廃止** → サーバ側で `YYYYMMDD_<username>_Order #<user_serial>` 自動生成 | orders スキーマ (`user_serial` 追加 / `title` 仕様変更) / CreateOrderRequest / Wizard step6 / 一覧表示 |
+| R2-01 | **発注タイトル入力廃止** → サーバ側で `YYYYMMDD_<username>_Order #<serial>` 自動生成。**serial は Commission Order 全体の通し番号 (sequence 採番、cancel 番号は再利用しない)** | orders スキーマ (`serial` 列 + sequence) / CreateOrderRequest / Wizard step6 / 一覧表示 |
 | R2-02 | `sound_type` から **`both` 削除** (`bgm` / `se` の二択) | OrderBriefWizard step1/step2 / OrderBrief 型 / 詳細画面の表示分岐 |
 | R2-03 | **希望締切 (`desired_deadline`)** Step1 に追加 / デフォルト `created_at + 7日` / user 編集可 | orders スキーマ / Wizard step1 / 詳細画面に編集 UI |
 | R2-04 | **`token_cost` 自動算出** = `length_sec`。手入力廃止 / Step1 で曲長スライダー (10〜600s) + 直接入力 | Wizard step1 / step6 / API (token_cost を body で受けない) |
@@ -498,12 +499,20 @@ Step 2 は `sound_type` (BGM/SE/both) によって表示項目が変わる。
 ### 11.5 必要マイグレーション
 
 ```sql
--- 改訂2 用 alembic migration
+-- 改訂2 用 alembic migrations
+-- 0008: per-user 連番 + desired_deadline 追加 (初期実装)
 ALTER TABLE orders ADD COLUMN user_serial INT;
 ALTER TABLE orders ADD COLUMN desired_deadline DATE;
--- title はそのまま (auto-generate に切替、DB スキーマ変更なし)
 CREATE UNIQUE INDEX uq_orders_user_serial ON orders (user_id, user_serial);
--- 既存 draft/open には user_id 単位で連番を埋める backfill が必要
+
+-- 0010: global 通し番号化 (改修)
+ALTER TABLE orders DROP CONSTRAINT uq_orders_user_serial;
+ALTER TABLE orders RENAME COLUMN user_serial TO serial;
+CREATE SEQUENCE orders_serial_seq AS BIGINT START WITH 1;
+-- 全 orders を created_at 昇順で再付番後、sequence を MAX に揃える
+ALTER TABLE orders ALTER COLUMN serial SET DEFAULT nextval('orders_serial_seq');
+CREATE UNIQUE INDEX uq_orders_serial ON orders (serial);
+-- cancel/削除しても番号は再利用されない (sequence の単調増加)
 ```
 
 ### 11.6 残課題 (改訂2 で未確定)

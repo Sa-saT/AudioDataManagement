@@ -1,15 +1,23 @@
 import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Audio, DownloadKind, DownloadLog, TokenConsumption
+from app.models import (
+    ActivityKind,
+    ActivityLog,
+    Audio,
+    DownloadKind,
+    DownloadLog,
+    TokenConsumption,
+)
 from app.models.audio import AudioTag, Tag
 from app.schemas.audio import CreatorBrief
 from app.security.deps import get_current_user
@@ -19,6 +27,9 @@ from app.security.signed_url import (
     verify_copy_download,
 )
 from app.services import audio_file
+
+# 直近この秒数以内に同ユーザの session 記録があれば新規 INSERT しない
+SESSION_DEDUP_WINDOW_SEC = 30 * 60  # 30分
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -198,3 +209,33 @@ def delete_my_download(
     copy_path = audio_file.get_copy_path(current_user.id, parsed_id)
     if copy_path.exists():
         copy_path.unlink(missing_ok=True)
+
+
+# ─── Session ping (改訂2) ─────────────────────────────────────────────────────
+
+@router.post("/session/ping")
+def session_ping(
+    response: Response,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+) -> dict:
+    """フロントが主要ページに到達した時に1回叩く。
+    直近 30分以内に同ユーザの session 記録があれば 204、なければ INSERT して 201。
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=SESSION_DEDUP_WINDOW_SEC)
+    recent = db.execute(
+        select(ActivityLog.id)
+        .where(
+            ActivityLog.user_id == current_user.id,
+            ActivityLog.kind == ActivityKind.session,
+            ActivityLog.created_at >= cutoff,
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    if recent is not None:
+        response.status_code = status.HTTP_204_NO_CONTENT
+        return {}
+    db.add(ActivityLog(user_id=current_user.id, kind=ActivityKind.session))
+    db.commit()
+    response.status_code = status.HTTP_201_CREATED
+    return {"recorded": True}

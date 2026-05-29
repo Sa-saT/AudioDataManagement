@@ -1,9 +1,15 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 
+// 改訂2:
+//   - title 入力は廃止 (サーバが自動生成)
+//   - sound_type から 'both' 削除
+//   - length_sec が token_cost を兼ねる (1秒=1token)
+//   - desired_deadline (default 7日後) を step1 に統合
+//   - step6 から deadline / budget_range / token入力 削除
 export interface OrderBrief {
   // Step 1
-  sound_type: 'bgm' | 'se' | 'both' | ''
+  sound_type: 'bgm' | 'se' | ''
   purpose: 'game' | 'video' | 'podcast' | 'other' | ''
   purpose_note: string
   length_sec: number | null
@@ -18,7 +24,7 @@ export interface OrderBrief {
   emotions_target: string[]
   emotions_avoid: string[]
   memory_impression: string
-  // Step 4 — Texture (3-way: 'a' | 'mid' | 'b' | '')
+  // Step 4 — Texture
   tx_organic_electronic: 'organic' | 'mid' | 'electronic' | ''
   tx_melody_rhythm: 'melody' | 'mid' | 'rhythm' | ''
   tx_warm_cold: 'warm' | 'mid' | 'cold' | ''
@@ -30,26 +36,41 @@ export interface OrderBrief {
   reference_avoid: string
   // Step 6 — Technical
   delivery_format: 'wav48k24b' | 'wav44k16b' | 'any' | ''
-  deadline: string
-  budget_range: '5000' | '10000' | 'negotiable' | ''
   note: string
 }
 
+interface Props {
+  initialBrief?: Partial<OrderBrief>
+  initialDeadline?: string  // YYYY-MM-DD
+}
+const props = defineProps<Props>()
+
 const emit = defineEmits<{
-  (e: 'submit', payload: { title: string; token_cost: number; brief: OrderBrief }): void
+  (e: 'submit', payload: { brief: OrderBrief; desired_deadline: string }): void
+  (e: 'saveDraft', payload: { brief: OrderBrief; desired_deadline: string }): void
   (e: 'cancel'): void
 }>()
 
 const TOTAL_STEPS = 6
 const step = ref(1)
-const title = ref('')
-const token_cost = ref(100)
+
+// 締切 default = 7日後
+function defaultDeadline(): string {
+  const d = new Date()
+  d.setDate(d.getDate() + 7)
+  return d.toISOString().slice(0, 10)
+}
+const desired_deadline = ref(props.initialDeadline || defaultDeadline())
+
+// length_sec の制約
+const LENGTH_MIN = 10
+const LENGTH_MAX = 600
 
 const brief = ref<OrderBrief>({
   sound_type: '',
   purpose: '',
   purpose_note: '',
-  length_sec: null,
+  length_sec: 60,
   bgm_scenes: [],
   bgm_loop: false,
   bgm_note: '',
@@ -67,10 +88,12 @@ const brief = ref<OrderBrief>({
   reference_elements: [],
   reference_avoid: '',
   delivery_format: '',
-  deadline: '',
-  budget_range: '',
   note: '',
+  ...(props.initialBrief as Partial<OrderBrief>),
 })
+
+// token = length_sec (改訂2)
+const tokenCost = computed(() => brief.value.length_sec ?? 0)
 
 // ─── Validation ───────────────────────────────────────
 const errors = ref<Record<string, string>>({})
@@ -79,20 +102,26 @@ function clearErrors() { errors.value = {} }
 
 function validateStep1(): boolean {
   clearErrors()
-  if (!title.value.trim()) errors.value.title = 'タイトルを入力してください'
   if (!brief.value.sound_type) errors.value.sound_type = 'サウンドタイプを選択してください'
   if (!brief.value.purpose) errors.value.purpose = '用途を選択してください'
-  if (!brief.value.length_sec || brief.value.length_sec <= 0) errors.value.length = '長さを入力してください (1秒以上)'
+  if (
+    !brief.value.length_sec ||
+    brief.value.length_sec < LENGTH_MIN ||
+    brief.value.length_sec > LENGTH_MAX
+  ) {
+    errors.value.length = `長さは ${LENGTH_MIN}〜${LENGTH_MAX} 秒で入力してください`
+  }
+  if (!desired_deadline.value) errors.value.deadline = '希望締切日を入力してください'
   return Object.keys(errors.value).length === 0
 }
 
 function validateStep2(): boolean {
   clearErrors()
   const t = brief.value.sound_type
-  if ((t === 'bgm' || t === 'both') && brief.value.bgm_scenes.length === 0) {
+  if (t === 'bgm' && brief.value.bgm_scenes.length === 0) {
     errors.value.bgm_scenes = 'シーンを1つ以上選択してください'
   }
-  if ((t === 'se' || t === 'both') && !brief.value.se_trigger.trim()) {
+  if (t === 'se' && !brief.value.se_trigger.trim()) {
     errors.value.se_trigger = 'SEのトリガーとなるアクションを入力してください'
   }
   return Object.keys(errors.value).length === 0
@@ -126,7 +155,17 @@ function skip() {
 }
 
 function handleSubmit() {
-  emit('submit', { title: title.value.trim(), token_cost: token_cost.value, brief: brief.value })
+  // 最終 [発注] ボタン。タイトル/token はサーバ側で自動生成・算出
+  emit('submit', { brief: brief.value, desired_deadline: desired_deadline.value })
+}
+
+function handleSaveDraft() {
+  // 一時保存 — どの step でも呼び出せる。最低限の検証のみ
+  if (!brief.value.length_sec || brief.value.length_sec < LENGTH_MIN) {
+    errors.value.length = `保存には長さ ${LENGTH_MIN} 秒以上の入力が必要です`
+    return
+  }
+  emit('saveDraft', { brief: brief.value, desired_deadline: desired_deadline.value })
 }
 
 // ─── Toggle helpers ────────────────────────────────────
@@ -210,7 +249,7 @@ function setTx(key: TxKey, val: string) {
 const progressPercent = computed(() => (step.value / TOTAL_STEPS) * 100)
 
 // ─── Summary helpers ──────────────────────────────────
-const SOUND_TYPE_L: Record<string, string> = { bgm: 'BGM', se: 'SE', both: 'BGM + SE' }
+const SOUND_TYPE_L: Record<string, string> = { bgm: 'BGM', se: 'SE' }
 const PURPOSE_L: Record<string, string> = { game: 'ゲーム', video: '映像', podcast: 'ポッドキャスト', other: 'その他' }
 const TX_L: Record<string, string> = {
   organic: '有機的', melody: 'メロディ重視', warm: '温かい', sparse: 'シンプル', static: '静的',
@@ -218,7 +257,6 @@ const TX_L: Record<string, string> = {
   electronic: '電子的', rhythm: 'リズム重視', cold: '冷たい', dense: '重厚', dynamic: '激しい',
 }
 const FORMAT_L: Record<string, string> = { wav48k24b: '48kHz/24bit', wav44k16b: '44.1kHz/16bit', any: 'どちらでも可' }
-const BUDGET_L: Record<string, string> = { '5000': '〜¥5,000', '10000': '〜¥10,000', negotiable: '要相談' }
 
 function emotionLabel(v: string) { return EMOTIONS.find(e => e.v === v)?.l ?? v }
 function bgmSceneLabel(v: string) { return BGM_SCENES.find(s => s.v === v)?.l ?? v }
@@ -249,25 +287,12 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
         <p class="text-[11px] text-ink/40 mt-0.5">まずどんなサウンドを作りたいか教えてください。</p>
       </div>
 
-      <!-- タイトル -->
-      <div>
-        <label class="block text-[12px] text-ink/60 mb-1.5">発注タイトル <span class="text-accent">*</span></label>
-        <input
-          v-model="title"
-          type="text"
-          placeholder="例: ダンジョンボス戦BGM"
-          class="w-full bg-surface-2 border border-white/10 rounded-lg px-3 py-2 text-[13px] text-ink placeholder:text-ink/30 focus:outline-none focus:ring-1 focus:ring-accent"
-          maxlength="100"
-        />
-        <p v-if="errors.title" class="mt-1 text-[11px] text-accent">{{ errors.title }}</p>
-      </div>
-
-      <!-- サウンドタイプ -->
+      <!-- サウンドタイプ (改訂2: BGM/SE 二択) -->
       <div>
         <label class="block text-[12px] text-ink/60 mb-1.5">サウンドタイプ <span class="text-accent">*</span></label>
         <div class="flex gap-2">
           <button
-            v-for="opt in [{ v: 'bgm', l: 'BGM' }, { v: 'se', l: 'SE' }, { v: 'both', l: 'BGM + SE' }]"
+            v-for="opt in [{ v: 'bgm', l: 'BGM' }, { v: 'se', l: 'SE' }]"
             :key="opt.v"
             type="button"
             class="flex-1 py-2 rounded-lg text-[12px] font-medium border transition-colors"
@@ -305,32 +330,48 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
         <p v-if="errors.purpose" class="mt-1 text-[11px] text-accent">{{ errors.purpose }}</p>
       </div>
 
-      <!-- 長さ -->
+      <!-- 長さ (改訂2: スライダー + 直接入力、token表示) -->
       <div>
-        <label class="block text-[12px] text-ink/60 mb-1.5">おおよその長さ (秒) <span class="text-accent">*</span></label>
-        <div class="flex flex-wrap gap-2 mb-2">
-          <button
-            v-for="preset in [15, 30, 60, 90, 120, 180]"
-            :key="preset"
-            type="button"
-            class="px-3 py-1.5 rounded-full text-[12px] border transition-colors"
-            :class="brief.length_sec === preset
-              ? 'bg-accent text-white border-accent'
-              : 'bg-surface-2 text-ink/60 border-white/10 hover:border-accent/50'"
-            @click="brief.length_sec = preset"
-          >{{ preset }}s</button>
+        <div class="flex items-baseline justify-between mb-1.5">
+          <label class="text-[12px] text-ink/60">曲の長さ <span class="text-accent">*</span></label>
+          <span class="font-mono text-[11px] text-ink/40">
+            = <span class="text-ink font-semibold">{{ tokenCost }}</span> tk 消費
+          </span>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-3">
           <input
             v-model.number="brief.length_sec"
-            type="number"
-            min="1"
-            placeholder="カスタム"
-            class="w-28 bg-surface-2 border border-white/10 rounded-lg px-3 py-2 text-[13px] text-ink placeholder:text-ink/30 focus:outline-none focus:ring-1 focus:ring-accent"
+            type="range"
+            :min="LENGTH_MIN"
+            :max="LENGTH_MAX"
+            step="1"
+            class="flex-1 accent-accent"
           />
-          <span class="text-[12px] text-ink/40">秒</span>
+          <div class="flex items-center gap-1 shrink-0">
+            <input
+              v-model.number="brief.length_sec"
+              type="number"
+              :min="LENGTH_MIN"
+              :max="LENGTH_MAX"
+              class="w-20 bg-surface-2 border border-white/10 rounded-lg px-2 py-1.5 text-[13px] text-ink text-right focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+            <span class="text-[12px] text-ink/40">秒</span>
+          </div>
         </div>
+        <p class="mt-1 text-[10px] text-ink/30 font-mono">{{ LENGTH_MIN }}〜{{ LENGTH_MAX }}秒。1秒 = 1 token (Dashboard と同じ式)</p>
         <p v-if="errors.length" class="mt-1 text-[11px] text-accent">{{ errors.length }}</p>
+      </div>
+
+      <!-- 希望締切日 (改訂2: 追加。default = 7日後) -->
+      <div>
+        <label class="block text-[12px] text-ink/60 mb-1.5">希望締切日 <span class="text-accent">*</span></label>
+        <input
+          v-model="desired_deadline"
+          type="date"
+          class="bg-surface-2 border border-white/10 rounded-lg px-3 py-2 text-[13px] text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+        />
+        <p class="mt-1 text-[10px] text-ink/30">デフォルトは作成日から7日後。後から変更も可能です。</p>
+        <p v-if="errors.deadline" class="mt-1 text-[11px] text-accent">{{ errors.deadline }}</p>
       </div>
     </div>
 
@@ -344,10 +385,8 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
       </div>
 
       <!-- BGM section -->
-      <template v-if="brief.sound_type === 'bgm' || brief.sound_type === 'both'">
-        <div :class="brief.sound_type === 'both' ? 'border border-white/10 rounded-xl p-4' : ''">
-          <p v-if="brief.sound_type === 'both'" class="text-[11px] font-semibold text-ink/50 tracking-widest uppercase mb-3">BGM</p>
-
+      <template v-if="brief.sound_type === 'bgm'">
+        <div>
           <!-- シーン選択 -->
           <div class="mb-4">
             <label class="block text-[12px] text-ink/60 mb-1.5">使用シーン <span class="text-accent">*</span></label>
@@ -397,10 +436,8 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
       </template>
 
       <!-- SE section -->
-      <template v-if="brief.sound_type === 'se' || brief.sound_type === 'both'">
-        <div :class="brief.sound_type === 'both' ? 'border border-white/10 rounded-xl p-4' : ''">
-          <p v-if="brief.sound_type === 'both'" class="text-[11px] font-semibold text-ink/50 tracking-widest uppercase mb-3">SE</p>
-
+      <template v-if="brief.sound_type === 'se'">
+        <div>
           <!-- トリガー -->
           <div class="mb-4">
             <label class="block text-[12px] text-ink/60 mb-1">何をしたときに鳴る音ですか？ <span class="text-accent">*</span></label>
@@ -600,12 +637,12 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
     </div>
 
     <!-- ═══════════════════════════════════════════════
-         Step 6: 技術仕様 + 確認
+         Step 6: 技術仕様 + 確認 (改訂2: 簡素化)
     ════════════════════════════════════════════════ -->
     <div v-else-if="step === 6" class="flex flex-col gap-5">
       <div>
-        <p class="text-[13px] font-semibold text-ink">技術仕様・予算</p>
-        <p class="text-[11px] text-ink/40 mt-0.5">最後に納品条件と予算を確認してください。</p>
+        <p class="text-[13px] font-semibold text-ink">技術仕様・確認</p>
+        <p class="text-[11px] text-ink/40 mt-0.5">最後に納品形式と内容を確認してください。</p>
       </div>
 
       <!-- 納品形式 -->
@@ -625,47 +662,6 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
         </div>
       </div>
 
-      <!-- 締切 -->
-      <div>
-        <label class="block text-[12px] text-ink/60 mb-1">希望締切日</label>
-        <input
-          v-model="brief.deadline"
-          type="date"
-          class="bg-surface-2 border border-white/10 rounded-lg px-3 py-2 text-[13px] text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-        />
-      </div>
-
-      <!-- 予算感 -->
-      <div>
-        <label class="block text-[12px] text-ink/60 mb-1.5">予算感</label>
-        <div class="flex flex-wrap gap-2">
-          <button
-            v-for="opt in [{ v: '5000', l: '〜¥5,000' }, { v: '10000', l: '〜¥10,000' }, { v: 'negotiable', l: '要相談' }]"
-            :key="opt.v"
-            type="button"
-            class="px-3 py-1.5 rounded-full text-[12px] border transition-colors"
-            :class="brief.budget_range === opt.v
-              ? 'bg-accent text-white border-accent'
-              : 'bg-surface-2 text-ink/60 border-white/10 hover:border-accent/50'"
-            @click="brief.budget_range = brief.budget_range === opt.v ? '' : opt.v as typeof brief.budget_range"
-          >{{ opt.l }}</button>
-        </div>
-      </div>
-
-      <!-- token -->
-      <div>
-        <label class="block text-[12px] text-ink/60 mb-1">使用 token 数 <span class="text-accent">*</span></label>
-        <div class="flex items-center gap-2">
-          <input
-            v-model.number="token_cost"
-            type="number"
-            min="1"
-            class="w-28 bg-surface-2 border border-white/10 rounded-lg px-3 py-2 text-[13px] text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-          />
-          <span class="text-[12px] text-ink/40">tk (完了時に消費 / Admin が変更可)</span>
-        </div>
-      </div>
-
       <!-- 補足 -->
       <div>
         <label class="block text-[12px] text-ink/60 mb-1">その他補足・要望</label>
@@ -680,15 +676,20 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
       <!-- Summary -->
       <div class="rounded-xl border border-white/10 bg-surface-2/40 px-4 py-3 space-y-1.5 text-[12px]">
         <p class="text-[11px] font-semibold text-ink/40 tracking-widest uppercase mb-2">確認</p>
-        <p><span class="text-ink/40 w-20 inline-block">タイトル</span><span class="text-ink">{{ title }}</span></p>
         <p><span class="text-ink/40 w-20 inline-block">タイプ</span><span class="text-ink">{{ SOUND_TYPE_L[brief.sound_type] }} / {{ PURPOSE_L[brief.purpose] }}{{ brief.purpose_note ? ` (${brief.purpose_note})` : '' }}</span></p>
-        <p><span class="text-ink/40 w-20 inline-block">長さ</span><span class="text-ink">{{ brief.length_sec }}秒</span></p>
+        <p><span class="text-ink/40 w-20 inline-block">長さ</span><span class="text-ink">{{ brief.length_sec }}秒 <span class="text-ink/40">(= {{ tokenCost }} tk)</span></span></p>
+        <p><span class="text-ink/40 w-20 inline-block">締切</span><span class="text-ink">{{ desired_deadline }}</span></p>
         <p v-if="brief.bgm_scenes.length"><span class="text-ink/40 w-20 inline-block">シーン</span><span class="text-ink">{{ brief.bgm_scenes.map(bgmSceneLabel).join(', ') }}</span></p>
         <p v-if="brief.se_trigger"><span class="text-ink/40 w-20 inline-block">SEトリガー</span><span class="text-ink">{{ brief.se_trigger }}</span></p>
         <p v-if="brief.emotions_target.length"><span class="text-ink/40 w-20 inline-block">狙う感情</span><span class="text-ink">{{ brief.emotions_target.map(emotionLabel).join(', ') }}</span></p>
         <p v-if="brief.memory_impression"><span class="text-ink/40 w-20 inline-block">イメージ</span><span class="text-ink">{{ brief.memory_impression }}</span></p>
         <p v-if="brief.reference_elements.length"><span class="text-ink/40 w-20 inline-block">参考要素</span><span class="text-ink">{{ brief.reference_elements.map(refElemLabel).join(', ') }}</span></p>
       </div>
+
+      <p class="text-[10px] text-ink/30 leading-relaxed">
+        ※ タイトルは <span class="font-mono text-ink/50">YYYYMMDD_username_Order #N</span> 形式で自動生成されます。<br/>
+        ※ token 消費は完了時のみ ({{ tokenCost }} tk = 曲長 {{ brief.length_sec }} 秒)。
+      </p>
     </div>
 
     <!-- ─── Navigation ─────────────────────────────────── -->
@@ -715,6 +716,13 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
           @click="skip"
         >スキップ</button>
 
+        <!-- 一時保存 (改訂2: 全 step で利用可) -->
+        <button
+          type="button"
+          class="px-3 py-2 text-[12px] text-ink/50 hover:text-ink border border-white/15 rounded-lg transition-colors"
+          @click="handleSaveDraft"
+        >一時保存</button>
+
         <button
           v-if="step < TOTAL_STEPS"
           type="button"
@@ -726,7 +734,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
           type="button"
           class="px-5 py-2 bg-accent hover:bg-accent/80 text-white text-[13px] rounded-lg font-medium transition-colors"
           @click="handleSubmit"
-        >下書き保存</button>
+        >発注</button>
       </div>
     </div>
 

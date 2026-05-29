@@ -50,3 +50,28 @@ class Favorite(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+class ActivityKind(str, enum.Enum):
+    session = "session"
+    order_view = "order_view"
+
+
+# 統合活動ログ。session ping と order view を1テーブルで扱う (改訂2)。
+# 将来の audio_view / search なども kind 追加で対応可能。
+class ActivityLog(Base):
+    __tablename__ = "activity_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=new_uuid)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[ActivityKind] = mapped_column(
+        Enum(ActivityKind, name="activity_log_kind", native_enum=True, create_type=False),
+        nullable=False,
+    )
+    # FK 制約は付けない (将来 audio_view / search 等を kind ごとに別テーブルに向けたいため)
+    target_id: Mapped[uuid.UUID | None] = mapped_column(PgUUID(as_uuid=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
