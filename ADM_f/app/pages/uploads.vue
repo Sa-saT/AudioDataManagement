@@ -80,12 +80,15 @@ const canSubmit = computed(() => !!file.value && title.value.trim().length > 0 &
 // ─── Submit ───────────────────────────────────────────
 const loading = ref(false)
 const errorMsg = ref<string | null>(null)
+const errorCode = ref<string | null>(null)
+const errorOpen = ref(false)
 const succeeded = ref(false)
 
 async function submit() {
   if (!canSubmit.value || !file.value) return
   loading.value = true
   errorMsg.value = null
+  errorCode.value = null
 
   const form = new FormData()
   form.append('file', file.value)
@@ -100,6 +103,8 @@ async function submit() {
     succeeded.value = true
   } catch (e) {
     errorMsg.value = errorMessageJa(e)
+    errorCode.value = (e as { code?: string })?.code ?? null
+    errorOpen.value = true
   } finally {
     loading.value = false
   }
@@ -113,6 +118,8 @@ function uploadAnother() {
   isPublic.value = false
   selectedTags.value = []
   errorMsg.value = null
+  errorCode.value = null
+  errorOpen.value = false
   succeeded.value = false
   if (fileInputRef.value) fileInputRef.value.value = ''
 }
@@ -292,11 +299,13 @@ function formatBytes(bytes: number): string {
           </label>
         </div>
 
-        <!-- Error -->
+        <!-- Error popup is rendered at template root via <ErrorPopup> below -->
         <p
-          v-if="errorMsg"
-          class="rounded-md border border-error/30 bg-error/5 px-3 py-2.5 text-[12px] text-error"
-        >{{ errorMsg }}</p>
+          v-if="errorMsg && !errorOpen"
+          class="rounded-md border border-accent/30 bg-accent/5 px-3 py-2.5 text-[12px] text-accent cursor-pointer"
+          @click="errorOpen = true"
+          title="クリックで詳細"
+        >アップロードに失敗しました - クリックで詳細</p>
 
         <!-- Actions -->
         <div class="flex items-center justify-between pt-1">
@@ -323,6 +332,14 @@ function formatBytes(bytes: number): string {
         </div>
       </div>
     </template>
+
+    <!-- Error popup (改訂: アップロード失敗を強調表示) -->
+    <ErrorPopup
+      v-model:open="errorOpen"
+      title="アップロードに失敗しました"
+      :message="errorMsg"
+      :code="errorCode"
+    />
 
   </div>
 </template>
