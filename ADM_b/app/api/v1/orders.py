@@ -574,16 +574,18 @@ def submit_order(
     parsed = _parse_uuid(order_id)
     order = db.execute(select(Order).where(Order.id == parsed).with_for_update()).scalar_one_or_none()
     _check_order_exists(order)
-    if order.user_id != current_user.id:
+    is_admin = current_user.role.value == "admin"
+    if order.user_id != current_user.id and not is_admin:
         raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "not your order"})
     if order.status != OrderStatus.draft:
         raise HTTPException(status_code=409, detail={"code": "INVALID_STATE", "message": f"expected draft, got {order.status.value}"})
 
-    # Token balance check (reservation, not consumption yet)
-    lic = current_user.license
+    # Token balance check. admin が代理 submit する場合は order.user の残高で判定
+    order_owner = db.get(User, order.user_id) if is_admin and order.user_id != current_user.id else current_user
+    lic = order_owner.license if order_owner else None
     if lic is None:
         raise HTTPException(status_code=403, detail={"code": "NO_LICENSE", "message": "no license"})
-    available = tokens_service.available_tokens(db, current_user.id, lic)
+    available = tokens_service.available_tokens(db, order_owner.id, lic)
     if available < order.token_cost:
         raise HTTPException(
             status_code=402,
@@ -617,13 +619,13 @@ def update_draft(
     _: None = Depends(_require_commission),
 ) -> OrderOut:
     """draft 状態の発注を編集する (改訂2: 一時保存からの続き入力)。
-    発注者本人のみ。status≠draft の場合は INVALID_STATE。
+    発注者本人 または admin (代理編集) のみ。status≠draft の場合は INVALID_STATE。
     brief を渡した場合は token_cost = brief.length_sec で再計算。
     """
     parsed = _parse_uuid(order_id)
     order = db.execute(select(Order).where(Order.id == parsed).with_for_update()).scalar_one_or_none()
     _check_order_exists(order)
-    if order.user_id != current_user.id:
+    if order.user_id != current_user.id and current_user.role.value != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"code": "FORBIDDEN", "message": "not your order"},

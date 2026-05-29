@@ -1,7 +1,7 @@
 # Commission / Order 機能 要件仕様書
 
-> 最終更新: 2026-05-29 (改訂2)  
-> 実装状態: ローカル完了 (Phase 3 #39/40) + 仕様改訂分は **未実装**
+> 最終更新: 2026-05-30 (改訂2.1)  
+> 実装状態: 改訂2 まで実装済 (Phase 3 #39〜#46) + §12 フローチャート / §13 発注後編集 (未実装)
 
 ---
 
@@ -522,3 +522,177 @@ CREATE UNIQUE INDEX uq_orders_serial ON orders (serial);
 | R2-Q1 | `sound_type=both` で既に作成済みの order の扱い (data migration するか UI 表示のみ対応か) |
 | R2-Q2 | `desired_deadline` を過ぎた order の扱い (アラート色 / 自動キャンセル / 何もしない) |
 | R2-Q3 | 「一時保存」中の draft をユーザが放置した場合の自動削除ポリシー (例: 30日未操作で消す) |
+
+---
+
+## 12. フローチャート (状態遷移 + 役割)
+
+### 12.1 状態遷移 (全体)
+
+```mermaid
+stateDiagram-v2
+    [*] --> draft : user 新規作成 / admin 代理作成
+    draft --> draft : 一時保存 (continue input)
+    draft --> open : user 発注 / admin 代理発注
+    draft --> cancelled : cancel
+    open --> recruiting : admin が候補 creator をノミネート
+    recruiting --> recruiting : creator が「できる送信」(accepted)
+    recruiting --> assigned : admin が 1人を assign
+    assigned --> reviewing : creator が音源提出 (submit-file)
+    reviewing --> done : admin が承認 (token 消費 + payout 生成)
+    reviewing --> assigned : admin が差し戻し (reject)
+    open --> cancelled : cancel
+    recruiting --> cancelled : cancel
+    assigned --> cancelled : cancel
+    reviewing --> cancelled : cancel
+    done --> [*]
+    cancelled --> [*]
+```
+
+### 12.2 3者参加チケットの操作フロー
+
+```mermaid
+sequenceDiagram
+    participant U as user
+    participant A as admin
+    participant C1 as creator (候補)
+    participant Cx as creator (選ばれた人)
+    participant T as Ticket
+
+    U->>T: 発注 (status=open) ／ admin も代理可
+    A->>T: 候補 creator をノミネート (status=recruiting)
+    T-->>C1: 通知 (要対応: pending ノミネーション)
+    C1-->>T: 「できる送信」(response=accepted)<br/>or 「断る」(declined)
+    T-->>A: 要対応: 1人を assign する番
+    A->>T: 1人を assign (status=assigned)
+    T-->>Cx: 通知: あなたに割り当て
+    T-->>C1: 通知 (情報のみ: 選ばれなかった<br/>1週間 or 開封で自動解除)
+    loop チャット (U / Cx / A の3者参加)
+        U-->>T: メッセージ
+        T-->>Cx: 通知 (未読件数バッジ)
+        T-->>A: 通知 (admin 監督)
+        Cx-->>T: メッセージ
+        T-->>U: 通知
+        T-->>A: 通知
+    end
+    Cx->>T: 音源提出 (status=reviewing)
+    T-->>A: 要対応: done / reject の決裁
+    T-->>U: 要対応: 納品確認
+    alt 承認
+        A->>T: done (token 消費 + payout 生成)
+        T-->>U: 通知: 完了、ファイル DL 可
+    else 差し戻し
+        A->>T: reject (status=assigned に戻す)
+        T-->>Cx: 要対応: 再提出
+    end
+```
+
+### 12.3 admin の権限早見表
+
+| 操作 | user (owner) | admin |
+|---|---|---|
+| draft の表示 (`GET /orders/{id}`) | 自分のみ | 全 user の draft |
+| draft の編集 (`PATCH /orders/{id}/draft`) | 自分のみ | **全 user の draft (代理編集 / 改訂2.1 で開放)** |
+| draft の発注 (`POST /orders/{id}/submit`) | 自分のみ | **代理発注可 / 改訂2.1 で開放** (token 残量は order.user の license で判定) |
+| 候補ノミネート (`POST /orders/{id}/nominate`) | × | ○ |
+| assign 確定 (`POST /orders/{id}/assign`) | × | ○ |
+| reject (`POST /orders/{id}/reject`) | × | ○ |
+| done (`POST /orders/{id}/done`) | × | ○ |
+| 締切編集 (`PATCH /orders/{id}/deadline`) | 自分のみ | ○ |
+| キャンセル | 自分のみ | ○ |
+| メッセージ送信 | チケット宛先のみ | 常時可 (3者宛先) |
+
+---
+
+## 13. 発注後ブリーフ編集 (改訂2.1: 未実装)
+
+ユーザが draft を提出 (status=open) した後、creator とのやりとりを通じて要件が固まる過程でブリーフの**事後編集**が必要になることがある。
+
+### 13.1 ユーザ要求
+
+- user が発注後でもチケット内でブリーフを編集できる
+- 編集された箇所は**色変化**で視覚的に区別
+- チャットに**bot 通知** (例:「ブリーフを編集しました: 狙う感情, 長さ」) が自動投稿される
+- creator/admin は変更を即時把握でき、認識ズレを防止
+
+### 13.2 データモデル変更案
+
+**新規テーブル `order_brief_edits`** (変更履歴):
+
+| カラム | 型 | 説明 |
+|---|---|---|
+| `id` | UUID PK | |
+| `order_id` | UUID FK → orders | |
+| `editor_id` | UUID FK → users | 編集者 (user / admin) |
+| `field_path` | TEXT | 変更フィールド (例: `"emotions_target"`, `"length_sec"`) |
+| `old_value` | JSONB | 変更前の値 |
+| `new_value` | JSONB | 変更後の値 |
+| `created_at` | TIMESTAMPTZ | |
+
+### 13.3 編集可能なステータス
+
+| status | brief 編集可? | 補足 |
+|---|---|---|
+| draft | ○ | `PATCH /orders/{id}/draft` (既存) |
+| open | ○ | nominate 前なら自由 |
+| recruiting | △ | 候補が「できる」と返答済の場合は警告表示推奨 |
+| assigned | △ | creator にメッセージで通知必須 |
+| reviewing | × | 提出済音源との不整合を防ぐため不可 |
+| done / cancelled | × | 不可 |
+
+### 13.4 新規 API
+
+```
+PATCH /api/v1/orders/{id}/brief-after-submit
+Authorization: Bearer <token>
+
+Body:
+{
+  "brief": { ... 更新された brief 全体 },
+  "edited_fields": ["emotions_target", "length_sec"]  // 変更箇所を明示
+}
+```
+
+**振る舞い:**
+1. `order_brief_edits` に各フィールドの old/new を記録
+2. `orders.brief` を新内容で上書き
+3. `OrderMessage` に bot メッセージを 1件追加:
+   - `sender_id = NULL` (system)
+   - `kind = OrderMessageKind.brief_edit` (新規 enum 値)
+   - `content = "ブリーフを編集しました: {field 名の日本語リスト}"`
+4. `length_sec` が変わった場合は `token_cost` も再計算
+
+### 13.5 フロントエンド表示
+
+**詳細画面 (`/orders/[id]`):**
+- ブリーフ表示エリアを編集可能フォームに切替 (ユーザ/admin の所有者のみ)
+- **編集された field は背景色を `accent/10` に**、`title="編集済 (yyyy-MM-dd HH:mm)"` でホバー時に最新編集日時表示
+- **編集履歴アイコン** (時計アイコン) → クリックで `order_brief_edits` の差分一覧をモーダル表示
+
+**チャットスレッド:**
+- `kind = brief_edit` のメッセージは特別スタイル (ファイル絵文字 + accent 色 + system 表記)
+- 差分のうち変更前 → 変更後を 2 行で表示:
+  ```
+  ✏️ ブリーフを編集しました
+  狙う感情: tension, fear → tension, dread
+  長さ: 60秒 → 90秒
+  ```
+
+### 13.6 実装タスク (未着手)
+
+| # | 内容 | 優先度 |
+|---|---|---|
+| R2.1-01 | migration: `order_brief_edits` テーブル + `OrderMessageKind.brief_edit` enum 値追加 | 高 |
+| R2.1-02 | API: `PATCH /orders/{id}/brief-after-submit` (権限 / status 制約 / diff 記録 / bot メッセージ生成) | 高 |
+| R2.1-03 | 詳細画面: brief 表示エリアを編集可能化 + 編集済 field の色変化 | 高 |
+| R2.1-04 | 編集履歴モーダル (`order_brief_edits` 一覧) | 中 |
+| R2.1-05 | チャット内 `brief_edit` メッセージの専用スタイル | 中 |
+| R2.1-06 | `length_sec` 変更による `token_cost` 再計算 + 残量再チェック | 高 |
+
+### 13.7 未確定事項
+
+| # | 内容 |
+|---|---|
+| R2.1-Q1 | reviewing 状態で creator が音源提出後の編集を許可するか (現状は不可案) |
+| R2.1-Q2 | 編集回数の上限 (例: 1チケット 5回まで等) を設けるか |
+| R2.1-Q3 | `length_sec` が大幅変更された場合、すでに進行中の assign を自動で取り消すか |
