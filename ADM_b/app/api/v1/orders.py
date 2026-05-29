@@ -938,20 +938,14 @@ def close_order(
             detail={"code": "ALREADY_CLOSED", "message": "既に受け取り済 (アーカイブ済)"},
         )
 
-    # ── Token 消費 (order.user の license で残量チェック → INSERT) ──
+    # ── Token 消費 (submit 時の予約で残量は確保済み、ここでは再チェックしない) ──
+    # 改訂2.2: submit 時点で available_tokens (reservation 込み) で残量検証済みなので、
+    # close の時点では消費を記録するのみ。月跨ぎで現在月の quota が回復していても、
+    # consumption は close 時点の period に記録される (受け取り月で計上)。
     owner = db.execute(select(User).where(User.id == order.user_id)).scalar_one()
     lic = owner.license
     if lic is None:
         raise HTTPException(status_code=422, detail={"code": "NO_LICENSE", "message": "user has no license"})
-    available = tokens_service.available_tokens(db, owner.id, lic)
-    if available < order.token_cost:
-        raise HTTPException(
-            status_code=402,
-            detail={
-                "code": "INSUFFICIENT_TOKENS",
-                "message": f"受け取りに {order.token_cost} token 必要 (残量 {available})",
-            },
-        )
     period = tokens_service.current_period_jst()
     db.add(TokenConsumption(
         user_id=order.user_id,

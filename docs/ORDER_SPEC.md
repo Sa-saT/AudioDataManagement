@@ -59,7 +59,7 @@ draft ──[submit by user]──→ open ──[nominate by admin]──→ re
 
 | 遷移 | 誰が | 前提ステータス | 副作用 |
 |---|---|---|---|
-| `submit` | user | draft | token残高チェック (消費はしない、予約のみ) |
+| `submit` | user | draft | **token 残量チェック + 予約開始** (改訂2.2: `available_tokens` が `reserved_by_open_orders` を差し引く実装になり、Order時点で確実に弾く) |
 | `nominate` | admin | open / recruiting | `order_candidate_creators` にレコード追加、status → recruiting |
 | `respond` | creator | recruiting | candidate の response_status を accepted/declined に更新 |
 | `assign` | admin | open / recruiting | creator確定、token_cost 調整可能 |
@@ -311,8 +311,10 @@ melody (メロディライン), rhythm (リズムパターン), density (音の�
 | タイミング | 処理 |
 |---|---|
 | `submit` (draft → open) | token 残高チェックのみ (消費しない) |
+| `submit` (draft → open) | **token 予約開始** (`reserved_by_open_orders` に算入)。残量不足ならここで 402 (発注不可) |
 | `done` (reviewing → done) | 提出ファイルを最終パスへコピー。**token は消費しない** (改訂2.2 で close に移動) |
-| `close` (受け取る) | `token_consumptions` にレコード追加 (`tokens = order.token_cost`) + `creator_payouts` 生成 + `closed_at` セット。残量不足なら 402 |
+| `close` (受け取る) | `token_consumptions` にレコード追加 (`tokens = order.token_cost`、period は受け取り月) + `creator_payouts` 生成 + `closed_at` セット。予約は自動的に外れる |
+| `cancel` | 予約を解放 (`closed_at` は変えず status=cancelled、reserved query から外れる) |
 
 **注意:** キャンセルした場合はトークン消費なし。`submit` 時点では残高確認のみで予約ではない (Admin が `assign` 時に `token_cost` を変更する場合があるため)。
 
