@@ -69,6 +69,8 @@ interface OrderDetail {
   id: string
   title: string
   serial: int
+  // 改訂2.2: user が受け取った時刻。null なら未受け取り
+  closed_at: string | null
   description: string | null
   brief: OrderBrief | null
   token_cost: int
@@ -105,6 +107,17 @@ onMounted(async () => {
     } catch { /* silent: 通知精度を落とすだけ */ }
     // 改訂2.1: 編集履歴を取得 (highlight + 履歴モーダル用)
     await fetchBriefEdits()
+    // 改訂2.2: 音源プレビュー URL を取得 (reviewing / done のみ)
+    if (hasSubmission.value) await loadPreview()
+  }
+})
+
+// status 変化で preview を再ロード
+watch(() => order.value?.status, async (s) => {
+  if (s && ['reviewing', 'done'].includes(s)) {
+    await loadPreview()
+  } else {
+    audioPreviewUrl.value = null
   }
 })
 
@@ -142,6 +155,106 @@ async function fetchBriefEdits() {
   try {
     briefEdits.value = await api.get<BriefEditHistoryItem[]>(`/api/v1/orders/${orderId.value}/brief-edits`)
   } catch { /* silent: 履歴は補助情報 */ }
+}
+
+// ─── REDMINE 風タイトル分離 (改訂2.2) ─────────────
+// 件名 = `title` から ` #N` 末尾を除去 (旧 order 互換)。新 order は最初から #N 無し
+const subjectDisplay = computed(() => {
+  const t = order.value?.title ?? '…'
+  return t.replace(/\s*#\d+\s*$/, '')
+})
+
+// ─── 音源プレビュー (改訂2.2) ───────────────────
+const audioPreviewUrl = ref<string | null>(null)
+const audioPreviewLoading = ref(false)
+const audioPreviewError = ref<string | null>(null)
+const hasSubmission = computed(() =>
+  order.value && ['reviewing', 'done'].includes(order.value.status),
+)
+
+async function loadPreview() {
+  if (!hasSubmission.value) return
+  audioPreviewLoading.value = true
+  audioPreviewError.value = null
+  try {
+    const { url } = await api.get<{ url: string }>(
+      `/api/v1/orders/${orderId.value}/submission-stream-url`,
+      { query: { start: 0 } },
+    )
+    const config = useRuntimeConfig()
+    const base = config.public.apiBaseUrl as string
+    audioPreviewUrl.value = url.startsWith('http') ? url : `${base}${url}`
+  } catch (err) {
+    audioPreviewError.value = errorMessageJa(err)
+  } finally {
+    audioPreviewLoading.value = false
+  }
+}
+
+// ─── 受け取る (close) (改訂2.2) ─────────────────
+const closeLoading = ref(false)
+const canReceive = computed(() => {
+  if (!order.value) return false
+  if (order.value.status !== 'done') return false
+  if (order.value.closed_at) return false
+  return isOwner.value
+})
+
+async function receiveAndClose() {
+  if (!order.value) return
+  if (!confirm('この音源を受け取りますか? アーカイブに移動します。')) return
+  closeLoading.value = true
+  try {
+    order.value = await api.post<OrderDetail>(`/api/v1/orders/${orderId.value}/close`, { body: {} })
+  } catch (err) { alert(errorMessageJa(err)) }
+  finally { closeLoading.value = false }
+}
+
+// ─── チャット添付による音源提出 (改訂2.2) ────────
+// 既存の showSubmitFile モーダルを撤去し、チャット欄で直接添付して提出する
+const attachInputRef = ref<HTMLInputElement | null>(null)
+const attachedFile = ref<File | null>(null)
+const attachLoading = ref(false)
+
+function pickAttach() {
+  attachInputRef.value?.click()
+}
+function onAttachChange(ev: Event) {
+  const f = (ev.target as HTMLInputElement).files?.[0]
+  if (!f) return
+  if (!f.name.toLowerCase().endsWith('.wav')) {
+    alert('音源は .wav (PCM) のみ受け付けます')
+    return
+  }
+  attachedFile.value = f
+}
+function clearAttach() {
+  attachedFile.value = null
+  if (attachInputRef.value) attachInputRef.value.value = ''
+}
+
+const canAttachSubmit = computed(() =>
+  order.value?.status === 'assigned' && isAssignedCreator.value,
+)
+
+async function sendChat() {
+  // 添付あり → submit-file (creator が音源提出)、なし → 通常メッセージ送信
+  if (attachedFile.value && canAttachSubmit.value) {
+    attachLoading.value = true
+    try {
+      const fd = new FormData()
+      fd.append('file', attachedFile.value)
+      fd.append('note', msgContent.value.trim() || '音源を提出しました。')
+      order.value = await api.post<OrderDetail>(
+        `/api/v1/orders/${orderId.value}/submit-file`, { body: fd },
+      )
+      clearAttach()
+      msgContent.value = ''
+    } catch (err) { alert(errorMessageJa(err)) }
+    finally { attachLoading.value = false }
+    return
+  }
+  await sendMessage()
 }
 
 // 編集されたことのある field 一覧 (highlight 用)
@@ -462,15 +575,26 @@ const myCandidate = computed(() =>
         </svg>
       </button>
       <div class="min-w-0 flex-1">
-        <div class="flex items-center gap-2">
-          <h1 class="truncate text-[18px] font-normal tracking-[-0.0125em] text-ink">
-            {{ order?.title ?? '…' }}
+        <!-- 改訂2.2: REDMINE 風 件名 / ID 分離表示 -->
+        <div class="flex items-center gap-3">
+          <span
+            v-if="order"
+            class="shrink-0 rounded-md bg-ink/5 px-2 py-0.5 font-mono text-[12px] font-semibold text-ink"
+            title="チケットID"
+          >#{{ order.serial }}</span>
+          <h1 class="min-w-0 flex-1 truncate text-[16px] font-normal tracking-[-0.0125em] text-ink" title="件名">
+            {{ subjectDisplay }}
           </h1>
           <span
             v-if="order"
             class="shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold"
             :class="STATUS_CLASS[order.status] ?? 'bg-hairline-soft text-body'"
           >{{ STATUS_LABEL[order.status] ?? order.status }}</span>
+          <span
+            v-if="order?.closed_at"
+            class="shrink-0 rounded-full bg-hairline-soft px-2 py-0.5 font-mono text-[10px] font-semibold text-muted"
+            title="受け取り済 (アーカイブ)"
+          >Archived</span>
         </div>
         <p v-if="order" class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted">
           <span>{{ order.user_name }}</span>
@@ -702,6 +826,36 @@ const myCandidate = computed(() =>
           </div>
         </div>
 
+        <!-- 改訂2.2: 音源プレビュー (reviewing / done で全参加者視聴可) -->
+        <div
+          v-if="hasSubmission"
+          class="card shrink-0 border-primary/30 bg-primary/5 px-4 py-3"
+        >
+          <div class="flex items-center justify-between gap-3">
+            <div class="min-w-0 flex-1">
+              <p class="text-[10px] font-semibold uppercase tracking-widest text-primary-active">提出された音源</p>
+              <p class="mt-0.5 text-[11px] text-muted">
+                {{ order.status === 'reviewing' ? '受け取り前にプレビュー可能' : '完了済み。受け取って archive へ' }}
+              </p>
+            </div>
+            <button
+              v-if="canReceive"
+              class="shrink-0 rounded-md bg-ink px-3 py-1.5 text-[12px] font-medium text-canvas transition-colors hover:bg-primary disabled:opacity-50"
+              :disabled="closeLoading"
+              @click="receiveAndClose"
+            >{{ closeLoading ? '…' : '受け取る' }}</button>
+          </div>
+          <div v-if="audioPreviewLoading" class="mt-2 text-[12px] text-muted">読み込み中…</div>
+          <div v-else-if="audioPreviewError" class="mt-2 text-[12px] text-accent">{{ audioPreviewError }}</div>
+          <audio
+            v-else-if="audioPreviewUrl"
+            :src="audioPreviewUrl"
+            controls
+            class="mt-2 h-9 w-full"
+            preload="metadata"
+          />
+        </div>
+
         <!-- Messages -->
         <div class="flex-1 overflow-y-auto space-y-2">
           <div
@@ -722,24 +876,55 @@ const myCandidate = computed(() =>
           <div v-if="order.messages.length === 0" class="py-6 text-center text-[12px] text-muted">メッセージはまだありません。</div>
         </div>
 
-        <!-- Reply box (active orders only) -->
+        <!-- 改訂2.2: チャット入力 (テキスト + 音源添付 + 送信) -->
         <div
-          v-if="order.status !== 'done' && order.status !== 'cancelled' && order.status !== 'draft'"
+          v-if="order.status !== 'cancelled' && order.status !== 'draft' && !order.closed_at"
           class="card shrink-0 px-3 py-2"
         >
           <textarea
             v-model="msgContent"
             rows="2"
-            placeholder="メッセージを入力…"
+            :placeholder="attachedFile ? '音源と一緒に送るメモ (任意)…' : 'メッセージを入力…'"
             class="w-full resize-none bg-transparent text-[13px] text-ink outline-none placeholder:text-muted"
-            @keydown.ctrl.enter.prevent="sendMessage"
+            @keydown.ctrl.enter.prevent="sendChat"
           />
-          <div class="mt-1.5 flex justify-end">
+          <!-- 添付済みファイル表示 -->
+          <div
+            v-if="attachedFile"
+            class="mt-1 flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-[11px]"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-primary-active">
+              <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+            </svg>
+            <span class="flex-1 truncate font-mono text-body">{{ attachedFile.name }}</span>
+            <button class="text-muted hover:text-accent" @click="clearAttach">×</button>
+          </div>
+          <div class="mt-1.5 flex items-center justify-between">
+            <!-- Attach (creator only, status=assigned) -->
             <button
-              class="rounded-md bg-ink px-3 py-1 text-[11px] font-medium text-canvas hover:bg-primary disabled:opacity-50"
-              :disabled="msgLoading || !msgContent.trim()"
-              @click="sendMessage"
-            >{{ msgLoading ? '…' : '送信' }}</button>
+              v-if="canAttachSubmit"
+              class="flex items-center gap-1 rounded-md border border-hairline-strong px-2 py-1 text-[11px] text-body transition-colors hover:border-primary hover:text-primary-active"
+              :title="'音源を添付して提出 (assigned creator のみ)'"
+              @click="pickAttach"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+              </svg>
+              音源添付
+            </button>
+            <span v-else />
+            <input
+              ref="attachInputRef"
+              type="file"
+              accept=".wav,audio/wav,audio/x-wav"
+              class="hidden"
+              @change="onAttachChange"
+            />
+            <button
+              class="rounded-md bg-ink px-3 py-1 text-[11px] font-medium text-canvas transition-colors hover:bg-primary disabled:opacity-50"
+              :disabled="msgLoading || attachLoading || (!msgContent.trim() && !attachedFile)"
+              @click="sendChat"
+            >{{ attachLoading ? '提出中…' : (attachedFile ? '提出' : (msgLoading ? '…' : '送信')) }}</button>
           </div>
         </div>
       </div>

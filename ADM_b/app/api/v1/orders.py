@@ -54,12 +54,19 @@ from app.security.deps import get_current_user, get_optional_user, require_role
 from app.security.signed_url import (
     SignedURLError,
     issue_order_download,
+    issue_submission_stream,
     verify_order_download,
+    verify_submission_stream,
 )
 from app.services import tokens as tokens_service
 
 settings = get_settings()
 router = APIRouter(tags=["orders"])
+
+
+def _build_url(path: str, params: dict) -> str:
+    qs = "&".join(f"{k}={v}" for k, v in params.items())
+    return f"{path}?{qs}"
 
 
 # ─── Helper: commission feature flag ──────────────────────────────────────────
@@ -114,6 +121,7 @@ class OrderOut(BaseModel):
     messages: list[MessageOut] = []
     file_path: str | None
     notified_at: Any
+    closed_at: Any  # 改訂2.2: user が受け取った時刻 (archive flag)
     created_at: Any
     updated_at: Any
 
@@ -127,6 +135,7 @@ class OrderListItem(BaseModel):
     user_name: str
     assigned_creator_name: str | None
     notified_at: Any
+    closed_at: Any  # 改訂2.2
     created_at: Any
     updated_at: Any
 
@@ -173,6 +182,7 @@ def _to_order_out(order: Order) -> OrderOut:
         messages=[_to_message(m) for m in order.messages],
         file_path=order.file_path,
         notified_at=order.notified_at,
+        closed_at=order.closed_at,
         created_at=order.created_at,
         updated_at=order.updated_at,
     )
@@ -191,6 +201,7 @@ def _to_list_item(order: Order) -> OrderListItem:
             order.assigned_creator.display_name if order.assigned_creator else None
         ),
         notified_at=order.notified_at,
+        closed_at=order.closed_at,
         created_at=order.created_at,
         updated_at=order.updated_at,
     )
@@ -398,6 +409,7 @@ def commission_unread(
 
 @router.get("/orders", response_model=list[OrderListItem])
 def list_orders(
+    archived: bool = Query(False, description="改訂2.2: closed_at セット済を含めるか (admin のみ意味あり)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     _: None = Depends(_require_commission),
@@ -411,18 +423,23 @@ def list_orders(
         )
     )
     if role == "user":
-        q = base.where(Order.user_id == current_user.id)
+        # user/creator は closed (受け取り済) を非表示
+        q = base.where(Order.user_id == current_user.id, Order.closed_at.is_(None))
     elif role == "creator":
-        # orders where this creator is a candidate or assigned
         candidate_order_ids = select(OrderCandidateCreator.order_id).where(
             OrderCandidateCreator.creator_id == current_user.id
         )
         q = base.where(
-            (Order.assigned_creator_id == current_user.id) |
-            Order.id.in_(candidate_order_ids)
+            ((Order.assigned_creator_id == current_user.id) |
+             Order.id.in_(candidate_order_ids)),
+            Order.closed_at.is_(None),
         )
     else:  # admin
-        q = base
+        # archived=true なら closed のみ、false なら未 close のみ
+        if archived:
+            q = base.where(Order.closed_at.is_not(None))
+        else:
+            q = base.where(Order.closed_at.is_(None))
 
     rows = db.execute(q.order_by(Order.updated_at.desc())).unique().scalars().all()
     return [_to_list_item(o) for o in rows]
@@ -449,9 +466,10 @@ def _next_global_serial(db: Session) -> int:
 
 
 def _generate_title(username: str, serial: int, when: datetime | None = None) -> str:
-    """改訂2: 自動タイトル生成 `YYYYMMDD_<username>_Order #<serial>` (serial は global)。"""
+    """改訂2 / 改訂2.2: 自動タイトル (件名) 生成 `YYYYMMDD_<username>_Order`。
+    serial (`#<N>`) は title に含めず、UI で別表示 (REDMINE 風)。"""
     when = when or datetime.now(timezone.utc)
-    return f"{when:%Y%m%d}_{username}_Order #{serial}"
+    return f"{when:%Y%m%d}_{username}_Order"
 
 
 def _extract_length_sec(brief: dict | None) -> int:
@@ -889,6 +907,116 @@ def update_deadline(
     order.updated_at = func.now()
     db.commit()
     return _to_order_out(_load_order(db, parsed))
+
+
+# ─── Close (改訂2.2: user が受け取る → archive) ─────────────────────────────
+
+@router.post("/orders/{order_id}/close", response_model=OrderOut)
+def close_order(
+    order_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(_require_commission),
+) -> OrderOut:
+    """User が done 済みのチケットで「受け取る」を押すと closed_at が設定される。
+    以後 user/creator の一覧には表示されず、admin の archive タブのみ参照可能になる。
+    Token 消費 / payout 生成は done 時点で既に完了している。"""
+    parsed = _parse_uuid(order_id)
+    order = db.execute(select(Order).where(Order.id == parsed).with_for_update()).scalar_one_or_none()
+    _check_order_exists(order)
+    # 発注者本人または admin のみ close 可能
+    if order.user_id != current_user.id and current_user.role.value != "admin":
+        raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "not your order"})
+    if order.status != OrderStatus.done:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "INVALID_STATE", "message": f"close 可能なのは done のみ (current: {order.status.value})"},
+        )
+    if order.closed_at is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "ALREADY_CLOSED", "message": "既に受け取り済 (アーカイブ済)"},
+        )
+    order.closed_at = datetime.now(timezone.utc)
+    order.updated_at = func.now()
+    _add_status_message(db, parsed, current_user.id, "closed (受け取り完了)")
+    db.commit()
+    return _to_order_out(_load_order(db, parsed))
+
+
+# ─── Submission stream (改訂2.2: 受け取る前のプレビュー) ─────────────────────
+
+@router.get("/orders/{order_id}/submission-stream-url")
+def get_submission_stream_url(
+    order_id: str,
+    start: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(_require_commission),
+) -> dict:
+    """チケット参加者 (user / assigned_creator / admin) が、提出済音源を 10秒チャンクで
+    プレビューするための signed URL を発行する。
+    対象ステータス: reviewing / done (submission ファイルが存在する状態)。
+    """
+    parsed = _parse_uuid(order_id)
+    order = _load_order(db, parsed)
+    _check_access(order, current_user)
+    if order.status not in (OrderStatus.reviewing, OrderStatus.done):
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "NO_SUBMISSION_FILE", "message": "submission file not available"},
+        )
+    params = issue_submission_stream(str(parsed), start)
+    return {"url": _build_url("/api/v1/orders/submission-stream", params)}
+
+
+@router.get("/orders/submission-stream")
+def submission_stream(
+    order_id: str = Query(...),
+    start: int = Query(0, ge=0),
+    exp: int = Query(...),
+    sig: str = Query(...),
+    db: Session = Depends(get_db),
+) -> Any:
+    """signed URL の検証 → submission ファイルから 10秒チャンクを切り出して返す。
+    JWT 不要 (短命 signed URL で代替)。"""
+    try:
+        verify_submission_stream(order_id, start, exp, sig)
+    except SignedURLError as exc:
+        raise HTTPException(status_code=403, detail={"code": exc.code, "message": exc.message})
+
+    parsed = _parse_uuid(order_id)
+    # 提出ファイル: reviewing は submissions/{id}.wav, done は {id}.wav (どちらかを使う)
+    sub_path = Path(settings.ORDERS_DIR) / "submissions" / f"{parsed}.wav"
+    final_path = Path(settings.ORDERS_DIR) / f"{parsed}.wav"
+    path = sub_path if sub_path.exists() else final_path
+    if not path.exists():
+        raise HTTPException(status_code=404, detail={"code": "FILE_NOT_FOUND", "message": "no submission file"})
+
+    import subprocess
+    from fastapi.responses import StreamingResponse
+    proc = subprocess.Popen(
+        [
+            "ffmpeg", "-loglevel", "error",
+            "-ss", str(start), "-t", "10",
+            "-i", str(path),
+            "-c:a", "copy",
+            "-f", "wav", "pipe:1",
+        ],
+        stdout=subprocess.PIPE,
+    )
+
+    def _iter_chunks():
+        try:
+            while True:
+                chunk = proc.stdout.read(65536)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            proc.kill()
+
+    return StreamingResponse(_iter_chunks(), media_type="audio/wav")
 
 
 # ─── Cancel ───────────────────────────────────────────────────────────────────

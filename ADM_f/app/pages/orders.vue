@@ -165,6 +165,11 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' })
 }
 
+// 改訂2.2: 旧 order 互換 — title 末尾の `#N` を除去して件名のみ返す
+function stripSerialFromTitle(title: string): string {
+  return title.replace(/\s*#\d+\s*$/, '')
+}
+
 const isUser = computed(() => auth.role === 'user')
 const isAdmin = computed(() => auth.role === 'admin')
 
@@ -313,7 +318,10 @@ const BGM_SCENE_L: Record<string, string> = {
             >
               <span class="shrink-0 rounded-full bg-hairline-soft px-2 py-0.5 font-mono text-[10px] font-semibold text-body">Draft</span>
               <div class="min-w-0 flex-1">
-                <div class="truncate text-[14px] font-medium text-ink">{{ draft.title }}</div>
+                <div class="flex items-center gap-2 truncate text-[14px] font-medium text-ink">
+                  <span class="shrink-0 rounded bg-ink/5 px-1.5 py-0.5 font-mono text-[10px]">#{{ draft.serial }}</span>
+                  <span class="truncate">{{ stripSerialFromTitle(draft.title) }}</span>
+                </div>
                 <div class="mt-0.5 flex items-center gap-2 text-[11px] text-muted">
                   <span class="font-mono">{{ draft.token_cost }} tk</span>
                   <span class="h-1 w-1 rounded-full bg-muted" />
@@ -360,7 +368,8 @@ const BGM_SCENE_L: Record<string, string> = {
 
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2">
-                  <span class="truncate text-[14px] font-medium text-ink">{{ order.title }}</span>
+                  <span class="shrink-0 rounded bg-ink/5 px-1.5 py-0.5 font-mono text-[10px] text-ink">#{{ order.serial }}</span>
+                  <span class="truncate text-[14px] font-medium text-ink">{{ stripSerialFromTitle(order.title) }}</span>
                   <span
                     v-if="order.status === 'done' && order.notified_at"
                     class="h-1.5 w-1.5 shrink-0 rounded-full bg-[#2ecc71]"

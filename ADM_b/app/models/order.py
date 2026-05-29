@@ -84,6 +84,8 @@ class Order(Base):
         PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
     )
     done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 改訂2.2: user が「受け取る」を押すと設定される。user/creator の一覧から非表示にする目印
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     file_path: Mapped[str | None] = mapped_column(Text)
     notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(

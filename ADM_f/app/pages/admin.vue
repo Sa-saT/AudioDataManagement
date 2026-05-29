@@ -15,7 +15,7 @@ onMounted(() => {
 })
 
 // ─── Tab ─────────────────────────────────────────────────────────────────────
-type Tab = 'users' | 'payouts' | 'tokens' | 'licenses' | 'orders' | 'logs' | 'settings'
+type Tab = 'users' | 'payouts' | 'tokens' | 'licenses' | 'orders' | 'archive' | 'logs' | 'settings'
 const tab = ref<Tab>('users')
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -342,11 +342,13 @@ async function issueLic() {
 interface AdminOrderItem {
   id: string
   title: string
+  serial: number
   token_cost: number
   status: string
   user_name: string
   assigned_creator_name: string | null
   notified_at: string | null
+  closed_at: string | null
   created_at: string
   updated_at: string
 }
@@ -366,6 +368,50 @@ async function fetchAdminOrders() {
     adminOrdersLoading.value = false
   }
 }
+
+// ─── Archive tab (改訂2.2) ────────────────────────────────────────────────────
+const archiveOrders = ref<AdminOrderItem[]>([])
+const archiveLoading = ref(false)
+const archiveError = ref<string | null>(null)
+const expandedGroups = ref<Set<string>>(new Set())
+
+async function fetchArchiveOrders() {
+  archiveLoading.value = true
+  archiveError.value = null
+  try {
+    archiveOrders.value = await api.get<AdminOrderItem[]>('/api/v1/orders?archived=true')
+    // 初期: 全グループ展開
+    expandedGroups.value = new Set(archiveOrders.value.map(o => yyyymmGroup(o.closed_at ?? o.updated_at)))
+  } catch (e) {
+    archiveError.value = errorMessageJa(e)
+  } finally {
+    archiveLoading.value = false
+  }
+}
+
+// 年月でグループ化 (REDMINE 風)
+function yyyymmGroup(iso: string): string {
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+function toggleGroup(g: string) {
+  if (expandedGroups.value.has(g)) expandedGroups.value.delete(g)
+  else expandedGroups.value.add(g)
+}
+function stripSerialFromTitle(t: string): string { return t.replace(/\s*#\d+\s*$/, '') }
+
+const archiveGroups = computed(() => {
+  const map = new Map<string, AdminOrderItem[]>()
+  for (const o of archiveOrders.value) {
+    const g = yyyymmGroup(o.closed_at ?? o.updated_at)
+    if (!map.has(g)) map.set(g, [])
+    map.get(g)!.push(o)
+  }
+  // 新しい順
+  return Array.from(map.entries())
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([g, items]) => ({ group: g, items }))
+})
 
 const ORDER_STATUS_LABEL: Record<string, string> = {
   draft: 'Draft', open: 'Open', recruiting: '募集中',
@@ -592,6 +638,7 @@ watch(tab, (t) => {
   if ((t === 'users' || t === 'tokens') && users.value.length === 0) fetchUsers()
   if (t === 'payouts') fetchPayouts()
   if (t === 'orders') fetchAdminOrders()
+  if (t === 'archive') fetchArchiveOrders()
   if (t === 'logs') fetchLogs()
   if (t === 'settings') fetchSettings()
 }, { immediate: true })
@@ -608,7 +655,7 @@ watch(tab, (t) => {
     <!-- Tabs -->
     <div class="flex shrink-0 flex-wrap gap-4 border-b border-hairline-soft pb-0">
       <button
-        v-for="t in ([['users','ユーザ管理'],['payouts','Payout'],['tokens','Token付与'],['licenses','lic発行'],['orders','発注管理'],['logs','ログ'],['settings','設定']] as [Tab, string][])"
+        v-for="t in ([['users','ユーザ管理'],['payouts','Payout'],['tokens','Token付与'],['licenses','lic発行'],['orders','発注管理'],['archive','アーカイブ'],['logs','ログ'],['settings','設定']] as [Tab, string][])"
         :key="t[0]"
         class="relative pb-2 text-[12px] font-semibold text-ink transition-all"
         :class="tab === t[0] ? 'filter-active' : 'opacity-40 hover:opacity-70'"
@@ -1080,6 +1127,71 @@ watch(tab, (t) => {
               <polyline points="9 18 15 12 9 6"/>
             </svg>
           </NuxtLink>
+        </div>
+      </div>
+
+      <!-- 改訂2.2: アーカイブ チケット (REDMINE 風) -->
+      <div v-if="tab === 'archive'">
+        <div class="mb-3 flex items-center gap-4">
+          <span class="text-[11px] font-semibold uppercase tracking-widest text-body-strong">アーカイブ チケット</span>
+          <span class="font-mono text-[10px] text-muted">{{ archiveOrders.length }} 件</span>
+          <button class="ml-auto text-[11px] text-muted hover:text-ink" @click="fetchArchiveOrders">↻ 更新</button>
+        </div>
+
+        <div v-if="archiveLoading" class="py-8 text-center text-[12px] text-muted">読み込み中…</div>
+        <div v-else-if="archiveError" class="py-4 text-[12px] text-accent">{{ archiveError }}</div>
+        <div v-else-if="archiveOrders.length === 0" class="py-8 text-center text-[12px] text-muted">
+          アーカイブされたチケットはありません。
+        </div>
+
+        <!-- REDMINE 風テーブル -->
+        <div v-else class="overflow-hidden rounded-lg border border-hairline">
+          <!-- ヘッダ -->
+          <div class="grid grid-cols-[40px_60px_100px_1fr_140px_140px_100px] gap-3 bg-hairline-soft px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-body">
+            <span></span>
+            <span>#</span>
+            <span>ステータス</span>
+            <span>件名</span>
+            <span>発注者</span>
+            <span>担当 (creator)</span>
+            <span>受取日</span>
+          </div>
+
+          <!-- 年月グループ -->
+          <div v-for="g in archiveGroups" :key="g.group">
+            <!-- グループヘッダ -->
+            <button
+              class="flex w-full items-center gap-2 border-t border-hairline bg-white/80 px-3 py-1.5 text-left text-[11px] font-semibold text-body transition-colors hover:bg-white"
+              @click="toggleGroup(g.group)"
+            >
+              <svg
+                width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                :class="expandedGroups.has(g.group) ? 'rotate-90' : ''"
+                class="transition-transform"
+              >
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+              <span>{{ g.group }}</span>
+              <span class="rounded bg-primary/15 px-1.5 font-mono text-[10px] text-primary-active">{{ g.items.length }}</span>
+            </button>
+            <!-- 行 -->
+            <div v-if="expandedGroups.has(g.group)">
+              <NuxtLink
+                v-for="row in g.items"
+                :key="row.id"
+                :to="`/orders/${row.id}`"
+                class="grid grid-cols-[40px_60px_100px_1fr_140px_140px_100px] items-center gap-3 border-t border-hairline-soft bg-white/60 px-3 py-2 text-[12px] text-body transition-colors hover:bg-primary/5"
+              >
+                <span></span>
+                <span class="font-mono text-ink">#{{ row.serial }}</span>
+                <span class="font-mono text-[10px] text-muted">{{ ORDER_STATUS_LABEL[row.status] ?? row.status }}</span>
+                <span class="truncate text-ink hover:underline">{{ stripSerialFromTitle(row.title) }}</span>
+                <span class="truncate">{{ row.user_name }}</span>
+                <span class="truncate text-muted">{{ row.assigned_creator_name ?? '-' }}</span>
+                <span class="font-mono text-[11px] text-muted">{{ row.closed_at ? new Date(row.closed_at).toLocaleDateString('ja-JP') : '-' }}</span>
+              </NuxtLink>
+            </div>
+          </div>
         </div>
       </div>
 

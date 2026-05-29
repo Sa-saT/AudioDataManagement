@@ -85,3 +85,18 @@ def verify_copy_download(audio_id: str, user_id: str, exp: int, sig: str) -> Non
         raise SignedURLError("INVALID_SIGNATURE", "invalid or tampered signature")
     if int(time.time()) > exp:
         raise SignedURLError("URL_EXPIRED", "download URL has expired")
+
+
+# 改訂2.2: チケット内の音源プレビュー (提出済 submission ファイル) — 10秒チャンク
+def issue_submission_stream(order_id: str, start: int) -> dict:
+    exp = int(time.time()) + settings.SIGNED_URL_TTL_SECONDS
+    sig = _sign("submission_stream", order_id, str(start), str(exp))
+    return {"order_id": order_id, "start": start, "exp": exp, "sig": sig}
+
+
+def verify_submission_stream(order_id: str, start: int, exp: int, sig: str) -> None:
+    expected = _sign("submission_stream", order_id, str(start), str(exp))
+    if not hmac.compare_digest(expected, sig):
+        raise SignedURLError("INVALID_SIGNATURE", "invalid or tampered signature")
+    if int(time.time()) > exp:
+        raise SignedURLError("URL_EXPIRED", "submission URL has expired")
