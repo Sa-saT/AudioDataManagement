@@ -1,7 +1,8 @@
 # Commission / Order 機能 要件仕様書
 
-> 最終更新: 2026-05-30 (改訂2.1)  
-> 実装状態: 改訂2.1 まで全て実装済 (Phase 3 #39〜#47)
+> 最終更新: 2026-05-30 (改訂2.3)  
+> 実装状態: 改訂2.3 まで全て実装済 (Phase 3 #39〜#48)  
+> 次回着手: [docs/ORDER_SPEC.md §9.1](#91-未実装-実装すべき) 未実装課題 (棚卸し済み)
 
 ---
 
@@ -434,19 +435,39 @@ Step 2 は `sound_type` (BGM/SE/both) によって表示項目が変わる。
 
 ---
 
-## 9. 未確定・今後の課題
+## 9. 未確定・今後の課題 (2026-05-30 棚卸し)
 
-| # | 項目 | 優先度 |
+完了済の項目には ✅、未着手は ○ をつける。優先度順。
+
+### 9.1 未実装 (実装すべき)
+
+| # | 項目 | 優先度 | 備考 |
+|---|---|---|---|
+| 9-A1 | **メッセージ未読カウント** を `activity_logs.order_view` ベースで再計算 (§6.5 A) | 高 | 現状はステータスベース action-required のみ実装。private 私信は別カウントすべきか要設計 |
+| 9-A2 | **情報通知の1週間自動解除** (§6.5 B) | 高 | 「できる送信したのに選ばれなかった」creator への info_only 通知の TTL 実装 |
+| 9-A3 | **Creator 複数提出のバージョン管理** | 中 | reject → 再提出のたびに `submissions/{id}.wav` が上書きされる。`submissions/{id}_v{n}.wav` 形式 + 履歴メタデータ |
+| 9-A4 | **クリエイター視点 UI 最適化** | 中 | 候補打診時のブリーフ表示は user 視点。creator が一目で要件把握できる別レイアウト |
+| 9-A5 | **SE 納品の複数ファイル対応** | 要検討 | SE は複数バリエーション納品が多い。`submissions/{id}_{slot}.wav` + 必要数フィールド |
+| 9-A6 | **改訂2.1 R2.1-Q1〜Q3** (§13.7) | 要検討 | reviewing 中の編集許可 / 編集回数上限 / length_sec 大幅変更時の自動 assign 取消 |
+| 9-A7 | **改訂2 R2-Q1〜Q3** (§11.6) | 低 | sound_type=both データ migration / 期限切れ order 扱い / draft 自動削除ポリシー |
+| 9-A8 | **本番ストレージ移行** | Phase 4 | ローカル `/storage/*` → S3 互換切替 |
+| 9-A9 | **2.3 §15 admin↔creator 私信 spec ドキュメント追記** | 低 | コード側は実装済、§ を追加して仕様文書化 |
+| 9-A10 | **私信での添付対応** | 低 | 私信メッセージにファイル添付できるべきか要検討 (現状は public のみ submit-file) |
+| 9-A11 | **submission ファイル peaks v2 化** | 中 | WaveformPlayer での視聴に peaks v2 が望ましい。submit-file 時に compute_peaks_v2 して `OrderMessage.attachment_peaks` 等に保存 |
+
+### 9.2 実装済 (Phase 3 #31〜#48 で完了)
+
+| # | 項目 | 完了コミット |
 |---|---|---|
-| 1 | **通知バッジ (action-required count)** TopNav 実装済み (Phase 3 #41) | ✅ 完了 |
-| 2 | **メッセージ未読カウント** `activity_logs.order_view` ベースで再計算する実装 (§6.5 A) | 高 |
-| 3 | **情報通知の1週間自動解除** §6.5 B の実装 | 高 |
-| 4 | **Token予約**: `submit` 時点で token を soft-lock し残高保護するか (改訂2 で token_cost が固定化されたため優先度低下) | 低 |
-| 5 | **Creator 複数提出**: reject → 再提出のたびに同じパスを上書きしている。バージョン管理が必要か | 中 |
-| 6 | **発注編集**: draft 状態のブリーフを編集する API / UI が未実装。改訂2 で「一時保存」UI を追加するため設計が必要 | 高 |
-| 7 | **ストレージ移行**: 開発はローカルストレージ。本番は S3 互換に切替が必要 | Phase 4 |
-| 8 | **クリエイター側のブリーフ確認 UI**: 候補打診時にブリーフを見た上で `accept/decline` するが、現在の詳細ページはユーザー視点で設計。クリエイター向けに最適化するか | 中 |
-| 9 | **SE 納品の複数ファイル対応**: SE は複数バリエーションを納品するケースが多い。現在は1ファイル (wav) のみ対応 | 要検討 |
+| ✅ | 通知バッジ (action-required count) | Phase 3 #41 (d2fe503) |
+| ✅ | 改訂2 全面実装 (タイトル自動生成 / 曲長→token / draft保存 / 通知二系統 / global serial) | Phase 3 #43 (c5a65b6) |
+| ✅ | Admin ログ機能 (集計4 API + SVG チャート 5種) | Phase 3 #44 (0e2417f) |
+| ✅ | 改訂2.1 発注後ブリーフ編集 (diff色 + bot通知 + 履歴) | Phase 3 #47 (ca99847) |
+| ✅ | 改訂2.2 REDMINE + 受け取る + アーカイブ + 音源プレビュー + チャット添付 | Phase 3 #48 (7ca5a28) |
+| ✅ | token 消費を done → close (受け取る) に移動 + 予約ロジック | 0d9a730 / c73ab9b |
+| ✅ | Admin Commission UI 改修 (creator ブラウザ + 候補一覧) | 42d7d30 |
+| ✅ | TopNav 再構成 + Open ボタン + /orders ルート衝突解消 | 94bc2e2 / d666394 / ab8679e |
+| ✅ | 改訂2.3 LINE 風チャット + admin↔creator 私信 + Deactivate→Dashboard | d9c2180 |
 
 ---
 
@@ -703,3 +724,49 @@ Body:
 | R2.1-Q1 | reviewing 状態で creator が音源提出後の編集を許可するか (現状は不可案) |
 | R2.1-Q2 | 編集回数の上限 (例: 1チケット 5回まで等) を設けるか |
 | R2.1-Q3 | `length_sec` が大幅変更された場合、すでに進行中の assign を自動で取り消すか |
+
+---
+
+## 14. 改訂2.2 サマリ (2026-05-30)
+
+REDMINE 風 ID / 件名分離 + 受け取る/アーカイブ + 音源プレビュー + チャット添付。
+
+| # | 変更 | 実装場所 |
+|---|---|---|
+| R2.2-01 | `_generate_title` から `#N` 削除 (件名と ID を完全分離) | orders.py |
+| R2.2-02 | `POST /orders/{id}/close` (user の「受け取る」) | orders.py |
+| R2.2-03 | `orders.closed_at` カラム + フィルタ (admin の archive タブで管理) | migration 0013 |
+| R2.2-04 | submission stream エンドポイント (チケット参加者プレビュー) | orders.py + signed_url.py |
+| R2.2-05 | チャット欄に音源添付ボタン (creator が提出 UI を統合) | orders/[id].vue |
+| R2.2-06 | 受け取る押下時に token 消費 + payout 生成 (done 時の消費を廃止) | orders.py |
+| R2.2-07 | submit 時の token 予約 (`reserved_by_open_orders`) → Order時点で残高不足を確実に弾く | services/tokens.py |
+| R2.2-08 | admin の発注リスト行を明示ボタン化 (Open ラベル) | admin.vue |
+| R2.2-09 | admin の nominate/assign を creator 一覧ブラウザ化 (ランクフィルタ + 検索 + 候補ラジオ) | orders/[id].vue |
+| R2.2-10 | admin タブ「Commission」を /orders へのリンク化 (Q.B 統合方針) | admin.vue |
+
+---
+
+## 15. 改訂2.3 サマリ (2026-05-30)
+
+LINE 風チャット + admin↔creator 私信 + 細部 UX。
+
+| # | 変更 | 実装場所 |
+|---|---|---|
+| R2.3-01 | `order_messages.visibility ENUM('public', 'admin_creator')` | migration 0014 |
+| R2.3-02 | `AddMessageRequest.private` フィールド追加 (admin/creator のみ有効) | orders.py |
+| R2.3-03 | `_visible_messages()` で viewer role に応じてフィルタ (user は admin_creator 不可視) | orders.py |
+| R2.3-04 | LINE 風チャット吹き出し UI (自分=右、相手=左、アバター頭文字 + 役割色) | orders/[id].vue |
+| R2.3-05 | 連続発言は名前・アバター省略 (5分超で再表示) + 自動スクロール最下部 | orders/[id].vue |
+| R2.3-06 | 私信送信 UI (admin / creator のみ表示)、有効時は紫色で強調 | orders/[id].vue |
+| R2.3-07 | TopNav: deactivate → `/dashboard` 強制遷移 (Guest 化) | TopNav.vue |
+| R2.3-08 | TopNav: admin にも Commission メニュー復活 (通知バッジ受信導線) | TopNav.vue |
+| R2.3-09 | Admin タブ font 12→14、'発注管理' → 'Commission'、'詳細を開く →' → 'Open' | admin.vue |
+
+### 15.1 残課題 (改訂2.3 由来)
+
+| # | 内容 | 優先度 |
+|---|---|---|
+| R2.3-Q1 | 私信メッセージで添付 (音源/画像) を許可するか? 現状は public のみ submit-file 経路 | 低 |
+| R2.3-Q2 | 「user→admin だけの私信」(creator 不可視) も必要か? 現状は admin↔creator のみ | 要検討 |
+| R2.3-Q3 | 私信メッセージの未読カウントは public とは別にすべきか? | 中 |
+| R2.3-Q4 | チケット LINE UI での 「タイピング中…」 表示 / リアルタイム更新 (WebSocket) | Phase 4 |

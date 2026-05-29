@@ -176,13 +176,26 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 | 44 | Admin ログ機能 実装 (集計 4 API + SVG チャート 5種 + 詳細展開) | 0e2417f |
 | 45 | 波形描画 Shader 化 (peaks v2 + WebGL + wavesurfer.js 撤去 / 単色 + dim + EQ ビジュアライザ) | f4cad0a / 4c69897 |
 | 46 | アップロード エラーの日本語ポップアップ (`ErrorPopup.vue`) | b99834a |
-| 47 | Commission admin 代理表示モーダル + Q4 発注後ブリーフ編集 (diff色 + bot通知 + 履歴) | 659f927 / (今) |
+| 47 | Commission 改訂2.1 — 発注後ブリーフ編集 (diff色 + bot通知 + 履歴) + admin 代理表示モーダル | 659f927 / ca99847 |
+| 48 | Commission 改訂2.2 + 2.3 — REDMINE / 受け取る / アーカイブ / LINE 風チャット / admin↔creator 私信 / token 予約 | 7ca5a28 〜 d9c2180 |
 
 ### Phase 3 残スコープ → Phase 4 前に整備
 
-- 動作確認 (ブラウザ実機): 10秒チャンク再生 / Shader 波形 / EQ ビジュアライザ / Commission 改訂2 / Admin ログ
-- コードコメント (Task D): 主要モジュールに「WHY」コメント追加
-- 本番準備: S3互換ストレージ切替 / CDN / 監視 / バックアップ
+詳細は **[docs/ORDER_SPEC.md §9.1](docs/ORDER_SPEC.md)** (棚卸し済) を一次ソースとする。
+
+**高優先 (次回着手候補):**
+- メッセージ未読カウントを `activity_logs.order_view` ベースで精緻化 (9-A1)
+- info_only 通知の **1週間自動解除** (9-A2)
+- submission ファイルの **peaks v2 化** (9-A11)
+
+**中優先:**
+- Creator 複数提出のバージョン管理 (9-A3) / クリエイター視点 UI 最適化 (9-A4)
+
+**低 / 要検討:**
+- 私信 + 添付 / user→admin 私信 / SE 複数納品 / draft 自動削除ポリシー
+
+**本番準備 (Phase 4):**
+- S3 互換ストレージ切替 / CDN / 監視 / バックアップ
 
 ## 9. 用語 (要点)
 
