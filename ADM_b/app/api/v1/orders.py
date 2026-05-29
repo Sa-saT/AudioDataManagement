@@ -753,6 +753,7 @@ def respond_to_nomination(
     if body.response not in ("accepted", "declined"):
         raise HTTPException(status_code=422, detail={"code": "INVALID_RESPONSE", "message": "response must be 'accepted' or 'declined'"})
     parsed = _parse_uuid(order_id)
+    # FOR UPDATE: ダブルクリックで accepted を上書きする競合を避ける
     candidate = db.execute(
         select(OrderCandidateCreator)
         .where(
@@ -798,6 +799,9 @@ def submit_file(
     if order.status != OrderStatus.assigned:
         raise HTTPException(status_code=409, detail={"code": "INVALID_STATE", "message": f"expected assigned, got {order.status.value}"})
 
+    # 提出ファイルは submissions/ サブディレクトリへ。
+    # 最終納品パス `{ORDERS_DIR}/{order_id}.wav` は admin の done 承認時に確定する
+    # → 差し戻し中の reviewing→assigned で誤って user が DL するのを防ぐ
     sub_dir = Path(settings.ORDERS_DIR) / "submissions"
     sub_dir.mkdir(parents=True, exist_ok=True)
     dest = sub_dir / f"{parsed}.wav"

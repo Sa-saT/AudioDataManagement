@@ -92,7 +92,8 @@ export function useStreamPlayer(audioId: string): StreamPlayer {
     source.buffer = buffer
     source.connect(ctx.destination)
     source.onended = () => {
-      // チャンク終端 or 明示停止
+      // チャンク終端 or 明示停止 (stop() で source.stop(0) を呼んでも発火する)。
+      // 明示停止の場合は呼び出し側が既に isPlaying=false にしているので二重更新しない
       if (isPlaying.value) {
         isPlaying.value = false
         pausedOffsetSec = 0

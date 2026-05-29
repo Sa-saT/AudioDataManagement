@@ -375,6 +375,8 @@ def download_audio(
     except ValueError:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "audio not found"})
 
+    # FOR UPDATE: 単発販売 (1音源につき1人) を排他的に成立させる。
+    # この行ロックがないと 2 user が同時 DL クリックした時、両方に sold が成立する競合が起きる
     audio = db.execute(
         select(Audio).where(Audio.id == parsed_id).with_for_update()
     ).scalar_one_or_none()

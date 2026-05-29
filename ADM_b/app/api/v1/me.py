@@ -28,8 +28,10 @@ from app.security.signed_url import (
 )
 from app.services import audio_file
 
-# 直近この秒数以内に同ユーザの session 記録があれば新規 INSERT しない
-SESSION_DEDUP_WINDOW_SEC = 30 * 60  # 30分
+# 直近この秒数以内に同ユーザの session 記録があれば新規 INSERT しない。
+# 30分とした理由: Admin ログでの「DAU/起動回数」を意味ある粒度で集計するため。
+# 短すぎると 1ページ遷移ごとに 1 session 増えてしまい、活発度の判定が壊れる。
+SESSION_DEDUP_WINDOW_SEC = 30 * 60
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -78,7 +80,9 @@ def download_copy_file(
 
     copy_path = audio_file.get_copy_path(parsed_user_id, parsed_audio_id)
     if not copy_path.exists():
-        # Fallback: serve original
+        # Fallback: 個人 copy が無ければ原本を直接配信。
+        # ストレージ枯渇でユーザが自身の copy を削除した直後でも、
+        # signed URL の有効期限内なら DL を継続させたいため (UX 優先)。
         audio = db.execute(select(Audio).where(Audio.id == parsed_audio_id)).scalar_one_or_none()
         if audio is None:
             raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "audio not found"})
