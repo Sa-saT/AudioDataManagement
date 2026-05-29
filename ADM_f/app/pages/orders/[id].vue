@@ -454,34 +454,107 @@ async function downloadDoneFile() {
   finally { dlLoading.value = false }
 }
 
-// ─── Admin: nominate ─────────────────────────────
+// ─── Admin: nominate (改訂2.2: creator 一覧 + ランクフィルタ + 複数選択) ────
+interface AdminUserItem {
+  id: string
+  username: string
+  role: string
+  rank: string | null
+  display_name: string | null
+}
+const allCreators = ref<AdminUserItem[]>([])
 const showNominate = ref(false)
-const nominateIds = ref('')
 const nominateLoading = ref(false)
 const nominateError = ref<string | null>(null)
+const nominateSelected = ref<Set<string>>(new Set())
+const nominateRankFilter = ref<Set<string>>(new Set(['bronze', 'silver', 'gold', 'platinum']))
+const nominateSearch = ref('')
+
+async function loadCreators() {
+  if (allCreators.value.length > 0) return
+  try {
+    const all = await api.get<AdminUserItem[]>('/api/v1/admin/users')
+    allCreators.value = all.filter(u => u.role === 'creator')
+  } catch (err) { nominateError.value = errorMessageJa(err) }
+}
+
+async function openNominateModal() {
+  nominateError.value = null
+  nominateSelected.value = new Set()
+  nominateSearch.value = ''
+  showNominate.value = true
+  await loadCreators()
+}
+
+const RANK_LABEL: Record<string, string> = {
+  bronze: 'Bronze ¥100', silver: 'Silver ¥200', gold: 'Gold ¥400', platinum: 'Platinum ¥800',
+}
+const RANK_CHIP: Record<string, string> = {
+  bronze: 'bg-[#cd7f3220] text-[#8b5a2b]',
+  silver: 'bg-[#c0c0c022] text-[#6b6b6b]',
+  gold:   'bg-[#ffd70022] text-[#a07900]',
+  platinum: 'bg-[#e5e4e220] text-[#5b6770]',
+}
+
+const filteredCreators = computed(() => {
+  const q = nominateSearch.value.trim().toLowerCase()
+  return allCreators.value.filter(c => {
+    const rank = c.rank ?? ''
+    if (!nominateRankFilter.value.has(rank)) return false
+    if (q && !(c.username.toLowerCase().includes(q) || (c.display_name ?? '').toLowerCase().includes(q))) return false
+    return true
+  })
+})
+
+function toggleRankFilter(rank: string) {
+  if (nominateRankFilter.value.has(rank)) nominateRankFilter.value.delete(rank)
+  else nominateRankFilter.value.add(rank)
+}
+function toggleNominate(id: string) {
+  if (nominateSelected.value.has(id)) nominateSelected.value.delete(id)
+  else nominateSelected.value.add(id)
+}
 
 async function executeNominate() {
-  const ids = nominateIds.value.split('\n').map(s => s.trim()).filter(Boolean)
-  if (!ids.length) { nominateError.value = 'Creator ID を入力してください。'; return }
+  const ids = Array.from(nominateSelected.value)
+  if (!ids.length) { nominateError.value = 'Creator を1人以上選択してください。'; return }
   nominateLoading.value = true
   nominateError.value = null
   try {
     order.value = await api.post<OrderDetail>(`/api/v1/orders/${orderId.value}/nominate`, { body: { creator_ids: ids } })
     showNominate.value = false
-    nominateIds.value = ''
+    nominateSelected.value = new Set()
   } catch (err) { nominateError.value = errorMessageJa(err) }
   finally { nominateLoading.value = false }
 }
 
-// ─── Admin: assign ────────────────────────────────
+// ─── Admin: assign (改訂2.2: 候補一覧から選択) ───
 const showAssign = ref(false)
 const assignCreatorId = ref('')
 const assignTokenCost = ref<number | null>(null)
 const assignLoading = ref(false)
 const assignError = ref<string | null>(null)
 
+// accepted な候補を優先表示、pending は薄く
+const candidatesForAssign = computed(() => {
+  const cs = order.value?.candidates ?? []
+  return [
+    ...cs.filter(c => c.response_status === 'accepted'),
+    ...cs.filter(c => c.response_status === 'pending'),
+  ]
+})
+
+function openAssignModal() {
+  assignError.value = null
+  // accepted な候補が1人だけならデフォルト選択
+  const accepted = order.value?.candidates.filter(c => c.response_status === 'accepted') ?? []
+  assignCreatorId.value = accepted.length === 1 ? accepted[0]!.creator_id : ''
+  assignTokenCost.value = null
+  showAssign.value = true
+}
+
 async function executeAssign() {
-  if (!assignCreatorId.value.trim()) { assignError.value = 'Creator ID を入力してください。'; return }
+  if (!assignCreatorId.value.trim()) { assignError.value = 'Creator を1人選択してください。'; return }
   assignLoading.value = true
   assignError.value = null
   try {
@@ -1001,13 +1074,15 @@ const myCandidate = computed(() =>
           <button
             v-if="['open','recruiting'].includes(order.status)"
             class="w-full rounded-md bg-ink px-3 py-1.5 text-[12px] font-medium text-canvas hover:bg-primary"
-            @click="showNominate = true"
+            @click="openNominateModal"
           >クリエイター指名</button>
 
           <button
             v-if="['open','recruiting'].includes(order.status)"
-            class="w-full rounded-md border border-[#20b2aa55] px-3 py-1.5 text-[12px] font-medium text-[#0e7a74] hover:bg-[#20b2aa15]"
-            @click="showAssign = true"
+            class="w-full rounded-md border border-[#20b2aa55] px-3 py-1.5 text-[12px] font-medium text-[#0e7a74] hover:bg-[#20b2aa15] disabled:opacity-40"
+            :disabled="candidatesForAssign.length === 0"
+            :title="candidatesForAssign.length === 0 ? '候補がいません。先に指名してください' : ''"
+            @click="openAssignModal"
           >アサイン確定</button>
 
           <button
@@ -1073,45 +1148,118 @@ const myCandidate = computed(() =>
         </div>
       </Transition>
 
-      <!-- Nominate -->
+      <!-- Nominate (改訂2.2: creator 一覧 + ランクフィルタ + 検索 + 複数選択) -->
       <Transition name="modal">
-        <div v-if="showNominate" class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-24 backdrop-blur-sm" @click.self="showNominate = false">
-          <div class="card mx-4 w-full max-w-[480px] p-6">
-            <h2 class="mb-4 text-[15px] font-semibold text-ink">クリエイター指名</h2>
-            <p class="mb-2 text-[12px] text-muted">Creator ID を1行につき1件入力してください。</p>
-            <textarea v-model="nominateIds" rows="4" placeholder="uuid&#10;uuid&#10;..." class="w-full resize-none rounded-md border border-hairline-strong bg-white/60 px-3 py-2 font-mono text-[12px] text-ink outline-none placeholder:text-muted focus:border-primary" />
+        <div v-if="showNominate" class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-12 pb-6 backdrop-blur-sm overflow-y-auto" @click.self="showNominate = false">
+          <div class="card mx-4 w-full max-w-[560px] p-6">
+            <h2 class="mb-3 text-[15px] font-semibold text-ink">クリエイター指名</h2>
+
+            <!-- ランクフィルタ -->
+            <div class="mb-3 flex flex-wrap items-center gap-1.5">
+              <span class="mr-1 text-[10px] uppercase tracking-widest text-muted">ランク</span>
+              <button
+                v-for="r in (['bronze','silver','gold','platinum'] as const)"
+                :key="r"
+                class="rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors"
+                :class="nominateRankFilter.has(r) ? RANK_CHIP[r] + ' ring-1 ring-current/40' : 'bg-hairline-soft text-muted'"
+                @click="toggleRankFilter(r)"
+              >{{ RANK_LABEL[r] }}</button>
+            </div>
+
+            <!-- 検索 -->
+            <input
+              v-model="nominateSearch"
+              type="search"
+              placeholder="ユーザ名 / 表示名で検索…"
+              class="mb-3 w-full rounded-md border border-hairline-strong bg-white/70 px-3 py-1.5 text-[12px] text-ink outline-none focus:border-primary"
+            />
+
+            <!-- 候補一覧 -->
+            <div class="max-h-[40vh] space-y-1 overflow-y-auto rounded-md border border-hairline">
+              <p v-if="filteredCreators.length === 0" class="p-4 text-center text-[12px] text-muted">該当する creator がいません</p>
+              <label
+                v-for="c in filteredCreators"
+                :key="c.id"
+                class="flex cursor-pointer items-center gap-3 border-b border-hairline-soft px-3 py-2 text-[12px] transition-colors last:border-b-0 hover:bg-primary/5"
+              >
+                <input
+                  type="checkbox"
+                  :checked="nominateSelected.has(c.id)"
+                  class="h-4 w-4 accent-primary"
+                  @change="toggleNominate(c.id)"
+                />
+                <span class="flex-1 truncate font-medium text-ink">{{ c.display_name ?? c.username }}</span>
+                <span class="font-mono text-[10px] text-muted">@{{ c.username }}</span>
+                <span
+                  v-if="c.rank"
+                  class="rounded-full px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase"
+                  :class="RANK_CHIP[c.rank] ?? ''"
+                >{{ c.rank }}</span>
+              </label>
+            </div>
+
+            <p class="mt-2 text-[11px] text-muted">{{ nominateSelected.size }} 名選択中</p>
             <p v-if="nominateError" class="mt-2 text-[12px] text-accent">{{ nominateError }}</p>
             <div class="mt-4 flex justify-end gap-2">
               <button class="rounded-md border border-hairline-strong px-4 py-1.5 text-[12px] text-body-strong hover:text-ink" @click="showNominate = false">やめる</button>
-              <button class="rounded-md bg-ink px-4 py-1.5 text-[12px] font-medium text-canvas hover:bg-primary disabled:opacity-50" :disabled="nominateLoading" @click="executeNominate">
-                {{ nominateLoading ? '…' : '指名する' }}
-              </button>
+              <button
+                class="rounded-md bg-ink px-4 py-1.5 text-[12px] font-medium text-canvas transition-colors hover:bg-primary disabled:opacity-50"
+                :disabled="nominateLoading || nominateSelected.size === 0"
+                @click="executeNominate"
+              >{{ nominateLoading ? '…' : `指名する (${nominateSelected.size})` }}</button>
             </div>
           </div>
         </div>
       </Transition>
 
-      <!-- Assign -->
+      <!-- Assign (改訂2.2: 候補から選択) -->
       <Transition name="modal">
         <div v-if="showAssign" class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-24 backdrop-blur-sm" @click.self="showAssign = false">
           <div class="card mx-4 w-full max-w-[480px] p-6">
-            <h2 class="mb-4 text-[15px] font-semibold text-ink">アサイン確定</h2>
-            <div class="space-y-3">
-              <div>
-                <label class="mb-1 block text-[12px] font-medium text-body-strong">Creator ID</label>
-                <input v-model="assignCreatorId" type="text" class="w-full rounded-md border border-hairline-strong bg-white/60 px-3 py-2 font-mono text-[12px] text-ink outline-none focus:border-primary" />
-              </div>
-              <div>
-                <label class="mb-1 block text-[12px] font-medium text-body-strong">token 数（変更する場合）</label>
-                <input v-model.number="assignTokenCost" type="number" min="1" placeholder="空欄=変更なし" class="w-32 rounded-md border border-hairline-strong bg-white/60 px-3 py-2 font-mono text-[12px] text-ink outline-none focus:border-primary" />
-              </div>
+            <h2 class="mb-3 text-[15px] font-semibold text-ink">アサイン確定</h2>
+            <p v-if="candidatesForAssign.length === 0" class="mb-3 text-[12px] text-muted">候補がいません。先に指名してください。</p>
+
+            <div v-else class="mb-3 space-y-1 rounded-md border border-hairline">
+              <label
+                v-for="c in candidatesForAssign"
+                :key="c.id"
+                class="flex cursor-pointer items-center gap-3 border-b border-hairline-soft px-3 py-2 text-[12px] transition-colors last:border-b-0 hover:bg-primary/5"
+                :class="c.response_status === 'pending' ? 'opacity-60' : ''"
+              >
+                <input
+                  type="radio"
+                  :value="c.creator_id"
+                  v-model="assignCreatorId"
+                  name="assign_creator"
+                  class="accent-primary"
+                />
+                <span class="flex-1 truncate font-medium text-ink">{{ c.creator_name }}</span>
+                <span
+                  class="rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+                  :class="c.response_status === 'accepted' ? 'bg-[#20b2aa22] text-[#0e7a74]' : 'bg-hairline-soft text-muted'"
+                >{{ RESPONSE_LABEL[c.response_status] }}</span>
+              </label>
             </div>
+
+            <div>
+              <label class="mb-1 block text-[11px] font-medium text-muted">token 数 (変更する場合)</label>
+              <input
+                v-model.number="assignTokenCost"
+                type="number"
+                min="1"
+                :placeholder="`現在: ${order?.token_cost ?? '-'}`"
+                class="w-40 rounded-md border border-hairline-strong bg-white/60 px-3 py-1.5 font-mono text-[12px] text-ink outline-none focus:border-primary"
+              />
+            </div>
+
             <p v-if="assignError" class="mt-2 text-[12px] text-accent">{{ assignError }}</p>
             <div class="mt-4 flex justify-end gap-2">
               <button class="rounded-md border border-hairline-strong px-4 py-1.5 text-[12px] text-body-strong hover:text-ink" @click="showAssign = false">やめる</button>
-              <button class="rounded-md bg-[#20b2aa] px-4 py-1.5 text-[12px] font-medium text-white hover:opacity-90 disabled:opacity-50" :disabled="assignLoading" @click="executeAssign">
-                {{ assignLoading ? '…' : 'アサイン確定' }}
-              </button>
+              <button
+                class="rounded-md bg-[#20b2aa] px-4 py-1.5 text-[12px] font-medium text-white hover:opacity-90 disabled:opacity-50"
+                :disabled="assignLoading || !assignCreatorId"
+                @click="executeAssign"
+              >{{ assignLoading ? '…' : 'アサイン確定' }}</button>
             </div>
           </div>
         </div>
