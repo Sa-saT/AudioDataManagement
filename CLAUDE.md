@@ -1,7 +1,7 @@
 # Audio Data Management — Project Guide
 
-サウンドクリエイター向け音響データ管理アプリ。
-本ファイルは Claude 向けのプロジェクトガイド。詳細仕様は `docs/` 配下を参照。
+サウンドクリエイター向け音響データ管理アプリ (Pathfinder)。
+本ファイルは Claude 向けのプロジェクトガイド。**詳細仕様は `docs/` 配下を参照** (本ファイルは概観のみ)。
 
 ## 1. 技術スタック
 
@@ -10,7 +10,7 @@
 - pnpm
 - TailwindCSS (`@nuxtjs/tailwindcss`)
 - Pinia (`@pinia/nuxt`)
-- wavesurfer.js
+- WebGL2 (波形描画は自前 Fragment Shader、wavesurfer.js は撤去済)
 
 ### Backend (`ADM_b/`)
 - FastAPI
@@ -22,39 +22,43 @@
 
 ```
 AudioDataManagement/
-├── ADM_f/                Frontend (Nuxt 4)
+├── ADM_f/                                Frontend (Nuxt 4)
 │   ├── app/
 │   │   ├── app.vue
 │   │   ├── assets/css/main.css
-│   │   ├── components/   TopNav, AudioCard, WaveformPlayer
-│   │   ├── layouts/      default.vue
-│   │   ├── pages/        index / dashboard / activate
-│   │   ├── stores/       auth, audios (Pinia)
-│   │   ├── types/        audio, auth
-│   │   └── utils/        mockTracks (ダミー)
+│   │   ├── components/
+│   │   │   ├── TopNav.vue / AudioCard.vue / WaveformPlayer.vue
+│   │   │   ├── NumberRoller.vue / ConfirmModal.vue / AudioEditModal.vue
+│   │   │   ├── ErrorPopup.vue / OrderBriefWizard.vue
+│   │   │   ├── charts/                  Admin ログ用 SVG (BarChart / Heatmap / RadarChart / Sparkline / SignalDot)
+│   │   │   └── waveform/                自前 Shader 波形 (peaks.ts / useWaveformGL.ts / fallback2d.ts / shaders/)
+│   │   ├── composables/                 useApi / useStreamPlayer
+│   │   ├── layouts/                     default.vue
+│   │   ├── pages/                       index / dashboard / activate / uploads / downloads
+│   │   │                                / orders / orders/[id] / admin
+│   │   ├── stores/                      auth / audios / system (Pinia)
+│   │   ├── types/                       audio / auth
+│   │   └── utils/                       errorMessageJa
 │   ├── tailwind.config.ts
 │   └── nuxt.config.ts
-├── ADM_b/                Backend (FastAPI)
+├── ADM_b/                                Backend (FastAPI)
 │   ├── app/
-│   │   ├── main.py       FastAPI エントリ
-│   │   ├── config.py     pydantic-settings (.env 読込)
-│   │   ├── db.py         SQLAlchemy engine/session
-│   │   └── models/       ORM (users / licenses / audios / payouts ...)
-│   ├── migrations/       Alembic
-│   ├── scripts/
-│   │   └── init_db.sh    冪等な DB / role / 依存 / migration 一括初期化
-│   ├── .env.example      環境変数テンプレ (init_db.sh が .env を生成)
-│   ├── alembic.ini
-│   ├── requirements.txt
-│   └── venv/
-├── docs/                 仕様ドキュメント
-│   ├── REQUIREMENTS.md   要件定義書
-│   ├── DATA_MODEL.md     ER / テーブル定義
-│   ├── API_SPEC.md       FastAPI エンドポイント設計
-│   └── LICENSE_FILE_SPEC.md  licファイル仕様
-├── images/               UI参考画像
-├── DESIGN.md             UIデザイントークン (Cursor風)
-└── CLAUDE.md             本ファイル
+│   │   ├── main.py                      FastAPI エントリ
+│   │   ├── config.py                    pydantic-settings (.env 読込)
+│   │   ├── db.py                        SQLAlchemy engine/session
+│   │   ├── api/v1/                      auth / audios / me / admin / admin_logs / orders
+│   │   ├── models/                      ORM (user / creator / audio / payment / log / order)
+│   │   ├── schemas/                     Pydantic (audio / auth)
+│   │   ├── security/                    deps / jwt / license / signed_url
+│   │   └── services/                    audio_file / tokens
+│   ├── migrations/                      Alembic (0001 〜 0011)
+│   ├── scripts/init_db.sh               冪等な DB / role / 依存 / migration 一括初期化
+│   ├── .env.example                     環境変数テンプレ
+│   ├── alembic.ini / requirements.txt / venv/
+├── docs/                                 仕様ドキュメント (§7 参照)
+├── images/                               UI 参考画像 (デザイン基準)
+├── DESIGN.md                             UIデザイントークン
+└── CLAUDE.md                             本ファイル
 ```
 
 ## 3. 開発コマンド
@@ -80,49 +84,43 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 ### DB ロール (最小権限)
 - `adm_migrator`: DDL 用。Alembic から接続。DB owner
 - `adm_app`: DML のみ。FastAPI が常用接続 (SELECT/INSERT/UPDATE/DELETE)
-- 本番もこの2ロール構成を踏襲。secret は環境ごとに切替
 
 ## 4. ユーザロール
 
 | ロール | 識別 | 主な権限 |
 |---|---|---|
 | guest | 未アクティベート | 公開音源の閲覧・視聴のみ。DL不可 |
-| user | licファイル (role=user) | 視聴 / DL (token消費) / DL済み再取得 / お気に入り |
-| creator | licファイル (role=creator) | 音源のアップロード / 編集 / 削除 / 公開設定 |
-| admin | licファイル (role=admin) | 全リソース管理、ユーザ/クリエイター管理、ランク変更、lic発行、token追加付与、payout承認 |
+| user | licファイル (role=user) | 視聴 / DL (token消費) / DL済み再取得 / お気に入り / Commission 発注 |
+| creator | licファイル (role=creator) | 音源のアップロード / 編集 / 削除 / 公開設定 / Commission 受注 |
+| admin | licファイル (role=admin) | 全リソース管理、ランク変更、lic発行、token追加付与、payout承認、Commission 仲介、ログ閲覧 |
 
 サイト初回アクセスは guest として `/dashboard` 表示。`/activate` で `.lic` を適用するとロール・月間token量が反映される。
 
-## 5. 音源・ストレージ
+詳細: [docs/REQUIREMENTS.md §4](docs/REQUIREMENTS.md)
 
-- 拡張子: `.wav` (PCM、非圧縮)
-- 想定スペック上限: **48 kHz / 24 bit / stereo**
-- 保存場所 (開発): 原本のみ `/storage/sounds/{id}.wav` (事前生成プレビューファイルなし)
-- 波形プレビュー: サーバが事前計算した `peaks` (正規化0..1配列) を JSONB で保持
+## 5. 音源・ストレージ (要点のみ)
+
+- 拡張子: `.wav` (PCM、非圧縮) / 上限 **48 kHz / 24 bit / stereo**
+- 保存場所 (開発): 原本 `/storage/sounds/{id}.wav` / DL コピー `/storage/downloads/{user_id}/{audio_id}.wav` / Commission `/storage/orders/`
+- 波形プレビュー: peaks v2 `{n, max, min, rms}` を JSONB で保持。WebGL Fragment Shader で描画
 - token量 = `duration_sec` (1秒 = 1 token)
 
-### 音質ポリシー (必須要件)
+**音質ポリシー (絶対要件):** アプリ側でトランスコード・ビットレート変換禁止。視聴も DL も原本と同一の PCM `.wav` をビットパーフェクト配信。視聴は 10 秒の動的チャンク切り出し (`?start=秒`、`ffmpeg -c:a copy`)。配信 URL は HMAC + TTL 30秒の signed URL。
 
-クライアント / ユーザ共にプロを想定。**アプリ側で音質を劣化させない**。guest も視聴可 (営業・加入促進目的)。
+詳細:
+- [docs/REQUIREMENTS.md §5.3](docs/REQUIREMENTS.md) (FR-STREAM-03〜09)
+- [docs/API_SPEC.md](docs/API_SPEC.md) `GET /audios/{id}/stream`
+- [docs/WAVEFORM_SHADER_SPEC.md](docs/WAVEFORM_SHADER_SPEC.md) (peaks v2 + Shader)
 
-- 視聴 (ストリーミング) も DL もトランスコード・ビットレート変換禁止。原本と同一の PCM `.wav` をビットパーフェクト配信。
-- 視聴は **動的チャンク切り出し** (`?start=秒` で任意位置から 10 秒を `ffmpeg -c:a copy`)。JWT 不要。
-- wavesurfer.js は **波形描画専用** (peaks データ使用)。再生は **Web Audio API** (fetch → decodeAudioData → AudioBufferSourceNode)。
-- 配信 URL は短命 signed URL (HMAC + TTL 30 秒)。
-- 詳細は `docs/REQUIREMENTS.md` §5.3 (FR-STREAM-03〜09) / `docs/API_SPEC.md` `GET /audios/{id}/stream`。
+## 5.5 料金/トークン制 (要点のみ)
 
-## 5.5 料金/トークン制 (重要)
+- **単発販売**: 各音源はシステム全体で1人にのみ DL 可。DL 後は全員の Dashboard から消える
+- **sold後の権限**: Creator は編集・削除不可。Admin のみ管理可。購入者は自身の Downloads コピーを削除可 (削除後は再 DL 不可)
+- **試聴/再 DL は無料** (token 消費なし、Creator 追加支払いなし)
+- **月間token**: lic の `monthlyQuotaTokens`。毎月1日 (JST) リセット、繰り越しなし。使い切ったら Admin が追加付与可 (当月末まで)
+- **Creator ランク単価** (1DLあたり): bronze=¥100 / silver=¥200 / gold=¥400 / platinum=¥800。支払いは pending → admin が paid 化
 
-- **単発販売**: 各音源はシステム全体で1人のユーザにのみ DL される。誰か1人が DL した瞬間、その音源は全員の Dashboard から消える。
-- **sold後の権限**: DL完了 (sold状態) になると Creator の編集・削除権限は消滅。以降は Admin のみが管理権限を持つ。購入者は自身の Downloads ストレージ内コピーのみ管理可 (削除でストレージ解放、削除後は再DL不可)。
-- **Downloadsストレージ**: DL成功時に原本コピーを `/storage/downloads/{user_id}/{audio_id}.wav` に格納。lic で設定した容量上限 (`max_download_storage_bytes`) あり。購入者はこのコピーから無制限に再DL可。
-- **DL = token消費 + Creator支払い**: DL時に `audio.duration_sec` を当月の token から差し引き、同時に Creator への支払いレコードを生成する。
-- **試聴は無料**: ストリーミング再生は token を消費しない。
-- **再DLは無料**: My Downloads から何度でも再取得可能 (token消費なし、Creator追加支払いなし)。
-- **月間token**: licファイルの `monthlyQuotaTokens` で個別付与。毎月1日 (JST) リセット、繰り越しなし。
-- **追加付与**: 使い切ったら Admin が手動で追加 token を付与可能 (当月末まで有効)。
-- **Creatorランク単価** (1DLあたり): bronze=100 / silver=200 / gold=400 / platinum=800 円。支払いは pending として記録され、Admin が paid にマークする。
-- 詳細は `docs/REQUIREMENTS.md` §5.4-5.8、`docs/DATA_MODEL.md` §2.4-2.9 参照。
+詳細: [docs/REQUIREMENTS.md §5.4-5.8](docs/REQUIREMENTS.md) / [docs/DATA_MODEL.md §2.4-2.9](docs/DATA_MODEL.md)
 
 ## 6. コーディング規約
 
@@ -137,8 +135,12 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 ### Backend
 - パスは `/api/v1/...` プレフィックス。
 - リクエスト/レスポンス型は Pydantic で定義。
-- 認可は JWT のカスタムクレーム `role` でチェック。
-- DBアクセスは SQLAlchemy + Alembic を想定 (Phase 2 で導入)。
+- 認可は JWT のカスタムクレーム `role` でチェック (`security/deps.py:require_role`)。
+- DB アクセスは SQLAlchemy + Alembic。
+
+### 共通
+- コメントは **WHY のみ** (HOW は名前で語る)。1行で済むなら 1行。
+- 過剰防衛コード禁止 (内部不変を信じる、境界のみ検証)。
 
 ## 7. 仕様ドキュメント
 
@@ -159,45 +161,37 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 |---|---|---|
 | 1 | フロント基礎 (Dashboard / Activate / Pinia / 擬似波形) | ✅ 完了 |
 | 2 | FastAPI + PostgreSQL 接続、`/audios` `/auth/activate`、実 wav 配信 | ✅ 完了 |
-| 3 | Creator: アップロード UI / Admin: 管理画面 / 購入 / 検索 / Commission | **実装中 (ローカル完了)** |
-| 4 | 本番運用 (CDN, 監視, バックアップ) | 未着手 |
+| 3 | Creator / Admin / Commission / 通知 / ログ / Shader 波形 / エラーポップアップ | ✅ **ローカル完了** |
+| 4 | 本番運用 (CDN, 監視, バックアップ, S3 互換ストレージ) | 未着手 |
 
-### Phase 3 タスク進捗
+### Phase 3 タスク (#31〜#46 全完了)
 
-| # | 内容 | 状態 |
+| # | 内容 | 完了コミット |
 |---|---|---|
-| 31 | Admin 管理画面 (ユーザ一覧・ランク変更) | ✅ 完了 |
-| 32 | Admin: lic 発行 / token 追加付与 / payout 承認 | ✅ 完了 |
-| 33 | Creator: アップロード UI (`/uploads`) | ✅ 完了 |
-| 34 | Dashboard を実 API 接続 (mockTracks 撤去・購入フロー・ページャー) | ✅ 完了 |
-| 35 | お気に入り: POST `/audios/{id}/favorite` (toggle) + AudioCard UI | ✅ 完了 |
-| 36 | タグ検索: GET `/audios/tags` + `?tags=` クエリ (OR) + Dashboard チップ UI | ✅ 完了 |
-| 37 | My Downloads: GET `/me/downloads` + 再DL + コピー削除 + ストレージ表示 | ✅ 完了 |
-| 38 | Admin: クリエイター統計 / グループ / ユーザ role フィルタ | ✅ 完了 |
-| 39 | Commission バックエンド (orders API 全エンドポイント + migration) | ✅ 完了 |
-| 40 | Commission フロントエンド (`/orders`, `/orders/[id]`, Admin タブ) | ✅ 完了 |
-| 41 | Commission 通知バッジ (金ドット + オレンジ変色 + action-required カウント) | ✅ 完了 |
-| 42 | Admin ログ仕様策定 (docs/LOG_SPEC.md) | ✅ 完了 |
-| 43 | Commission 改訂2 実装 (タイトル自動生成 / 曲長→token / draft保存 / 通知二系統) | ✅ 完了 |
-| 44 | Admin ログ機能 実装 (集計4 API + SVG チャート5種 + 詳細展開) | ✅ 完了 |
-| 45 | 波形描画 Shader 化 (peaks v2 + WebGL + wavesurfer.js 撤去) | ✅ 完了 |
-| 46 | Creator アップロード エラーの日本語ポップアップ表示 | ✅ 完了 |
+| 31〜38 | Admin / アップロード / Dashboard / お気に入り / タグ検索 / My Downloads | (e7000b0 までに完了) |
+| 39〜40 | Commission Backend + Frontend | e7000b0 |
+| 41 | Commission 通知バッジ (action-required ベース) | d2fe503 |
+| 42 | Admin ログ仕様策定 (LOG_SPEC.md) | d2fe503 |
+| 43 | Commission 改訂2 (タイトル自動生成 / 曲長→token / draft保存 / 通知二系統 / 全体通し番号) | c5a65b6 |
+| 44 | Admin ログ機能 実装 (集計 4 API + SVG チャート 5種 + 詳細展開) | 0e2417f |
+| 45 | 波形描画 Shader 化 (peaks v2 + WebGL + wavesurfer.js 撤去 / 単色 + dim + EQ ビジュアライザ) | f4cad0a / 4c69897 |
+| 46 | アップロード エラーの日本語ポップアップ (`ErrorPopup.vue`) | b99834a |
 
 ### Phase 3 残スコープ → Phase 4 前に整備
 
 - 動作確認 (ブラウザ実機): 10秒チャンク再生 / Shader 波形 / EQ ビジュアライザ / Commission 改訂2 / Admin ログ
-- CLAUDE.md 整理 (Task B): `§5 音源・ストレージ` `§5.5 料金/トークン制` `§9 用語` を `docs/REQUIREMENTS.md` に集約
-- ディレクトリ構成 §2 を最新ファイル群に合わせて更新
-- コードコメント (Task D): orders.py / audios.py / me.py / signed_url.py / tokens.py に「WHY」コメント
-- 本番: S3互換ストレージ切替 / CDN / 監視 / バックアップ
+- コードコメント (Task D): 主要モジュールに「WHY」コメント追加
+- 本番準備: S3互換ストレージ切替 / CDN / 監視 / バックアップ
 
-## 9. 用語
+## 9. 用語 (要点)
+
+全用語集は [docs/REQUIREMENTS.md §8](docs/REQUIREMENTS.md) を参照。本ファイルでは Claude が頻出する識別子のみ:
 
 | 用語 | 説明 |
 |---|---|
 | licファイル | ユーザ/ロールを識別する `.lic` 拡張子のライセンスファイル |
-| peaks | 波形プレビュー用の正規化サンプル値配列 (0..1) |
-| アクティベート | licファイルを適用して guest → user/creator/admin になる操作 |
+| peaks | 波形プレビューデータ。**v2** = `{n, max, min, rms}` (1000ポイント、`WAVEFORM_SHADER_SPEC.md` §3) |
+| アクティベート | licファイル適用で guest → user/creator/admin になる操作 |
 | ランク | クリエイターの段位 (bronze/silver/gold/platinum) |
-| 発注 (Commission) | ユーザがオリジナル音源の制作依頼を出すチケットベースのフロー。Dashboard の単発DLとは独立。 |
-| 発注チケット | 発注1件を表す `orders` レコード。状態遷移と3者間のメッセージ履歴を持つ。 |
+| Commission / 発注 | オリジナル音源の制作依頼チケット。Dashboard の単発DL とは独立 (`ORDER_SPEC.md`) |
+| activity_logs | session ping / order_view を統合した活動ログテーブル (`LOG_SPEC.md` §2.1) |
