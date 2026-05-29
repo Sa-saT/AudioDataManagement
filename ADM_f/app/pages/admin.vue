@@ -1100,8 +1100,10 @@ watch(tab, (t) => {
             v-for="order in adminOrders"
             :key="order.id"
             :to="`/orders/${order.id}`"
-            class="card flex items-center gap-3 px-4 py-3 transition-colors hover:border-primary/40"
+            class="card flex cursor-pointer items-center gap-3 px-4 py-3 transition-all hover:-translate-y-px hover:border-primary hover:shadow-md"
           >
+            <!-- #serial を ID として独立表示 (REDMINE 風) -->
+            <span class="shrink-0 rounded-md bg-ink/5 px-2 py-0.5 font-mono text-[11px] font-semibold text-ink">#{{ order.serial }}</span>
             <span
               class="shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold"
               :class="ORDER_STATUS_CLASS[order.status] ?? 'bg-hairline-soft text-body'"
@@ -1109,7 +1111,7 @@ watch(tab, (t) => {
 
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2">
-                <span class="truncate text-[13px] font-medium text-ink">{{ order.title }}</span>
+                <span class="truncate text-[13px] font-medium text-ink">{{ stripSerialFromTitle(order.title) }}</span>
               </div>
               <div class="mt-0.5 flex items-center gap-2 text-[10px] text-muted font-mono">
                 <span>{{ order.user_name }}</span>
@@ -1123,9 +1125,10 @@ watch(tab, (t) => {
               </div>
             </div>
 
-            <svg class="shrink-0 text-muted" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="9 18 15 12 9 6"/>
-            </svg>
+            <!-- 詳細を開くボタン (明示的にクリック可能) -->
+            <span class="shrink-0 rounded-md bg-ink px-3 py-1 text-[11px] font-medium text-canvas transition-colors group-hover:bg-primary">
+              詳細を開く →
+            </span>
           </NuxtLink>
         </div>
       </div>

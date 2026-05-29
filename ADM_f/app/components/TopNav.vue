@@ -105,7 +105,8 @@ function goTo(path: string) {
 
 const isCreator = computed(() => auth.role === 'creator' || auth.role === 'admin')
 const isAdmin = computed(() => auth.role === 'admin')
-const showCommission = computed(() => auth.isActivated && system.commissionEnabled)
+// admin はメニューバーに Commission を出さない (Admin タブ > 発注管理から操作)
+const showCommission = computed(() => auth.isActivated && system.commissionEnabled && !isAdmin.value)
 // 改訂2: 通知二系統
 //   要対応 (action_count > 0) → 橙 + 件数バッジ + 金ドット
 //   情報のみ (action_count == 0 && has_info) → 橙のみ (件数なし)
@@ -178,8 +179,33 @@ const isHighlighted = computed(() => hasAction.value || hasInfo.value)
             class="absolute right-0 top-[calc(100%+6px)] w-60 overflow-hidden rounded-lg border border-hairline bg-white/85 shadow-lg backdrop-blur-md"
           >
 
-            <!-- Commission -->
-            <div v-if="showCommission">
+            <!-- Admin (改訂: 最上部配置) -->
+            <div v-if="isAdmin">
+              <div
+                class="flex cursor-pointer items-center gap-2 px-4 py-2.5 transition-colors hover:bg-white/80"
+                @click="goTo('/admin')"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shrink-0">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+                <span class="flex-1 text-[13px] text-ink">Admin</span>
+                <span class="mr-1 rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[9px] text-accent">admin</span>
+                <button
+                  class="group rounded-full p-0.5 transition-opacity"
+                  :class="infoOpen === 'admin' ? 'text-ink' : ''"
+                  @click.stop="toggleInfo('admin')"
+                  aria-label="説明"
+                >
+                  <img src="/information.png" alt="info" class="h-[18px] w-[18px] opacity-50 transition-opacity group-hover:opacity-80" />
+                </button>
+              </div>
+              <div v-if="infoOpen === 'admin'" class="border-t border-hairline-soft bg-white/40 px-4 pb-2.5 pt-2 text-[11px] leading-relaxed text-muted">
+                {{ INFO.admin }}
+              </div>
+            </div>
+
+            <!-- Commission (admin 以外) -->
+            <div v-if="showCommission" :class="isAdmin ? 'border-t border-hairline-soft' : ''">
               <div
                 class="flex cursor-pointer items-center gap-2 px-4 py-2.5 transition-colors hover:bg-white/80"
                 @click="goTo('/orders')"
@@ -258,7 +284,7 @@ const isHighlighted = computed(() => hasAction.value || hasInfo.value)
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shrink-0">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                <span class="flex-1 text-[13px] text-ink">Downloads</span>
+                <span class="flex-1 text-[13px] text-ink">DL List</span>
                 <button
                   class="group rounded-full p-0.5 transition-opacity"
                   :class="infoOpen === 'downloads' ? 'text-ink' : ''"
@@ -270,31 +296,6 @@ const isHighlighted = computed(() => hasAction.value || hasInfo.value)
               </div>
               <div v-if="infoOpen === 'downloads'" class="border-t border-hairline-soft bg-white/40 px-4 pb-2.5 pt-2 text-[11px] leading-relaxed text-muted">
                 {{ INFO.downloads }}
-              </div>
-            </div>
-
-            <!-- Admin -->
-            <div v-if="isAdmin" class="border-t border-hairline-soft">
-              <div
-                class="flex cursor-pointer items-center gap-2 px-4 py-2.5 transition-colors hover:bg-white/80"
-                @click="goTo('/admin')"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shrink-0">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                </svg>
-                <span class="flex-1 text-[13px] text-ink">Admin</span>
-                <span class="mr-1 rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[9px] text-accent">admin</span>
-                <button
-                  class="group rounded-full p-0.5 transition-opacity"
-                  :class="infoOpen === 'admin' ? 'text-ink' : ''"
-                  @click.stop="toggleInfo('admin')"
-                  aria-label="説明"
-                >
-                  <img src="/information.png" alt="info" class="h-[18px] w-[18px] opacity-50 transition-opacity group-hover:opacity-80" />
-                </button>
-              </div>
-              <div v-if="infoOpen === 'admin'" class="border-t border-hairline-soft bg-white/40 px-4 pb-2.5 pt-2 text-[11px] leading-relaxed text-muted">
-                {{ INFO.admin }}
               </div>
             </div>
 
