@@ -42,6 +42,7 @@ from app.models import (
     OrderCandidateCreator,
     OrderMessage,
     OrderMessageKind,
+    OrderMessageVisibility,
     OrderStatus,
     CandidateResponseStatus,
     PayoutStatus,
@@ -102,6 +103,7 @@ class MessageOut(BaseModel):
     content: str | None
     attachment_path: str | None
     kind: str
+    visibility: str = "public"  # 改訂2.3: 'public' | 'admin_creator'
     created_at: Any
 
 class OrderOut(BaseModel):
@@ -158,11 +160,20 @@ def _to_message(m: OrderMessage) -> MessageOut:
         content=m.content,
         attachment_path=m.attachment_path,
         kind=m.kind.value,
+        visibility=m.visibility.value,
         created_at=m.created_at,
     )
 
 
-def _to_order_out(order: Order) -> OrderOut:
+def _visible_messages(order: Order, viewer: User | None) -> list[OrderMessage]:
+    """改訂2.3: viewer の role に応じて messages を絞り込む。
+    user は admin_creator 私信を見られない。creator / admin は全部見える。"""
+    if viewer is None or viewer.role.value == "user":
+        return [m for m in order.messages if m.visibility != OrderMessageVisibility.admin_creator]
+    return list(order.messages)
+
+
+def _to_order_out(order: Order, viewer: User | None = None) -> OrderOut:
     return OrderOut(
         id=str(order.id),
         title=order.title,
@@ -179,7 +190,7 @@ def _to_order_out(order: Order) -> OrderOut:
             order.assigned_creator.display_name if order.assigned_creator else None
         ),
         candidates=[_to_candidate(c) for c in order.candidates],
-        messages=[_to_message(m) for m in order.messages],
+        messages=[_to_message(m) for m in _visible_messages(order, viewer)],
         file_path=order.file_path,
         notified_at=order.notified_at,
         closed_at=order.closed_at,
@@ -520,7 +531,7 @@ def create_order(
     )
     db.add(order)
     db.commit()
-    return _to_order_out(_load_order(db, order.id))
+    return _to_order_out(_load_order(db, order.id), viewer=current_user)
 
 
 # ─── Order detail ─────────────────────────────────────────────────────────────
@@ -618,7 +629,7 @@ def submit_order(
     order.updated_at = func.now()
     _add_status_message(db, parsed, current_user.id, "open")
     db.commit()
-    return _to_order_out(_load_order(db, parsed))
+    return _to_order_out(_load_order(db, parsed), viewer=current_user)
 
 
 # ─── Update draft (改訂2: 一時保存編集) ────────────────────────────────────────
@@ -663,7 +674,7 @@ def update_draft(
         order.desired_deadline = body.desired_deadline
     order.updated_at = func.now()
     db.commit()
-    return _to_order_out(_load_order(db, parsed))
+    return _to_order_out(_load_order(db, parsed), viewer=current_user)
 
 
 # ─── Update brief after submit (改訂2.1) ──────────────────────────────────────
@@ -780,7 +791,7 @@ def update_brief_after_submit(
     diffs = _diff_brief(order.brief, body.brief)
     if not diffs:
         # 変更なし → 何もせず返す
-        return _to_order_out(_load_order(db, parsed))
+        return _to_order_out(_load_order(db, parsed), viewer=current_user)
 
     # 1. 差分を履歴テーブルに記録
     for field, old_v, new_v in diffs:
@@ -824,7 +835,7 @@ def update_brief_after_submit(
     ))
     order.updated_at = func.now()
     db.commit()
-    return _to_order_out(_load_order(db, parsed))
+    return _to_order_out(_load_order(db, parsed), viewer=current_user)
 
 
 # ─── Brief edit history (改訂2.1) ─────────────────────────────────────────────
@@ -906,7 +917,7 @@ def update_deadline(
     order.desired_deadline = body.desired_deadline
     order.updated_at = func.now()
     db.commit()
-    return _to_order_out(_load_order(db, parsed))
+    return _to_order_out(_load_order(db, parsed), viewer=current_user)
 
 
 # ─── Close (改訂2.2: user が受け取る → archive) ─────────────────────────────
@@ -979,7 +990,7 @@ def close_order(
     order.updated_at = func.now()
     _add_status_message(db, parsed, current_user.id, "closed (受け取り完了 / token消費)")
     db.commit()
-    return _to_order_out(_load_order(db, parsed))
+    return _to_order_out(_load_order(db, parsed), viewer=current_user)
 
 
 # ─── Submission stream (改訂2.2: 受け取る前のプレビュー) ─────────────────────
@@ -1076,13 +1087,16 @@ def cancel_order(
     order.updated_at = func.now()
     _add_status_message(db, parsed, current_user.id, "cancelled")
     db.commit()
-    return _to_order_out(_load_order(db, parsed))
+    return _to_order_out(_load_order(db, parsed), viewer=current_user)
 
 
 # ─── Message ──────────────────────────────────────────────────────────────────
 
 class AddMessageRequest(BaseModel):
     content: str
+    # 改訂2.3: True なら admin↔creator 私信 (user 不可視)。
+    # user が True を投げても無視 (公開扱い)。
+    private: bool = False
 
 
 @router.post("/orders/{order_id}/message", response_model=OrderOut)
@@ -1099,15 +1113,24 @@ def add_message(
     _check_access(order, current_user)
     if order.status in (OrderStatus.done, OrderStatus.cancelled):
         raise HTTPException(status_code=409, detail={"code": "INVALID_STATE", "message": "order is closed"})
+
+    # 改訂2.3: admin / creator のみが私信を送れる (user の private=true は無視)
+    sender_role = current_user.role.value
+    if body.private and sender_role in ("admin", "creator"):
+        vis = OrderMessageVisibility.admin_creator
+    else:
+        vis = OrderMessageVisibility.public
+
     db.add(OrderMessage(
         order_id=parsed,
         sender_id=current_user.id,
         content=body.content,
         kind=OrderMessageKind.comment,
+        visibility=vis,
     ))
     order.updated_at = func.now()
     db.commit()
-    return _to_order_out(_load_order(db, parsed))
+    return _to_order_out(_load_order(db, parsed), viewer=current_user)
 
 
 # ─── Creator: candidate response ──────────────────────────────────────────────
@@ -1152,7 +1175,7 @@ def respond_to_nomination(
             kind=OrderMessageKind.comment,
         ))
     db.commit()
-    return _to_order_out(_load_order(db, parsed))
+    return _to_order_out(_load_order(db, parsed), viewer=current_user)
 
 
 # ─── Creator: submit file (assigned → reviewing) ──────────────────────────────
@@ -1201,7 +1224,7 @@ def submit_file(
     ))
     _add_status_message(db, parsed, current_user.id, "reviewing")
     db.commit()
-    return _to_order_out(_load_order(db, parsed))
+    return _to_order_out(_load_order(db, parsed), viewer=current_user)
 
 
 # ─── User: download done file ─────────────────────────────────────────────────
@@ -1286,7 +1309,7 @@ def nominate_creators(
     order.updated_at = func.now()
     _add_status_message(db, parsed, current_user.id, "recruiting")
     db.commit()
-    return _to_order_out(_load_order(db, parsed))
+    return _to_order_out(_load_order(db, parsed), viewer=current_user)
 
 
 # ─── Admin: assign creator ────────────────────────────────────────────────────
@@ -1327,7 +1350,7 @@ def assign_creator(
         order.token_cost = body.token_cost
     _add_status_message(db, parsed, current_user.id, "assigned", f"Creator: {profile.display_name}")
     db.commit()
-    return _to_order_out(_load_order(db, parsed))
+    return _to_order_out(_load_order(db, parsed), viewer=current_user)
 
 
 # ─── Admin: reject (reviewing → assigned) ────────────────────────────────────
@@ -1359,7 +1382,7 @@ def reject_submission(
     ))
     _add_status_message(db, parsed, current_user.id, "assigned (差し戻し)")
     db.commit()
-    return _to_order_out(_load_order(db, parsed))
+    return _to_order_out(_load_order(db, parsed), viewer=current_user)
 
 
 # ─── Admin: done (reviewing → done) ──────────────────────────────────────────
@@ -1411,7 +1434,7 @@ def mark_done(
         kind=OrderMessageKind.done,
     ))
     db.commit()
-    return _to_order_out(_load_order(db, parsed))
+    return _to_order_out(_load_order(db, parsed), viewer=current_user)
 
 
 # ─── Admin: settings ──────────────────────────────────────────────────────────

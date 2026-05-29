@@ -28,6 +28,7 @@ interface Message {
   content: string | null
   attachment_path: string | null
   kind: string
+  visibility?: string  // 改訂2.3: 'public' | 'admin_creator'
   created_at: string
 }
 
@@ -109,6 +110,8 @@ onMounted(async () => {
     await fetchBriefEdits()
     // 改訂2.2: 音源プレビュー URL を取得 (reviewing / done のみ)
     if (hasSubmission.value) await loadPreview()
+    // チャット最下部までスクロール (LINE 風)
+    await scrollToBottom()
   }
 })
 
@@ -379,16 +382,75 @@ async function cancelOrder() {
 // ─── Message ─────────────────────────────────────
 const msgContent = ref('')
 const msgLoading = ref(false)
+const msgPrivate = ref(false)  // 改訂2.3: admin/creator のみ、user 非表示の私信
+const messagesRef = ref<HTMLDivElement | null>(null)
+
 async function sendMessage() {
   if (!msgContent.value.trim()) return
   msgLoading.value = true
   try {
     order.value = await api.post<OrderDetail>(`/api/v1/orders/${orderId.value}/message`, {
-      body: { content: msgContent.value.trim() },
+      body: { content: msgContent.value.trim(), private: msgPrivate.value },
     })
     msgContent.value = ''
+    msgPrivate.value = false
+    await scrollToBottom()
   } catch (err) { alert(errorMessageJa(err)) }
   finally { msgLoading.value = false }
+}
+
+// 私信送信可否 (admin / creator のみ)
+const canSendPrivate = computed(() => isAdmin.value || (isCreator.value && !isAdmin.value))
+
+// ─── LINE 風チャット表示ヘルパ (改訂2.3) ──────────
+function isMyMessage(m: Message): boolean {
+  return !!(m.sender_id && auth.user?.id && m.sender_id === auth.user.id)
+}
+function shouldShowAvatar(m: Message, i: number): boolean {
+  // 連続発言は最初のみアバター/名前を表示
+  if (i === 0) return true
+  const prev = order.value?.messages[i - 1]
+  if (!prev) return true
+  if (prev.sender_id !== m.sender_id) return true
+  if (prev.kind !== m.kind) return true
+  // 5分以上空けば改めて表示
+  const dt = new Date(m.created_at).getTime() - new Date(prev.created_at).getTime()
+  return dt > 5 * 60 * 1000
+}
+function avatarLetter(m: Message): string {
+  if (!m.sender_name) return 'S'
+  return m.sender_name.charAt(0).toUpperCase()
+}
+function avatarClass(m: Message): string {
+  if (!m.sender_id) return 'bg-hairline-soft text-muted'  // system
+  if (isMyMessage(m)) return 'bg-primary text-white'
+  // 発注者(user) / creator / admin を識別
+  if (m.sender_id === order.value?.user_id) return 'bg-[#807d72] text-white'  // user
+  if (m.sender_id === order.value?.assigned_creator_id) return 'bg-[#20b2aa] text-white'  // creator
+  return 'bg-accent text-white'  // admin など
+}
+function senderLabel(m: Message): string {
+  if (m.kind === 'brief_edit') return 'System (Brief Bot)'
+  if (!m.sender_name) return 'System'
+  if (m.sender_id === order.value?.user_id) return `${m.sender_name} (発注者)`
+  if (m.sender_id === order.value?.assigned_creator_id) return `${m.sender_name} (creator)`
+  return m.sender_name
+}
+function bubbleClass(m: Message): string {
+  const priv = m.visibility === 'admin_creator'
+  if (priv) {
+    return 'border border-[#9333ea]/30 bg-[#f3e8ff]/70 text-ink shadow-sm'
+  }
+  if (isMyMessage(m)) return 'bg-primary text-white shadow-sm'
+  return 'bg-surface-strong/60 text-ink shadow-sm'
+}
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+}
+async function scrollToBottom() {
+  await nextTick()
+  const el = messagesRef.value
+  if (el) el.scrollTop = el.scrollHeight
 }
 
 // ─── Creator: respond ─────────────────────────────
@@ -930,24 +992,69 @@ const myCandidate = computed(() =>
           />
         </div>
 
-        <!-- Messages -->
-        <div class="flex-1 overflow-y-auto space-y-2">
-          <div
-            v-for="msg in order.messages"
-            :key="msg.id"
-            class="card px-4 py-2.5"
-            :class="KIND_CLASS[msg.kind] ?? ''"
-          >
-            <div class="flex items-center gap-2 text-[11px] text-muted">
-              <span
-                class="font-medium"
-                :class="msg.kind === 'brief_edit' ? 'text-accent' : 'text-body-strong'"
-              >{{ msg.kind === 'brief_edit' ? 'System (Brief Bot)' : (msg.sender_name ?? 'System') }}</span>
-              <span>{{ formatDate(msg.created_at) }}</span>
-            </div>
-            <p v-if="msg.content" class="mt-1 whitespace-pre-wrap text-[13px] text-ink">{{ msg.content }}</p>
+        <!-- Messages (改訂2.3: LINE 風チャット吹き出し) -->
+        <div ref="messagesRef" class="flex-1 overflow-y-auto px-2 py-2">
+          <div v-if="order.messages.length === 0" class="py-12 text-center text-[12px] text-muted">
+            メッセージはまだありません。
           </div>
-          <div v-if="order.messages.length === 0" class="py-6 text-center text-[12px] text-muted">メッセージはまだありません。</div>
+          <div
+            v-for="(msg, i) in order.messages"
+            :key="msg.id"
+            class="mb-1.5 flex gap-2"
+            :class="isMyMessage(msg) ? 'flex-row-reverse' : 'flex-row'"
+          >
+            <!-- アバター (初文字) — 連続発言時は省略 -->
+            <div
+              v-if="shouldShowAvatar(msg, i)"
+              class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-mono text-[11px] font-bold"
+              :class="avatarClass(msg)"
+            >{{ avatarLetter(msg) }}</div>
+            <div v-else class="w-7 shrink-0" />
+
+            <!-- 吹き出し -->
+            <div :class="isMyMessage(msg) ? 'flex max-w-[78%] flex-col items-end' : 'flex max-w-[78%] flex-col items-start'">
+              <!-- 名前 + 時刻 + 私信バッジ -->
+              <div
+                v-if="shouldShowAvatar(msg, i)"
+                class="mb-0.5 flex items-center gap-1.5 px-1 text-[10px]"
+                :class="isMyMessage(msg) ? 'flex-row-reverse' : 'flex-row'"
+              >
+                <span class="font-medium text-body-strong">{{ senderLabel(msg) }}</span>
+                <span class="text-muted">{{ formatTime(msg.created_at) }}</span>
+                <span
+                  v-if="msg.visibility === 'admin_creator'"
+                  class="rounded-full bg-[#9333ea]/15 px-1.5 py-0.5 text-[9px] font-semibold text-[#7e22ce]"
+                  title="admin↔creator 私信 — user には見えません"
+                >🔒 私信</span>
+              </div>
+
+              <!-- 吹き出し本体 -->
+              <div
+                v-if="msg.kind === 'comment' || msg.kind === 'submission'"
+                class="rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed whitespace-pre-wrap break-words"
+                :class="bubbleClass(msg)"
+              >
+                <p v-if="msg.content">{{ msg.content }}</p>
+                <p v-if="msg.attachment_path" class="mt-1 font-mono text-[10px] opacity-70">
+                  📎 添付ファイル
+                </p>
+              </div>
+              <!-- システム / status / brief_edit はインラインの細い表示 -->
+              <div
+                v-else
+                class="rounded-md border-l-2 px-2.5 py-1 text-[11px] italic"
+                :class="msg.kind === 'brief_edit'
+                  ? 'border-accent bg-accent/5 text-accent'
+                  : msg.kind === 'rejection'
+                    ? 'border-accent/50 bg-accent/5 text-body'
+                    : msg.kind === 'done'
+                      ? 'border-[#2ecc71]/60 bg-[#2ecc71]/5 text-body'
+                      : 'border-hairline-strong bg-hairline-soft/60 text-muted'"
+              >
+                <p v-if="msg.content" class="whitespace-pre-wrap">{{ msg.content }}</p>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- 改訂2.2: チャット入力 (テキスト + 音源添付 + 送信) -->
@@ -973,32 +1080,46 @@ const myCandidate = computed(() =>
             <span class="flex-1 truncate font-mono text-body">{{ attachedFile.name }}</span>
             <button class="text-muted hover:text-accent" @click="clearAttach">×</button>
           </div>
-          <div class="mt-1.5 flex items-center justify-between">
-            <!-- Attach (creator only, status=assigned) -->
+          <div class="mt-1.5 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <!-- Attach (creator only, status=assigned) -->
+              <button
+                v-if="canAttachSubmit"
+                class="flex items-center gap-1 rounded-md border border-hairline-strong px-2 py-1 text-[11px] text-body transition-colors hover:border-primary hover:text-primary-active"
+                :title="'音源を添付して提出 (assigned creator のみ)'"
+                @click="pickAttach"
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                </svg>
+                音源添付
+              </button>
+              <input
+                ref="attachInputRef"
+                type="file"
+                accept=".wav,audio/wav,audio/x-wav"
+                class="hidden"
+                @change="onAttachChange"
+              />
+              <!-- 私信トグル (admin / creator のみ、改訂2.3) -->
+              <label
+                v-if="canSendPrivate && !attachedFile"
+                class="flex cursor-pointer items-center gap-1 rounded-md border border-[#9333ea]/30 bg-[#f3e8ff]/40 px-2 py-1 text-[11px] transition-colors"
+                :class="msgPrivate ? 'bg-[#9333ea]/15 text-[#7e22ce]' : 'text-body hover:bg-[#f3e8ff]/70'"
+                title="user に見えない admin↔creator 私信として送信"
+              >
+                <input v-model="msgPrivate" type="checkbox" class="h-3 w-3 accent-[#7e22ce]" />
+                🔒 私信
+              </label>
+            </div>
             <button
-              v-if="canAttachSubmit"
-              class="flex items-center gap-1 rounded-md border border-hairline-strong px-2 py-1 text-[11px] text-body transition-colors hover:border-primary hover:text-primary-active"
-              :title="'音源を添付して提出 (assigned creator のみ)'"
-              @click="pickAttach"
-            >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-              </svg>
-              音源添付
-            </button>
-            <span v-else />
-            <input
-              ref="attachInputRef"
-              type="file"
-              accept=".wav,audio/wav,audio/x-wav"
-              class="hidden"
-              @change="onAttachChange"
-            />
-            <button
-              class="rounded-md bg-ink px-3 py-1 text-[11px] font-medium text-canvas transition-colors hover:bg-primary disabled:opacity-50"
+              class="rounded-md px-3 py-1 text-[11px] font-medium transition-colors disabled:opacity-50"
+              :class="msgPrivate
+                ? 'bg-[#7e22ce] text-white hover:bg-[#6b1eab]'
+                : 'bg-ink text-canvas hover:bg-primary'"
               :disabled="msgLoading || attachLoading || (!msgContent.trim() && !attachedFile)"
               @click="sendChat"
-            >{{ attachLoading ? '提出中…' : (attachedFile ? '提出' : (msgLoading ? '…' : '送信')) }}</button>
+            >{{ attachLoading ? '提出中…' : (attachedFile ? '提出' : (msgLoading ? '…' : (msgPrivate ? '私信送信' : '送信'))) }}</button>
           </div>
         </div>
       </div>

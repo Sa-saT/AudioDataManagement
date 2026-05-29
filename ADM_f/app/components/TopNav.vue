@@ -96,6 +96,8 @@ async function onPick(e: Event) {
 function deactivate() {
   auth.deactivate()
   closeMenu()
+  // 改訂: Deactivate 後は guest になるので Dashboard へ強制遷移
+  router.push('/dashboard')
 }
 
 function goTo(path: string) {
@@ -105,8 +107,9 @@ function goTo(path: string) {
 
 const isCreator = computed(() => auth.role === 'creator' || auth.role === 'admin')
 const isAdmin = computed(() => auth.role === 'admin')
-// admin はメニューバーに Commission を出さない (Admin タブ > 発注管理から操作)
-const showCommission = computed(() => auth.isActivated && system.commissionEnabled && !isAdmin.value)
+// 改訂: admin にも Commission メニューを表示 (Admin タブ Commission からも遷移可能、
+// メニュー導線も残して通知バッジを admin にも届ける)
+const showCommission = computed(() => auth.isActivated && system.commissionEnabled)
 // 改訂2: 通知二系統
 //   要対応 (action_count > 0) → 橙 + 件数バッジ + 金ドット
 //   情報のみ (action_count == 0 && has_info) → 橙のみ (件数なし)

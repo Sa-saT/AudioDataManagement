@@ -35,6 +35,15 @@ class OrderMessageKind(str, enum.Enum):
     brief_edit = "brief_edit"
 
 
+class OrderMessageVisibility(str, enum.Enum):
+    """改訂2.3: メッセージの公開範囲。
+    - public: 全参加者 (user / creator / admin) に見える (default)
+    - admin_creator: admin と creator のみ閲覧可、user 不可視 (admin↔creator 私信)
+    """
+    public = "public"
+    admin_creator = "admin_creator"
+
+
 class SystemSetting(Base):
     __tablename__ = "system_settings"
 
@@ -151,6 +160,12 @@ class OrderMessage(Base):
         Enum(OrderMessageKind, name="order_message_kind", native_enum=True, create_type=False),
         nullable=False,
         default=OrderMessageKind.comment,
+    )
+    # 改訂2.3: 公開範囲 (admin↔creator 私信は admin_creator)
+    visibility: Mapped[OrderMessageVisibility] = mapped_column(
+        Enum(OrderMessageVisibility, name="order_message_visibility", native_enum=True, create_type=False),
+        nullable=False,
+        default=OrderMessageVisibility.public,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

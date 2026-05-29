@@ -655,11 +655,11 @@ watch(tab, (t) => {
     <!-- Tabs -->
     <div class="flex shrink-0 flex-wrap gap-4 border-b border-hairline-soft pb-0">
       <button
-        v-for="t in ([['users','ユーザ管理'],['payouts','Payout'],['tokens','Token付与'],['licenses','lic発行'],['orders','発注管理'],['archive','アーカイブ'],['logs','ログ'],['settings','設定']] as [Tab, string][])"
+        v-for="t in ([['users','ユーザ管理'],['payouts','Payout'],['tokens','Token付与'],['licenses','lic発行'],['orders','Commission'],['archive','アーカイブ'],['logs','ログ'],['settings','設定']] as [Tab, string][])"
         :key="t[0]"
-        class="relative pb-2 text-[12px] font-semibold text-ink transition-all"
+        class="relative pb-2 text-[14px] font-semibold text-ink transition-all"
         :class="tab === t[0] ? 'filter-active' : 'opacity-40 hover:opacity-70'"
-        @click="tab = t[0]"
+        @click="t[0] === 'orders' ? router.push('/orders') : (tab = t[0])"
       >
         {{ t[1] }}
         <span v-if="tab === t[0]" class="absolute inset-x-0 -bottom-px h-0.5 rounded-sm bg-primary" />
@@ -1126,8 +1126,8 @@ watch(tab, (t) => {
             </div>
 
             <!-- 詳細を開くボタン (明示的にクリック可能) -->
-            <span class="shrink-0 rounded-md bg-ink px-3 py-1 text-[11px] font-medium text-canvas transition-colors group-hover:bg-primary">
-              詳細を開く →
+            <span class="shrink-0 rounded-md bg-ink px-3 py-1 text-[11px] font-mono font-medium text-canvas transition-colors group-hover:bg-primary">
+              Open
             </span>
           </NuxtLink>
         </div>
