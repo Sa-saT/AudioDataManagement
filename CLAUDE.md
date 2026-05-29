@@ -150,6 +150,7 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 - licファイル: [docs/LICENSE_FILE_SPEC.md](docs/LICENSE_FILE_SPEC.md)
 - **Commission発注**: [docs/ORDER_SPEC.md](docs/ORDER_SPEC.md)
 - **Admin ログ**: [docs/LOG_SPEC.md](docs/LOG_SPEC.md)
+- **波形描画 Shader**: [docs/WAVEFORM_SHADER_SPEC.md](docs/WAVEFORM_SHADER_SPEC.md)
 - UIデザイン: [DESIGN.md](DESIGN.md)
 
 ## 8. 進捗フェーズ
@@ -180,9 +181,9 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 
 ### Phase 3 残スコープ (ローカル開発終了後 → Phase 4 前に整備)
 
-- 視聴: 波形クリック → `/stream-url?start=N` 取得 → Web Audio API で10秒再生 (wavesurfer + Web Audio 連携)
+- 視聴: 波形クリック → `/stream-url?start=N` 取得 → Web Audio API で10秒再生
 - Creator アップロード: `INVALID_CODEC` 等のエラーコードを日本語ポップアップ表示
-- Admin ログ: LOG_SPEC.md に基づき実装 (BarChart コンポーネント + ログタブ + 4 API エンドポイント)
+- 波形描画 Shader 化: WAVEFORM_SHADER_SPEC.md (peaks v2 + WebGL Fragment Shader、wavesurfer.js 撤去)
 - 本番: S3互換ストレージ切替 / CDN / 監視 / バックアップ
 
 ## 9. 用語

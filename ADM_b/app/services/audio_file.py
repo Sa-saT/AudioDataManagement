@@ -110,7 +110,7 @@ def probe(path: Path) -> AudioMeta:
 
 
 def compute_peaks(path: Path, *, num_points: int = 200) -> list[float]:
-    """Return normalized (0..1) peak array for waveform display."""
+    """[DEPRECATED v1] 単一ピーク配列。新規アップロードは compute_peaks_v2 を使う。"""
     data, _ = sf.read(str(path), dtype="float32", always_2d=True)
     mono = np.abs(data).max(axis=1)
     chunk = max(1, len(mono) // num_points)
@@ -120,6 +120,46 @@ def compute_peaks(path: Path, *, num_points: int = 200) -> list[float]:
     if max_val > 0:
         peaks = [round(p / max_val, 4) for p in peaks]
     return peaks
+
+
+def compute_peaks_v2(path: Path, *, num_points: int = 1000) -> dict:
+    """Return DAW-style peaks (max / min / RMS) for shader-based waveform.
+
+    形式: {"n": int, "max": float[n], "min": float[n], "rms": float[n]}
+    - max / min は bucket あたりの瞬間ピーク (上下端)
+    - rms は実効エネルギー (中央濃色帯の高さに使う)
+    - 全体ピーク (|max|, |min| の最大) で正規化し、対称性を保つ
+    """
+    data, _ = sf.read(str(path), dtype="float32", always_2d=True)
+    mono = data.mean(axis=1)  # ステレオ → mono ミックス
+    n = len(mono)
+    if n == 0:
+        return {"n": 0, "max": [], "min": [], "rms": []}
+
+    chunk = max(1, n // num_points)
+    out_max: list[float] = []
+    out_min: list[float] = []
+    out_rms: list[float] = []
+    for i in range(0, n, chunk):
+        seg = mono[i : i + chunk]
+        if seg.size == 0:
+            continue
+        out_max.append(float(seg.max()))
+        out_min.append(float(seg.min()))
+        out_rms.append(float(np.sqrt(np.mean(seg * seg))))
+
+    out_max = out_max[:num_points]
+    out_min = out_min[:num_points]
+    out_rms = out_rms[:num_points]
+
+    # ピーク = max(|max|, |min|) で正規化 (mirror 対称性を維持)
+    abs_peak = max(max(out_max, default=0.0), -min(out_min, default=0.0)) or 1.0
+    return {
+        "n": len(out_max),
+        "max": [round(v / abs_peak, 4) for v in out_max],
+        "min": [round(v / abs_peak, 4) for v in out_min],
+        "rms": [round(v / abs_peak, 4) for v in out_rms],
+    }
 
 
 def save_original(src: Path, audio_id: uuid.UUID) -> Path:

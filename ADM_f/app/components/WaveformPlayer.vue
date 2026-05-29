@@ -1,77 +1,122 @@
 <script setup lang="ts">
-import WaveSurfer from 'wavesurfer.js'
+// WAVEFORM_SHADER_SPEC.md §4 準拠。
+// wavesurfer.js を撤去し WebGL2/Canvas2D で peaks v2 を描画する。
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+
+import type { PeaksAny } from '~/components/waveform/peaks'
+import { useWaveformGL, type WaveformColors } from '~/components/waveform/useWaveformGL'
 import { useStreamPlayer } from '~/composables/useStreamPlayer'
 
 const props = defineProps<{
-  /** Audio ID (uuid). Required for real streaming. */
   audioId: string
-  peaks: number[]
+  peaks: PeaksAny
   durationSec: number
+  /** ガンマ補正係数 (default 0.4)。小音を持ち上げる強さ */
+  gamma?: number
 }>()
 
+// ─── DOM refs ─────────────────────────────────────
 const containerRef = ref<HTMLDivElement | null>(null)
-const ws = ref<WaveSurfer | null>(null)
+const canvasRef = ref<HTMLCanvasElement | null>(null)
 
 const player = useStreamPlayer(props.audioId)
 
+// ─── Time labels ──────────────────────────────────
 const formatTime = (sec: number) => {
   const m = Math.floor(sec / 60)
   const s = Math.floor(sec % 60)
   return `${m}:${s.toString().padStart(2, '0')}`
 }
-
 const totalLabel = computed(() => formatTime(props.durationSec))
 const currentLabel = computed(() => formatTime(player.currentTime.value))
 
-function buildWavePeaks(): [number[], number[]] {
-  return [props.peaks, props.peaks.map((p) => -p)]
-}
+// ─── Reactive state for shader ────────────────────
+const playPos = computed(() =>
+  props.durationSec > 0
+    ? Math.min(1, Math.max(0, player.currentTime.value / props.durationSec))
+    : 0,
+)
+const peaksRef = computed(() => props.peaks)
 
-// WaveSurfer の表示用 progress を currentTime に同期
-watch(() => player.currentTime.value, (t) => {
-  if (ws.value) ws.value.setTime(t)
+// デザイントークン (RGB 0..1 に変換済み)
+//  washi = #807d72 / turquoise = #40e0d0 / dark turquoise = #20b2aa / tomato = #ff6347
+const colors = ref<WaveformColors>({
+  wave:      [0x80 / 255, 0x7d / 255, 0x72 / 255],
+  progress:  [0x40 / 255, 0xe0 / 255, 0xd0 / 255],
+  rms:       [0x20 / 255, 0xb2 / 255, 0xaa / 255],
+  hoverGlow: [0xff / 255, 0x63 / 255, 0x47 / 255],
 })
 
-onMounted(() => {
-  if (!containerRef.value) return
-  ws.value = WaveSurfer.create({
-    container: containerRef.value,
-    height: 48,
-    waveColor: '#807d72',
-    progressColor: '#40e0d0',
-    cursorColor: '#40e0d0',
-    cursorWidth: 1,
-    barWidth: 2,
-    barGap: 1,
-    barRadius: 1,
-    interact: true,
-    peaks: buildWavePeaks(),
-    duration: props.durationSec,
-  })
+// ─── prefers-reduced-motion ───────────────────────
+const reducedMotion = ref(false)
+let motionMql: MediaQueryList | null = null
+function onMotionChange(ev: MediaQueryListEvent | MediaQueryList) {
+  reducedMotion.value = ev.matches
+}
 
-  // クリック位置 (0..1 の比率) を秒に変換して seekTo
-  ws.value.on('interaction', (t) => {
-    // t は秒 (duration が与えられているので直接秒数)
-    void player.seekTo(t)
-  })
+// ─── Compose WebGL renderer ───────────────────────
+const { mode, setHover, init, kick } = useWaveformGL({
+  canvasRef,
+  peaksSource: peaksRef,
+  playPos,
+  isPlaying: computed(() => player.isPlaying.value),
+  colors,
+  gamma: props.gamma ?? 0.4,
+  reducedMotion,
+})
+
+// ─── Interaction handlers ─────────────────────────
+function hitRatio(ev: MouseEvent): number {
+  const el = containerRef.value
+  if (!el) return 0
+  const rect = el.getBoundingClientRect()
+  return Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width))
+}
+
+function onClick(ev: MouseEvent) {
+  const r = hitRatio(ev)
+  void player.seekTo(r * props.durationSec)
+}
+
+function onMove(ev: MouseEvent) {
+  if (reducedMotion.value) return
+  setHover(hitRatio(ev))
+}
+function onLeave() { setHover(null) }
+
+// ─── Lifecycle ────────────────────────────────────
+let resizeObs: ResizeObserver | null = null
+onMounted(() => {
+  if (typeof window !== 'undefined' && window.matchMedia) {
+    motionMql = window.matchMedia('(prefers-reduced-motion: reduce)')
+    reducedMotion.value = motionMql.matches
+    motionMql.addEventListener('change', onMotionChange)
+  }
+  init()
+  if (canvasRef.value) {
+    resizeObs = new ResizeObserver(() => kick())
+    resizeObs.observe(canvasRef.value)
+  }
 })
 
 onBeforeUnmount(() => {
   player.stop()
-  ws.value?.destroy()
-  ws.value = null
+  resizeObs?.disconnect()
+  resizeObs = null
+  if (motionMql) {
+    motionMql.removeEventListener('change', onMotionChange)
+    motionMql = null
+  }
 })
 
 async function toggle() {
-  if (player.isPlaying.value) {
-    player.pause()
-  } else {
-    await player.resume()
-  }
+  if (player.isPlaying.value) player.pause()
+  else await player.resume()
 }
 
 defineExpose({
   isPlaying: computed(() => player.isPlaying.value),
+  renderMode: computed(() => mode.value),
 })
 </script>
 
@@ -84,7 +129,6 @@ defineExpose({
       :disabled="player.isLoading.value"
       @click="toggle"
     >
-      <!-- Loading spinner -->
       <svg v-if="player.isLoading.value" class="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
         <path d="M21 12a9 9 0 1 1-6.219-8.56" />
       </svg>
@@ -98,7 +142,18 @@ defineExpose({
     </button>
 
     <div class="min-w-0 flex-1">
-      <div ref="containerRef" class="w-full" />
+      <div
+        ref="containerRef"
+        class="relative h-12 w-full cursor-pointer select-none"
+        @click="onClick"
+        @mousemove="onMove"
+        @mouseleave="onLeave"
+      >
+        <canvas
+          ref="canvasRef"
+          class="block h-full w-full"
+        />
+      </div>
       <div class="mt-1 flex items-center gap-3">
         <span class="font-mono text-[11px] text-muted">
           {{ currentLabel }} / {{ totalLabel }}

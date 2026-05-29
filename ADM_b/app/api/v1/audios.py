@@ -227,7 +227,7 @@ def upload_audio(
                 detail={"code": exc.code, "message": exc.message},
             )
 
-        peaks = audio_file.compute_peaks(tmp_path)
+        peaks = audio_file.compute_peaks_v2(tmp_path)
         dest = audio_file.save_original(tmp_path, audio_id)
     finally:
         if tmp_path and tmp_path.exists():

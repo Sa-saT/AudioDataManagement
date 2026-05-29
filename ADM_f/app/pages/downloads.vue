@@ -15,7 +15,7 @@ interface DownloadItem {
   duration_sec: number
   token_cost: number
   tags: string[]
-  peaks: number[]
+  peaks: import('~/components/waveform/peaks').PeaksAny
   downloaded_at: string | null
   tokens_consumed: number
   file_size_bytes: number

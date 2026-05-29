@@ -1,3 +1,5 @@
+import type { PeaksAny } from '~/components/waveform/peaks'
+
 export interface CreatorBrief {
   id: string
   displayName: string
@@ -10,7 +12,8 @@ export interface ApiAudioListItem {
   creator: { id: string; display_name: string }
   duration_sec: number
   token_cost: number
-  peaks: number[]
+  /** v1: number[] (legacy) / v2: { n, max, min, rms } */
+  peaks: PeaksAny
   youtube_safe: boolean
   published_at: string | null
   tags?: string[]
@@ -38,7 +41,8 @@ export interface AudioTrack {
   durationSec: number
   /** = duration_sec, but exposed as user-visible cost */
   tokenCost: number
-  peaks: number[]
+  /** v1 number[] (legacy) or v2 {max,min,rms} — shader handles both via toPeaksV2 */
+  peaks: PeaksAny
   youtubeSafe: boolean
   publishedAt: string | null
   /** Optional real source URL (.wav). When omitted, only waveform renders. */
@@ -65,25 +69,10 @@ export interface DownloadApiResponse {
   remaining_tokens: number | null
 }
 
-/**
- * Backend は peaks を「ファイル全体の max で正規化済み」で返すが、
- * 大半が大音量の曲だと値が 0.99 近辺に密集して波形が "ベタ塗り" に見える。
- * クライアント側で min-max を 0..1 に拡げて視覚的コントラストを確保する。
- */
-function spreadPeaks(peaks: number[]): number[] {
-  if (peaks.length === 0) return peaks
-  let min = Infinity
-  let max = -Infinity
-  for (const p of peaks) {
-    if (p < min) min = p
-    if (p > max) max = p
-  }
-  const range = max - min
-  if (range < 1e-6) return peaks.map(() => 0.5)
-  return peaks.map((p) => (p - min) / range)
-}
-
-/** Map API → frontend domain */
+/** Map API → frontend domain.
+ * v2 peaks (max/min/rms) はそのまま透過。v1 (number[]) も透過し、
+ * 描画側 (Shader) でガンマ補正 + RMS 帯処理を行う。
+ * 旧 spreadPeaks クライアント補正は不要になったため廃止。 */
 export function mapApiAudio(api: ApiAudioListItem): AudioTrack {
   return {
     id: api.id,
@@ -93,7 +82,7 @@ export function mapApiAudio(api: ApiAudioListItem): AudioTrack {
     creatorName: api.creator.display_name,
     durationSec: api.duration_sec,
     tokenCost: api.token_cost,
-    peaks: spreadPeaks(api.peaks),
+    peaks: api.peaks,
     youtubeSafe: api.youtube_safe,
     publishedAt: api.published_at,
     tags: api.tags ?? [],
