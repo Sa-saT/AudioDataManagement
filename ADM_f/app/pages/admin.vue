@@ -15,7 +15,7 @@ onMounted(() => {
 })
 
 // ─── Tab ─────────────────────────────────────────────────────────────────────
-type Tab = 'users' | 'payouts' | 'tokens' | 'licenses' | 'orders' | 'settings'
+type Tab = 'users' | 'payouts' | 'tokens' | 'licenses' | 'orders' | 'logs' | 'settings'
 const tab = ref<Tab>('users')
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -415,11 +415,184 @@ async function toggleSetting(key: string, current: string) {
   }
 }
 
+// ─── Logs tab (Admin activity log) ────────────────────────────────────────────
+
+type LogSub = 'creators' | 'users'
+type Signal = 'green' | 'yellow' | 'red'
+type LogDays = 7 | 30 | 90
+
+interface LogMetricsBase {
+  session_count: number
+  active_days: number
+}
+interface UserMetricsRow extends LogMetricsBase {
+  download_count: number
+  tokens_used: number
+  monthly_quota: number
+  favorite_added: number
+  commission_count: number
+}
+interface CreatorMetricsRow extends LogMetricsBase {
+  upload_count: number
+  sold_count: number
+  sell_rate: number
+  earnings_pending: number
+  earnings_paid: number
+  commission_done_count: number
+  message_count: number
+}
+interface UserLogRow {
+  user_id: string
+  username: string
+  role: string
+  score: number
+  signal: Signal
+  metrics: UserMetricsRow
+  last_active_at: string | null
+}
+interface CreatorLogRow {
+  creator_id: string
+  username: string
+  display_name: string
+  rank: string
+  score: number
+  signal: Signal
+  metrics: CreatorMetricsRow
+  last_active_at: string | null
+}
+interface Bucket { date: string; value: number }
+interface HeatCell { weekday: number; hour: number; count: number }
+interface EventRow { ts: string; kind: string; detail: string }
+interface UserDetail {
+  user_id: string; username: string; score: number; signal: Signal
+  metrics: UserMetricsRow
+  heatmap: HeatCell[]
+  sparkline: { sessions: Bucket[]; downloads: Bucket[]; tokens: Bucket[] }
+  events: EventRow[]
+}
+interface CreatorDetail {
+  creator_id: string; username: string; display_name: string; rank: string
+  score: number; signal: Signal
+  metrics: CreatorMetricsRow
+  rank_median: Record<string, number>
+  heatmap: HeatCell[]
+  sparkline: {
+    sessions: Bucket[]; uploads: Bucket[]; sold: Bucket[]; earnings: Bucket[]
+  }
+  events: EventRow[]
+}
+
+const logSub = ref<LogSub>('creators')
+const logDays = ref<LogDays>(30)
+const userLogs = ref<UserLogRow[]>([])
+const creatorLogs = ref<CreatorLogRow[]>([])
+const logsLoading = ref(false)
+const logsError = ref<string | null>(null)
+
+// 行クリックで詳細展開 (複数同時展開可)
+const expandedDetails = ref<Map<string, UserDetail | CreatorDetail>>(new Map())
+const detailLoading = ref<Set<string>>(new Set())
+
+async function fetchLogs() {
+  logsLoading.value = true
+  logsError.value = null
+  try {
+    if (logSub.value === 'creators') {
+      creatorLogs.value = await api.get<CreatorLogRow[]>(
+        `/api/v1/admin/logs/creators?days=${logDays.value}`,
+      )
+    } else {
+      userLogs.value = await api.get<UserLogRow[]>(
+        `/api/v1/admin/logs/users?days=${logDays.value}`,
+      )
+    }
+    expandedDetails.value.clear()
+  } catch (err: unknown) {
+    logsError.value = (err as { data?: { detail?: { message?: string } } })?.data?.detail?.message
+      ?? '読み込みに失敗しました'
+  } finally {
+    logsLoading.value = false
+  }
+}
+
+async function toggleDetail(id: string) {
+  if (expandedDetails.value.has(id)) {
+    expandedDetails.value.delete(id)
+    return
+  }
+  detailLoading.value.add(id)
+  try {
+    const path = logSub.value === 'creators'
+      ? `/api/v1/admin/logs/creators/${id}/detail?days=${logDays.value}`
+      : `/api/v1/admin/logs/users/${id}/detail?days=${logDays.value}`
+    const data = await api.get<UserDetail | CreatorDetail>(path)
+    expandedDetails.value.set(id, data)
+  } catch (err: unknown) {
+    alert((err as { data?: { detail?: { message?: string } } })?.data?.detail?.message ?? '詳細の取得に失敗しました')
+  } finally {
+    detailLoading.value.delete(id)
+  }
+}
+
+// 期間 / サブタブ変更で再フェッチ
+watch([logSub, logDays], () => {
+  if (tab.value === 'logs') fetchLogs()
+})
+
+const SIGNAL_DOT_COLOR: Record<Signal, string> = {
+  green: '#2ecc71',
+  yellow: '#f0a840',
+  red: '#e74c3c',
+}
+
+// KPI 計算 (一覧から)
+const kpi = computed(() => {
+  if (logSub.value === 'creators') {
+    const rows = creatorLogs.value
+    return {
+      total: rows.length,
+      active: rows.filter(r => r.signal === 'green').length,
+      avgScore: rows.length === 0 ? 0
+        : Math.round(rows.reduce((s, r) => s + r.score, 0) / rows.length),
+      alert: rows.filter(r => r.signal === 'red').length,
+    }
+  }
+  const rows = userLogs.value
+  return {
+    total: rows.length,
+    active: rows.filter(r => r.signal === 'green').length,
+    avgScore: rows.length === 0 ? 0
+      : Math.round(rows.reduce((s, r) => s + r.score, 0) / rows.length),
+    alert: rows.filter(r => r.signal === 'red').length,
+  }
+})
+
+function formatRelTime(iso: string | null): string {
+  if (!iso) return 'なし'
+  const d = new Date(iso)
+  const diff = Date.now() - d.getTime()
+  const day = Math.floor(diff / 86_400_000)
+  if (day === 0) return '今日'
+  if (day === 1) return '昨日'
+  if (day < 30) return `${day}日前`
+  return d.toLocaleDateString('ja-JP')
+}
+
+// Creator のレーダーチャート軸定義
+const CREATOR_RADAR_AXES = [
+  { key: 'active_days',           label: 'アクセス',    max: 30 },
+  { key: 'upload_count',          label: 'UL',          max: 10 },
+  { key: 'sell_rate',             label: '販売率',      max: 1 },
+  { key: 'commission_done_count', label: 'Commission', max: 5 },
+  { key: 'message_count',         label: 'メッセージ',  max: 30 },
+]
+
 // ─── Load on tab change ───────────────────────────────────────────────────────
 watch(tab, (t) => {
   if ((t === 'users' || t === 'tokens') && users.value.length === 0) fetchUsers()
   if (t === 'payouts') fetchPayouts()
   if (t === 'orders') fetchAdminOrders()
+  if (t === 'logs') fetchLogs()
   if (t === 'settings') fetchSettings()
 }, { immediate: true })
 </script>
@@ -435,7 +608,7 @@ watch(tab, (t) => {
     <!-- Tabs -->
     <div class="flex shrink-0 flex-wrap gap-4 border-b border-hairline-soft pb-0">
       <button
-        v-for="t in ([['users','ユーザ管理'],['payouts','Payout'],['tokens','Token付与'],['licenses','lic発行'],['orders','発注管理'],['settings','設定']] as [Tab, string][])"
+        v-for="t in ([['users','ユーザ管理'],['payouts','Payout'],['tokens','Token付与'],['licenses','lic発行'],['orders','発注管理'],['logs','ログ'],['settings','設定']] as [Tab, string][])"
         :key="t[0]"
         class="relative pb-2 text-[12px] font-semibold text-ink transition-all"
         :class="tab === t[0] ? 'filter-active' : 'opacity-40 hover:opacity-70'"
@@ -910,7 +1083,234 @@ watch(tab, (t) => {
         </div>
       </div>
 
-      <!-- ⑥ 設定 -->
+      <!-- ⑥ ログ (Admin activity log) -->
+      <div v-if="tab === 'logs'">
+        <!-- サブタブ + 期間 -->
+        <div class="mb-4 flex flex-wrap items-center gap-3">
+          <div class="flex gap-2">
+            <button
+              v-for="opt in ([['creators','Creator'],['users','User']] as [LogSub, string][])"
+              :key="opt[0]"
+              class="rounded-full px-3 py-1 text-[11px] font-semibold transition-colors"
+              :class="logSub === opt[0]
+                ? 'bg-ink text-canvas'
+                : 'border border-hairline-strong text-body hover:border-primary hover:text-ink'"
+              @click="logSub = opt[0]"
+            >{{ opt[1] }}</button>
+          </div>
+          <div class="ml-auto flex items-center gap-1">
+            <span class="mr-2 text-[10px] uppercase tracking-widest text-muted">期間</span>
+            <button
+              v-for="d in ([7, 30, 90] as LogDays[])"
+              :key="d"
+              class="rounded-md px-2 py-0.5 text-[11px] font-mono transition-colors"
+              :class="logDays === d
+                ? 'bg-primary/15 text-primary-active'
+                : 'text-muted hover:text-ink'"
+              @click="logDays = d"
+            >{{ d }}日</button>
+          </div>
+        </div>
+
+        <!-- KPI cards -->
+        <div class="mb-4 grid grid-cols-4 gap-2">
+          <div class="card px-3 py-2">
+            <p class="text-[9px] uppercase tracking-widest text-muted">対象</p>
+            <p class="font-mono text-[18px] font-bold text-ink">{{ kpi.total }}</p>
+          </div>
+          <div class="card px-3 py-2">
+            <p class="text-[9px] uppercase tracking-widest text-muted">活発 (緑)</p>
+            <p class="font-mono text-[18px] font-bold" style="color:#2ecc71">{{ kpi.active }}</p>
+          </div>
+          <div class="card px-3 py-2">
+            <p class="text-[9px] uppercase tracking-widest text-muted">平均スコア</p>
+            <p class="font-mono text-[18px] font-bold text-ink">{{ kpi.avgScore }}</p>
+          </div>
+          <div class="card px-3 py-2">
+            <p class="text-[9px] uppercase tracking-widest text-muted">要注意 (赤)</p>
+            <p class="font-mono text-[18px] font-bold" style="color:#e74c3c">{{ kpi.alert }}</p>
+          </div>
+        </div>
+
+        <!-- Loading / Error -->
+        <div v-if="logsLoading" class="py-8 text-center text-[12px] text-muted">読み込み中…</div>
+        <div v-else-if="logsError" class="py-4 text-[12px] text-accent">{{ logsError }}</div>
+
+        <!-- Creator list -->
+        <div v-else-if="logSub === 'creators'" class="space-y-2">
+          <div v-if="creatorLogs.length === 0" class="py-8 text-center text-[12px] text-muted">
+            この期間のクリエイター活動はありません
+          </div>
+          <div v-for="row in creatorLogs" :key="row.creator_id" class="overflow-hidden">
+            <button
+              class="flex w-full items-center gap-3 rounded-lg border border-hairline-soft bg-white/50 px-4 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-white"
+              @click="toggleDetail(row.creator_id)"
+            >
+              <ChartsSignalDot :signal="row.signal" />
+              <div class="min-w-0 flex-1">
+                <div class="flex items-baseline gap-2">
+                  <span class="text-[13px] font-semibold text-ink">{{ row.display_name }}</span>
+                  <span class="font-mono text-[10px] uppercase tracking-widest text-muted">{{ row.rank }} · @{{ row.username }}</span>
+                </div>
+                <div class="mt-0.5 flex items-center gap-3 font-mono text-[10px] text-muted">
+                  <span>UL <span class="text-ink">{{ row.metrics.upload_count }}</span></span>
+                  <span>販売 <span class="text-ink">{{ row.metrics.sold_count }}</span></span>
+                  <span>収益 <span class="text-ink">¥{{ row.metrics.earnings_pending + row.metrics.earnings_paid }}</span></span>
+                  <span>access <span class="text-ink">{{ row.metrics.active_days }}/{{ logDays }}d</span></span>
+                  <span class="text-[9px]">last {{ formatRelTime(row.last_active_at) }}</span>
+                </div>
+              </div>
+              <div class="flex shrink-0 items-center gap-2">
+                <span class="font-mono text-[13px] font-bold text-ink">{{ row.score }}</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-muted transition-transform" :class="expandedDetails.has(row.creator_id) ? 'rotate-90' : ''">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              </div>
+            </button>
+
+            <!-- 詳細展開 -->
+            <div v-if="expandedDetails.has(row.creator_id)" class="mt-1 rounded-lg border border-hairline bg-white/70 p-4">
+              <div v-if="detailLoading.has(row.creator_id)" class="text-center text-[12px] text-muted">読み込み中…</div>
+              <template v-else>
+                <div class="grid grid-cols-2 gap-4">
+                  <!-- Radar + 中央値 -->
+                  <div>
+                    <p class="mb-2 text-[10px] uppercase tracking-widest text-muted">ランク内比較 ({{ row.rank }} 中央値 = 点線)</p>
+                    <ChartsRadarChart
+                      :axes="CREATOR_RADAR_AXES"
+                      :values="(expandedDetails.get(row.creator_id) as CreatorDetail).metrics as unknown as Record<string, number>"
+                      :medians="(expandedDetails.get(row.creator_id) as CreatorDetail).rank_median"
+                    />
+                  </div>
+                  <!-- Heatmap -->
+                  <div>
+                    <p class="mb-2 text-[10px] uppercase tracking-widest text-muted">アクセス時刻 (曜日 × 時間)</p>
+                    <ChartsHeatmap :data="(expandedDetails.get(row.creator_id) as CreatorDetail).heatmap" />
+                  </div>
+                </div>
+
+                <!-- Sparklines -->
+                <div class="mt-4 grid grid-cols-3 gap-3">
+                  <div>
+                    <p class="text-[10px] text-muted">UL</p>
+                    <ChartsBarChart :data="(expandedDetails.get(row.creator_id) as CreatorDetail).sparkline.uploads" color="#20b2aa" :height="60" />
+                  </div>
+                  <div>
+                    <p class="text-[10px] text-muted">販売</p>
+                    <ChartsBarChart :data="(expandedDetails.get(row.creator_id) as CreatorDetail).sparkline.sold" color="#2ecc71" :height="60" />
+                  </div>
+                  <div>
+                    <p class="text-[10px] text-muted">収益</p>
+                    <ChartsBarChart :data="(expandedDetails.get(row.creator_id) as CreatorDetail).sparkline.earnings" color="#f0a840" :height="60" />
+                  </div>
+                </div>
+
+                <!-- Events -->
+                <div class="mt-4">
+                  <p class="mb-1 text-[10px] uppercase tracking-widest text-muted">直近イベント</p>
+                  <div class="max-h-[160px] space-y-1 overflow-y-auto font-mono text-[11px]">
+                    <p v-for="(ev, i) in (expandedDetails.get(row.creator_id) as CreatorDetail).events" :key="i" class="flex gap-2 text-body">
+                      <span class="text-muted">{{ new Date(ev.ts).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) }}</span>
+                      <span class="text-primary-active">{{ ev.kind }}</span>
+                      <span class="text-ink">{{ ev.detail }}</span>
+                    </p>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <!-- User list -->
+        <div v-else class="space-y-2">
+          <div v-if="userLogs.length === 0" class="py-8 text-center text-[12px] text-muted">
+            この期間のユーザ活動はありません
+          </div>
+          <div v-for="row in userLogs" :key="row.user_id" class="overflow-hidden">
+            <button
+              class="flex w-full items-center gap-3 rounded-lg border border-hairline-soft bg-white/50 px-4 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-white"
+              @click="toggleDetail(row.user_id)"
+            >
+              <ChartsSignalDot :signal="row.signal" />
+              <div class="min-w-0 flex-1">
+                <div class="flex items-baseline gap-2">
+                  <span class="text-[13px] font-semibold text-ink">@{{ row.username }}</span>
+                  <span class="font-mono text-[10px] uppercase tracking-widest text-muted">{{ row.role }}</span>
+                </div>
+                <div class="mt-0.5 flex items-center gap-3 font-mono text-[10px] text-muted">
+                  <span>DL <span class="text-ink">{{ row.metrics.download_count }}</span></span>
+                  <span>token <span class="text-ink">{{ row.metrics.tokens_used }}/{{ row.metrics.monthly_quota }}</span></span>
+                  <span>♥ <span class="text-ink">{{ row.metrics.favorite_added }}</span></span>
+                  <span>Cm <span class="text-ink">{{ row.metrics.commission_count }}</span></span>
+                  <span>access <span class="text-ink">{{ row.metrics.active_days }}/{{ logDays }}d</span></span>
+                  <span class="text-[9px]">last {{ formatRelTime(row.last_active_at) }}</span>
+                </div>
+              </div>
+              <div class="flex shrink-0 items-center gap-2">
+                <span class="font-mono text-[13px] font-bold text-ink">{{ row.score }}</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-muted transition-transform" :class="expandedDetails.has(row.user_id) ? 'rotate-90' : ''">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              </div>
+            </button>
+
+            <div v-if="expandedDetails.has(row.user_id)" class="mt-1 rounded-lg border border-hairline bg-white/70 p-4">
+              <div v-if="detailLoading.has(row.user_id)" class="text-center text-[12px] text-muted">読み込み中…</div>
+              <template v-else>
+                <!-- Heatmap -->
+                <div>
+                  <p class="mb-2 text-[10px] uppercase tracking-widest text-muted">アクセス時刻 (曜日 × 時間)</p>
+                  <ChartsHeatmap :data="(expandedDetails.get(row.user_id) as UserDetail).heatmap" />
+                </div>
+
+                <!-- Sparklines -->
+                <div class="mt-4 grid grid-cols-3 gap-3">
+                  <div>
+                    <p class="text-[10px] text-muted">起動</p>
+                    <ChartsBarChart :data="(expandedDetails.get(row.user_id) as UserDetail).sparkline.sessions" color="#20b2aa" :height="60" />
+                  </div>
+                  <div>
+                    <p class="text-[10px] text-muted">DL</p>
+                    <ChartsBarChart :data="(expandedDetails.get(row.user_id) as UserDetail).sparkline.downloads" color="#2ecc71" :height="60" />
+                  </div>
+                  <div>
+                    <p class="text-[10px] text-muted">Token 消費</p>
+                    <ChartsBarChart :data="(expandedDetails.get(row.user_id) as UserDetail).sparkline.tokens" color="#f0a840" :height="60" />
+                  </div>
+                </div>
+
+                <!-- Token quota gauge -->
+                <div class="mt-4">
+                  <p class="mb-1 text-[10px] uppercase tracking-widest text-muted">Token 月間残量</p>
+                  <div class="h-2 overflow-hidden rounded-full bg-hairline-soft">
+                    <div
+                      class="h-full rounded-full"
+                      :style="{
+                        width: ((expandedDetails.get(row.user_id) as UserDetail).metrics.monthly_quota === 0 ? 0 : Math.min(100, ((expandedDetails.get(row.user_id) as UserDetail).metrics.tokens_used / (expandedDetails.get(row.user_id) as UserDetail).metrics.monthly_quota) * 100)) + '%',
+                        background: '#20b2aa',
+                      }"
+                    />
+                  </div>
+                </div>
+
+                <!-- Events -->
+                <div class="mt-4">
+                  <p class="mb-1 text-[10px] uppercase tracking-widest text-muted">直近イベント</p>
+                  <div class="max-h-[160px] space-y-1 overflow-y-auto font-mono text-[11px]">
+                    <p v-for="(ev, i) in (expandedDetails.get(row.user_id) as UserDetail).events" :key="i" class="flex gap-2 text-body">
+                      <span class="text-muted">{{ new Date(ev.ts).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) }}</span>
+                      <span class="text-primary-active">{{ ev.kind }}</span>
+                      <span class="text-ink">{{ ev.detail }}</span>
+                    </p>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ⑦ 設定 -->
       <div v-if="tab === 'settings'" class="max-w-[480px]">
         <p class="mb-4 text-[11px] font-semibold uppercase tracking-widest text-body-strong">システム設定</p>
 
