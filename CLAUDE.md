@@ -178,12 +178,17 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 | 40 | Commission フロントエンド (`/orders`, `/orders/[id]`, Admin タブ) | ✅ 完了 |
 | 41 | Commission 通知バッジ (金ドット + オレンジ変色 + action-required カウント) | ✅ 完了 |
 | 42 | Admin ログ仕様策定 (docs/LOG_SPEC.md) | ✅ 完了 |
+| 43 | Commission 改訂2 実装 (タイトル自動生成 / 曲長→token / draft保存 / 通知二系統) | ✅ 完了 |
+| 44 | Admin ログ機能 実装 (集計4 API + SVG チャート5種 + 詳細展開) | ✅ 完了 |
+| 45 | 波形描画 Shader 化 (peaks v2 + WebGL + wavesurfer.js 撤去) | ✅ 完了 |
+| 46 | Creator アップロード エラーの日本語ポップアップ表示 | ✅ 完了 |
 
-### Phase 3 残スコープ (ローカル開発終了後 → Phase 4 前に整備)
+### Phase 3 残スコープ → Phase 4 前に整備
 
-- 視聴: 波形クリック → `/stream-url?start=N` 取得 → Web Audio API で10秒再生
-- Creator アップロード: `INVALID_CODEC` 等のエラーコードを日本語ポップアップ表示
-- 波形描画 Shader 化: WAVEFORM_SHADER_SPEC.md (peaks v2 + WebGL Fragment Shader、wavesurfer.js 撤去)
+- 動作確認 (ブラウザ実機): 10秒チャンク再生 / Shader 波形 / EQ ビジュアライザ / Commission 改訂2 / Admin ログ
+- CLAUDE.md 整理 (Task B): `§5 音源・ストレージ` `§5.5 料金/トークン制` `§9 用語` を `docs/REQUIREMENTS.md` に集約
+- ディレクトリ構成 §2 を最新ファイル群に合わせて更新
+- コードコメント (Task D): orders.py / audios.py / me.py / signed_url.py / tokens.py に「WHY」コメント
 - 本番: S3互換ストレージ切替 / CDN / 監視 / バックアップ
 
 ## 9. 用語
