@@ -918,9 +918,9 @@ def close_order(
     current_user: User = Depends(get_current_user),
     _: None = Depends(_require_commission),
 ) -> OrderOut:
-    """User が done 済みのチケットで「受け取る」を押すと closed_at が設定される。
-    以後 user/creator の一覧には表示されず、admin の archive タブのみ参照可能になる。
-    Token 消費 / payout 生成は done 時点で既に完了している。"""
+    """改訂2.2 (再): User が「受け取る」を押すと **token 消費 + Creator payout 生成 + closed_at** を同時に実行する。
+    admin の done は提出ファイルを最終パスへコピーするだけで、token は消費しない。
+    支払いは user 受領のタイミングで確定する設計 (ユーザが受け取らない限り消費されない)。"""
     parsed = _parse_uuid(order_id)
     order = db.execute(select(Order).where(Order.id == parsed).with_for_update()).scalar_one_or_none()
     _check_order_exists(order)
@@ -937,9 +937,53 @@ def close_order(
             status_code=409,
             detail={"code": "ALREADY_CLOSED", "message": "既に受け取り済 (アーカイブ済)"},
         )
+
+    # ── Token 消費 (order.user の license で残量チェック → INSERT) ──
+    owner = db.execute(select(User).where(User.id == order.user_id)).scalar_one()
+    lic = owner.license
+    if lic is None:
+        raise HTTPException(status_code=422, detail={"code": "NO_LICENSE", "message": "user has no license"})
+    available = tokens_service.available_tokens(db, owner.id, lic)
+    if available < order.token_cost:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "code": "INSUFFICIENT_TOKENS",
+                "message": f"受け取りに {order.token_cost} token 必要 (残量 {available})",
+            },
+        )
+    period = tokens_service.current_period_jst()
+    db.add(TokenConsumption(
+        user_id=order.user_id,
+        audio_id=None,
+        license_id=lic.id,
+        tokens=order.token_cost,
+        period_yyyymm=period,
+    ))
+
+    # ── Creator payout 生成 (ランク単価 × token_cost) ──
+    if order.assigned_creator_id:
+        creator_profile = db.execute(
+            select(CreatorProfile).where(CreatorProfile.user_id == order.assigned_creator_id)
+        ).scalar_one_or_none()
+        if creator_profile:
+            rank_price = db.execute(
+                select(CreatorRankPrice).where(CreatorRankPrice.rank == creator_profile.rank)
+            ).scalar_one_or_none()
+            if rank_price:
+                db.add(CreatorPayout(
+                    audio_id=None,
+                    creator_id=order.assigned_creator_id,
+                    rank_at_payout=creator_profile.rank,
+                    unit_price_yen=rank_price.unit_price_yen,
+                    amount_yen=rank_price.unit_price_yen * order.token_cost,
+                    status=PayoutStatus.pending,
+                ))
+
+    # ── アーカイブフラグ ──
     order.closed_at = datetime.now(timezone.utc)
     order.updated_at = func.now()
-    _add_status_message(db, parsed, current_user.id, "closed (受け取り完了)")
+    _add_status_message(db, parsed, current_user.id, "closed (受け取り完了 / token消費)")
     db.commit()
     return _to_order_out(_load_order(db, parsed))
 
@@ -1353,44 +1397,11 @@ def mark_done(
     if latest_submission is None or not Path(latest_submission.attachment_path).exists():
         raise HTTPException(status_code=409, detail={"code": "NO_SUBMISSION_FILE", "message": "no submitted file found"})
 
-    # Copy submission to final path
+    # Copy submission to final path (改訂2.2: token 消費 / payout 生成は close 時に移動)
     final_dir = Path(settings.ORDERS_DIR)
     final_dir.mkdir(parents=True, exist_ok=True)
     final_path = final_dir / f"{parsed}.wav"
     shutil.copy2(latest_submission.attachment_path, final_path)
-
-    # Token consumption
-    user = db.execute(select(User).where(User.id == order.user_id)).scalar_one()
-    lic = user.license
-    if lic is None:
-        raise HTTPException(status_code=422, detail={"code": "NO_LICENSE", "message": "user has no license"})
-    period = tokens_service.current_period_jst()
-    db.add(TokenConsumption(
-        user_id=order.user_id,
-        audio_id=None,  # no audio_id for orders
-        license_id=lic.id,
-        tokens=order.token_cost,
-        period_yyyymm=period,
-    ))
-
-    # Creator payout
-    if order.assigned_creator_id:
-        creator_profile = db.execute(
-            select(CreatorProfile).where(CreatorProfile.user_id == order.assigned_creator_id)
-        ).scalar_one_or_none()
-        if creator_profile:
-            rank_price = db.execute(
-                select(CreatorRankPrice).where(CreatorRankPrice.rank == creator_profile.rank)
-            ).scalar_one_or_none()
-            if rank_price:
-                db.add(CreatorPayout(
-                    audio_id=None,
-                    creator_id=order.assigned_creator_id,
-                    rank_at_payout=creator_profile.rank,
-                    unit_price_yen=rank_price.unit_price_yen,
-                    amount_yen=rank_price.unit_price_yen * order.token_cost,
-                    status=PayoutStatus.pending,
-                ))
 
     order.status = OrderStatus.done
     order.file_path = str(final_path)

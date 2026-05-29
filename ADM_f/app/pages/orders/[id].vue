@@ -202,7 +202,8 @@ const canReceive = computed(() => {
 
 async function receiveAndClose() {
   if (!order.value) return
-  if (!confirm('この音源を受け取りますか? アーカイブに移動します。')) return
+  const cost = order.value.token_cost
+  if (!confirm(`この音源を受け取りますか?\n\n${cost} token が消費され、creator への支払いが確定します。\n受け取り後はアーカイブに移動します。`)) return
   closeLoading.value = true
   try {
     order.value = await api.post<OrderDetail>(`/api/v1/orders/${orderId.value}/close`, { body: {} })
@@ -835,7 +836,7 @@ const myCandidate = computed(() =>
             <div class="min-w-0 flex-1">
               <p class="text-[10px] font-semibold uppercase tracking-widest text-primary-active">提出された音源</p>
               <p class="mt-0.5 text-[11px] text-muted">
-                {{ order.status === 'reviewing' ? '受け取り前にプレビュー可能' : '完了済み。受け取って archive へ' }}
+                {{ order.status === 'reviewing' ? 'プレビュー可能 (admin の承認後に受け取れます)' : `承認済み — 受け取り時に ${order.token_cost} token 消費` }}
               </p>
             </div>
             <button

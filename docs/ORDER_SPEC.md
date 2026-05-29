@@ -65,7 +65,8 @@ draft ──[submit by user]──→ open ──[nominate by admin]──→ re
 | `assign` | admin | open / recruiting | creator確定、token_cost 調整可能 |
 | `submit-file` | creator | assigned | ファイルをサーバに保存、status → reviewing |
 | `reject` | admin | reviewing | status → assigned (差し戻し)、理由メッセージ記録 |
-| `done` | admin | reviewing | **token消費** / **payout生成** / ファイルコピー / status → done |
+| `done` | admin | reviewing | 提出ファイルを最終パスへコピー / status → done (**token 消費はまだ無い、改訂2.2 で close に移動**) |
+| `close` (受け取る) | user / admin (代理) | done && closed_at IS NULL | **token 消費 + Creator payout 生成 + closed_at セット** (改訂2.2) |
 | `cancel` | user / creator / admin | 全て (done, cancelled 以外) | token消費なし |
 
 ---
@@ -305,12 +306,13 @@ melody (メロディライン), rhythm (リズムパターン), density (音の�
 
 ## 6. ビジネスルール
 
-### token 消費タイミング
+### token 消費タイミング (改訂2.2)
 
 | タイミング | 処理 |
 |---|---|
 | `submit` (draft → open) | token 残高チェックのみ (消費しない) |
-| `done` (reviewing → done) | `token_consumptions` にレコード追加。`tokens = order.token_cost` |
+| `done` (reviewing → done) | 提出ファイルを最終パスへコピー。**token は消費しない** (改訂2.2 で close に移動) |
+| `close` (受け取る) | `token_consumptions` にレコード追加 (`tokens = order.token_cost`) + `creator_payouts` 生成 + `closed_at` セット。残量不足なら 402 |
 
 **注意:** キャンセルした場合はトークン消費なし。`submit` 時点では残高確認のみで予約ではない (Admin が `assign` 時に `token_cost` を変更する場合があるため)。
 
@@ -539,7 +541,8 @@ stateDiagram-v2
     recruiting --> recruiting : creator が「できる送信」(accepted)
     recruiting --> assigned : admin が 1人を assign
     assigned --> reviewing : creator が音源提出 (submit-file)
-    reviewing --> done : admin が承認 (token 消費 + payout 生成)
+    reviewing --> done : admin が承認 (ファイルコピーのみ)
+    done --> closed : user 受け取り (token 消費 + payout 生成 + closed_at)
     reviewing --> assigned : admin が差し戻し (reject)
     open --> cancelled : cancel
     recruiting --> cancelled : cancel
@@ -579,7 +582,9 @@ sequenceDiagram
     T-->>A: 要対応: done / reject の決裁
     T-->>U: 要対応: 納品確認
     alt 承認
-        A->>T: done (token 消費 + payout 生成)
+        A->>T: done (ファイルコピーのみ、token はまだ消費しない)
+        T-->>U: 受け取る可能 (audio プレビュー + 受け取るボタン)
+        U->>T: 受け取る押下 → close (token 消費 + payout 生成 + closed_at)
         T-->>U: 通知: 完了、ファイル DL 可
     else 差し戻し
         A->>T: reject (status=assigned に戻す)
