@@ -1100,7 +1100,7 @@ watch(tab, (t) => {
             v-for="order in adminOrders"
             :key="order.id"
             :to="`/orders/${order.id}`"
-            class="card flex cursor-pointer items-center gap-3 px-4 py-3 transition-all hover:-translate-y-px hover:border-primary hover:shadow-md"
+            class="card group flex cursor-pointer items-center gap-3 px-4 py-3 transition-all hover:-translate-y-px hover:border-primary hover:shadow-md"
           >
             <!-- #serial を ID として独立表示 (REDMINE 風) -->
             <span class="shrink-0 rounded-md bg-ink/5 px-2 py-0.5 font-mono text-[11px] font-semibold text-ink">#{{ order.serial }}</span>

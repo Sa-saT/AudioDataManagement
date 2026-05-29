@@ -311,10 +311,15 @@ const BGM_SCENE_L: Record<string, string> = {
             一時保存中 ({{ drafts.length }})
           </p>
           <div class="space-y-2">
+            <!-- 行全体クリックで開ける (admin → 表示モーダル / user → wizard 再開) -->
             <div
               v-for="draft in drafts"
               :key="draft.id"
-              class="card flex items-center gap-4 border-dashed border-primary/30 bg-primary/5 px-4 py-3"
+              class="card flex cursor-pointer items-center gap-4 border-dashed border-primary/30 bg-primary/5 px-4 py-3 transition-all hover:-translate-y-px hover:border-primary hover:shadow-md"
+              role="button"
+              tabindex="0"
+              @click="isAdmin ? openAdminView(draft.id) : openResume(draft.id)"
+              @keydown.enter.prevent="isAdmin ? openAdminView(draft.id) : openResume(draft.id)"
             >
               <span class="shrink-0 rounded-full bg-hairline-soft px-2 py-0.5 font-mono text-[10px] font-semibold text-body">Draft</span>
               <div class="min-w-0 flex-1">
@@ -333,20 +338,20 @@ const BGM_SCENE_L: Record<string, string> = {
               <!-- Admin: [表示] [キャンセル(戻る)] -->
               <template v-if="isAdmin">
                 <button
-                  class="shrink-0 rounded-md border border-primary/50 bg-white px-3 py-1 text-[11px] font-medium text-primary-active hover:bg-primary/10"
-                  @click="openAdminView(draft.id)"
+                  class="shrink-0 rounded-md bg-ink px-3 py-1 text-[11px] font-medium text-canvas hover:bg-primary"
+                  @click.stop="openAdminView(draft.id)"
                 >表示</button>
                 <button
                   class="shrink-0 rounded-md border border-hairline-strong bg-white px-3 py-1 text-[11px] font-medium text-muted hover:border-ink hover:text-ink"
-                  @click="() => { /* キャンセル(戻る): 何もしない (一覧に留まる) */ }"
+                  @click.stop
                   title="戻る (一覧に留まる)"
                 >キャンセル(戻る)</button>
               </template>
               <!-- User / その他: [続きから入力] -->
               <button
                 v-else
-                class="shrink-0 rounded-md border border-primary/50 bg-white px-3 py-1 text-[11px] font-medium text-primary-active hover:bg-primary/10"
-                @click="openResume(draft.id)"
+                class="shrink-0 rounded-md bg-ink px-3 py-1 text-[11px] font-medium text-canvas hover:bg-primary"
+                @click.stop="openResume(draft.id)"
               >続きから入力</button>
             </div>
           </div>
