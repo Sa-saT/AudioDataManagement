@@ -1,7 +1,7 @@
 # Commission / Order 機能 要件仕様書
 
 > 最終更新: 2026-05-30 (改訂2.1)  
-> 実装状態: 改訂2 まで実装済 (Phase 3 #39〜#46) + §12 フローチャート / §13 発注後編集 (未実装)
+> 実装状態: 改訂2.1 まで全て実装済 (Phase 3 #39〜#47)
 
 ---
 
@@ -604,7 +604,7 @@ sequenceDiagram
 
 ---
 
-## 13. 発注後ブリーフ編集 (改訂2.1: 未実装)
+## 13. 発注後ブリーフ編集 (改訂2.1: 実装済)
 
 ユーザが draft を提出 (status=open) した後、creator とのやりとりを通じて要件が固まる過程でブリーフの**事後編集**が必要になることがある。
 
@@ -678,16 +678,16 @@ Body:
   長さ: 60秒 → 90秒
   ```
 
-### 13.6 実装タスク (未着手)
+### 13.6 実装タスク (全完了)
 
-| # | 内容 | 優先度 |
+| # | 内容 | 状態 |
 |---|---|---|
-| R2.1-01 | migration: `order_brief_edits` テーブル + `OrderMessageKind.brief_edit` enum 値追加 | 高 |
-| R2.1-02 | API: `PATCH /orders/{id}/brief-after-submit` (権限 / status 制約 / diff 記録 / bot メッセージ生成) | 高 |
-| R2.1-03 | 詳細画面: brief 表示エリアを編集可能化 + 編集済 field の色変化 | 高 |
-| R2.1-04 | 編集履歴モーダル (`order_brief_edits` 一覧) | 中 |
-| R2.1-05 | チャット内 `brief_edit` メッセージの専用スタイル | 中 |
-| R2.1-06 | `length_sec` 変更による `token_cost` 再計算 + 残量再チェック | 高 |
+| R2.1-01 | migration 0012: `order_brief_edits` + `OrderMessageKind.brief_edit` enum 追加 | ✅ |
+| R2.1-02 | API: `PATCH /orders/{id}/brief-after-submit` + `GET /orders/{id}/brief-edits` | ✅ |
+| R2.1-03 | 詳細画面に「ブリーフを編集」ボタン + wizard プリフィル起動 | ✅ |
+| R2.1-04 | 編集済 field の `bg-accent/10` ハイライト + 履歴モーダル (時計アイコン) | ✅ |
+| R2.1-05 | チャット内 `brief_edit` メッセージ専用スタイル (`System (Brief Bot)` + accent 左ボーダー) | ✅ |
+| R2.1-06 | `length_sec` 変更で `token_cost` 再計算 + 残量再チェック (差分 token 不足で 402) | ✅ |
 
 ### 13.7 未確定事項
 

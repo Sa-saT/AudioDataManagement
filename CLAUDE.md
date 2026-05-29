@@ -176,6 +176,7 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 | 44 | Admin ログ機能 実装 (集計 4 API + SVG チャート 5種 + 詳細展開) | 0e2417f |
 | 45 | 波形描画 Shader 化 (peaks v2 + WebGL + wavesurfer.js 撤去 / 単色 + dim + EQ ビジュアライザ) | f4cad0a / 4c69897 |
 | 46 | アップロード エラーの日本語ポップアップ (`ErrorPopup.vue`) | b99834a |
+| 47 | Commission admin 代理表示モーダル + Q4 発注後ブリーフ編集 (diff色 + bot通知 + 履歴) | 659f927 / (今) |
 
 ### Phase 3 残スコープ → Phase 4 前に整備
 

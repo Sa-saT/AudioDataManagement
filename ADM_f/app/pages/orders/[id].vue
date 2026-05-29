@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { OrderBrief as WizardBrief } from '~/components/OrderBriefWizard.vue'
 import { useAuthStore } from '~/stores/auth'
 import { errorMessageJa } from '~/utils/errorMessageJa'
 
@@ -102,6 +103,8 @@ onMounted(async () => {
     try {
       await api.post(`/api/v1/orders/${orderId.value}/view`, { body: {} })
     } catch { /* silent: 通知精度を落とすだけ */ }
+    // 改訂2.1: 編集履歴を取得 (highlight + 履歴モーダル用)
+    await fetchBriefEdits()
   }
 })
 
@@ -114,6 +117,84 @@ async function fetchOrder() {
     fetchError.value = errorMessageJa(err)
   } finally {
     loading.value = false
+  }
+}
+
+// ─── Brief edit after submit (改訂2.1) ─────────────
+interface BriefEditHistoryItem {
+  id: string
+  editor_id: string | null
+  editor_name: string | null
+  field_path: string
+  field_label: string
+  old_value: unknown
+  new_value: unknown
+  created_at: string
+}
+
+const briefEdits = ref<BriefEditHistoryItem[]>([])
+const showBriefEditWizard = ref(false)
+const showBriefHistory = ref(false)
+const briefEditError = ref<string | null>(null)
+
+async function fetchBriefEdits() {
+  if (!order.value) return
+  try {
+    briefEdits.value = await api.get<BriefEditHistoryItem[]>(`/api/v1/orders/${orderId.value}/brief-edits`)
+  } catch { /* silent: 履歴は補助情報 */ }
+}
+
+// 編集されたことのある field 一覧 (highlight 用)
+const editedFieldSet = computed(() => new Set(briefEdits.value.map(e => e.field_path)))
+
+// 各 field の最終編集時刻 (ホバー表示用)
+const fieldLastEditedAt = computed(() => {
+  const m = new Map<string, string>()
+  for (const e of briefEdits.value) {
+    if (!m.has(e.field_path)) m.set(e.field_path, e.created_at)
+  }
+  return m
+})
+
+// brief 編集可能かどうか (open/recruiting/assigned かつ owner or admin)
+const canEditBrief = computed(() => {
+  const o = order.value
+  if (!o) return false
+  if (!['open', 'recruiting', 'assigned'].includes(o.status)) return false
+  return isOwner.value || isAdmin.value
+})
+
+function fieldHighlightClass(field: string): string {
+  return editedFieldSet.value.has(field)
+    ? 'rounded-md bg-accent/10 px-1.5 py-0.5 -mx-1.5'
+    : ''
+}
+
+function openBriefEditWizard() {
+  briefEditError.value = null
+  showBriefEditWizard.value = true
+}
+
+async function submitBriefEdit(payload: { brief: WizardBrief; desired_deadline: string }) {
+  briefEditError.value = null
+  try {
+    order.value = await api.patch<OrderDetail>(
+      `/api/v1/orders/${orderId.value}/brief-after-submit`,
+      { body: { brief: payload.brief } },
+    )
+    showBriefEditWizard.value = false
+    await fetchBriefEdits()
+    // 締切も変わっていれば反映 (別 API)
+    if (order.value.desired_deadline !== payload.desired_deadline) {
+      try {
+        order.value = await api.patch<OrderDetail>(
+          `/api/v1/orders/${orderId.value}/deadline`,
+          { body: { desired_deadline: payload.desired_deadline } },
+        )
+      } catch { /* deadline 失敗は別 toast 化したいが今回はサイレント */ }
+    }
+  } catch (err) {
+    briefEditError.value = errorMessageJa(err)
   }
 }
 
@@ -350,6 +431,7 @@ const KIND_CLASS: Record<string, string> = {
   submission: 'border-l-2 border-primary/40 pl-3',
   rejection: 'border-l-2 border-accent/40 pl-3',
   done: 'border-l-2 border-[#2ecc71]/50 pl-3',
+  brief_edit: 'border-l-2 border-accent/60 bg-accent/5 pl-3',
 }
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -454,7 +536,36 @@ const myCandidate = computed(() =>
 
         <!-- Brief (structured hearing) -->
         <div v-if="order.brief" class="card px-4 py-4 space-y-4 text-[12px]">
-          <p class="text-[10px] font-semibold text-ink/40 tracking-widest uppercase">サウンドブリーフ</p>
+          <div class="flex items-center justify-between">
+            <p class="text-[10px] font-semibold text-ink/40 tracking-widest uppercase">サウンドブリーフ</p>
+            <div class="flex items-center gap-2">
+              <!-- 履歴アイコン -->
+              <button
+                v-if="briefEdits.length > 0"
+                class="flex items-center gap-1 rounded-md border border-hairline-soft bg-white/60 px-2 py-0.5 text-[10px] text-muted transition-colors hover:border-accent hover:text-accent"
+                title="編集履歴を表示"
+                @click="showBriefHistory = true"
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                履歴 {{ briefEdits.length }}
+              </button>
+              <!-- 編集ボタン (open/recruiting/assigned のみ) -->
+              <button
+                v-if="canEditBrief"
+                class="flex items-center gap-1 rounded-md border border-accent/40 bg-accent/5 px-2.5 py-0.5 text-[10px] font-medium text-accent transition-colors hover:bg-accent hover:text-white"
+                @click="openBriefEditWizard"
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+                ブリーフを編集
+              </button>
+            </div>
+          </div>
 
           <!-- 基本 -->
           <div class="space-y-1">
@@ -462,21 +573,21 @@ const myCandidate = computed(() =>
             <div class="grid grid-cols-[80px_1fr] gap-y-1.5">
               <template v-if="order.brief.sound_type">
                 <span class="text-muted">タイプ</span>
-                <span class="text-body font-medium">{{ { bgm: 'BGM', se: 'SE', both: 'BGM + SE' }[order.brief.sound_type] ?? order.brief.sound_type }}</span>
+                <span class="text-body font-medium" :class="fieldHighlightClass('sound_type')" :title="editedFieldSet.has('sound_type') ? `編集済 (${formatDate(fieldLastEditedAt.get('sound_type') ?? '')})` : ''">{{ { bgm: 'BGM', se: 'SE', both: 'BGM + SE' }[order.brief.sound_type] ?? order.brief.sound_type }}</span>
               </template>
               <template v-if="order.brief.purpose">
                 <span class="text-muted">用途</span>
-                <span class="text-body">{{ { game: 'ゲーム', video: '映像', podcast: 'ポッドキャスト', other: 'その他' }[order.brief.purpose] ?? order.brief.purpose }}{{ order.brief.purpose_note ? ` — ${order.brief.purpose_note}` : '' }}</span>
+                <span class="text-body" :class="fieldHighlightClass('purpose')" :title="editedFieldSet.has('purpose') ? `編集済 (${formatDate(fieldLastEditedAt.get('purpose') ?? '')})` : ''">{{ { game: 'ゲーム', video: '映像', podcast: 'ポッドキャスト', other: 'その他' }[order.brief.purpose] ?? order.brief.purpose }}{{ order.brief.purpose_note ? ` — ${order.brief.purpose_note}` : '' }}</span>
               </template>
               <template v-if="order.brief.length_sec">
                 <span class="text-muted">長さ</span>
-                <span class="text-body">{{ order.brief.length_sec }}秒</span>
+                <span class="text-body" :class="fieldHighlightClass('length_sec')" :title="editedFieldSet.has('length_sec') ? `編集済 (${formatDate(fieldLastEditedAt.get('length_sec') ?? '')})` : ''">{{ order.brief.length_sec }}秒</span>
               </template>
             </div>
           </div>
 
           <!-- シーン (BGM) -->
-          <div v-if="order.brief.bgm_scenes?.length" class="space-y-1">
+          <div v-if="order.brief.bgm_scenes?.length" class="space-y-1" :class="fieldHighlightClass('bgm_scenes')">
             <p class="text-[10px] font-semibold text-ink/30 tracking-widest uppercase">BGM シーン</p>
             <div class="flex flex-wrap gap-1">
               <span
@@ -505,7 +616,7 @@ const myCandidate = computed(() =>
           <!-- 感情設計 -->
           <div v-if="order.brief.emotions_target?.length || order.brief.memory_impression" class="space-y-2">
             <p class="text-[10px] font-semibold text-ink/30 tracking-widest uppercase">感情設計</p>
-            <div v-if="order.brief.emotions_target?.length">
+            <div v-if="order.brief.emotions_target?.length" :class="fieldHighlightClass('emotions_target')">
               <p class="text-muted mb-1">狙う感情</p>
               <div class="flex flex-wrap gap-1">
                 <span
@@ -515,7 +626,7 @@ const myCandidate = computed(() =>
                 >{{ { excitement: '高揚感/興奮', tension: '緊張感', fear: '恐怖/不安', relief: '安らぎ/安心', loneliness: '孤独感', grandeur: '壮大さ/圧倒感', speed: '疾走感', sadness: '哀愁/切なさ', mystery: '神秘/異世界感', achievement: '達成感', heaviness: '重厚感/威圧感', comfort: '心地よさ', euphoria: '爽快感', dread: 'じわじわとした恐怖', wonder: '驚き/発見の喜び' }[e] ?? e }}</span>
               </div>
             </div>
-            <div v-if="order.brief.emotions_avoid?.length">
+            <div v-if="order.brief.emotions_avoid?.length" :class="fieldHighlightClass('emotions_avoid')">
               <p class="text-muted mb-1">避けたい感情</p>
               <div class="flex flex-wrap gap-1">
                 <span
@@ -525,7 +636,7 @@ const myCandidate = computed(() =>
                 >{{ { excitement: '高揚感/興奮', tension: '緊張感', fear: '恐怖/不安', relief: '安らぎ/安心', loneliness: '孤独感', grandeur: '壮大さ/圧倒感', speed: '疾走感', sadness: '哀愁/切なさ', mystery: '神秘/異世界感', achievement: '達成感', heaviness: '重厚感/威圧感', comfort: '心地よさ', euphoria: '爽快感', dread: 'じわじわとした恐怖', wonder: '驚き/発見の喜び' }[e] ?? e }}</span>
               </div>
             </div>
-            <p v-if="order.brief.memory_impression" class="mt-2 rounded-lg bg-surface-2/60 border border-white/10 px-3 py-2 text-[12px] text-body italic whitespace-pre-wrap">「{{ order.brief.memory_impression }}」</p>
+            <p v-if="order.brief.memory_impression" class="mt-2 rounded-lg bg-surface-2/60 border border-white/10 px-3 py-2 text-[12px] text-body italic whitespace-pre-wrap" :class="fieldHighlightClass('memory_impression')">「{{ order.brief.memory_impression }}」</p>
           </div>
 
           <!-- テクスチャ -->
@@ -600,7 +711,10 @@ const myCandidate = computed(() =>
             :class="KIND_CLASS[msg.kind] ?? ''"
           >
             <div class="flex items-center gap-2 text-[11px] text-muted">
-              <span class="font-medium text-body-strong">{{ msg.sender_name ?? 'System' }}</span>
+              <span
+                class="font-medium"
+                :class="msg.kind === 'brief_edit' ? 'text-accent' : 'text-body-strong'"
+              >{{ msg.kind === 'brief_edit' ? 'System (Brief Bot)' : (msg.sender_name ?? 'System') }}</span>
               <span>{{ formatDate(msg.created_at) }}</span>
             </div>
             <p v-if="msg.content" class="mt-1 whitespace-pre-wrap text-[13px] text-ink">{{ msg.content }}</p>
@@ -834,6 +948,80 @@ const myCandidate = computed(() =>
         </div>
       </Transition>
 
+    </Teleport>
+
+    <!-- 改訂2.1: ブリーフ編集 wizard モーダル -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div
+          v-if="showBriefEditWizard && order?.brief"
+          class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-12 pb-6 backdrop-blur-sm overflow-y-auto"
+          @click.self="showBriefEditWizard = false"
+        >
+          <div class="card mx-4 w-full max-w-[540px] p-6">
+            <div class="mb-3 flex items-center justify-between">
+              <div>
+                <h2 class="text-[15px] font-semibold text-ink">ブリーフを編集</h2>
+                <p class="mt-0.5 text-[11px] text-muted">変更内容はチャットに自動通知されます</p>
+              </div>
+              <button class="text-muted hover:text-ink" @click="showBriefEditWizard = false">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 6 6 18M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+            <OrderBriefWizard
+              :initial-brief="order.brief as Partial<WizardBrief>"
+              :initial-deadline="order.desired_deadline"
+              @submit="submitBriefEdit"
+              @cancel="showBriefEditWizard = false"
+            />
+            <p v-if="briefEditError" class="mt-3 text-[12px] text-accent">{{ briefEditError }}</p>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- 改訂2.1: ブリーフ編集履歴モーダル -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div
+          v-if="showBriefHistory"
+          class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-16 pb-6 backdrop-blur-sm overflow-y-auto"
+          @click.self="showBriefHistory = false"
+        >
+          <div class="card mx-4 w-full max-w-[520px] p-6">
+            <div class="mb-4 flex items-center justify-between">
+              <h2 class="text-[15px] font-semibold text-ink">ブリーフ編集履歴 ({{ briefEdits.length }})</h2>
+              <button class="text-muted hover:text-ink" @click="showBriefHistory = false">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 6 6 18M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+            <div v-if="briefEdits.length === 0" class="py-8 text-center text-[12px] text-muted">編集はまだありません。</div>
+            <div v-else class="space-y-3 max-h-[60vh] overflow-y-auto">
+              <div
+                v-for="e in briefEdits"
+                :key="e.id"
+                class="rounded-lg border border-hairline bg-white/60 px-3 py-2.5"
+              >
+                <div class="flex items-baseline justify-between gap-2 text-[11px] text-muted">
+                  <span class="font-mono">{{ formatDate(e.created_at) }}</span>
+                  <span>{{ e.editor_name ?? 'system' }}</span>
+                </div>
+                <p class="mt-1 text-[12px] font-semibold text-accent">{{ e.field_label }}</p>
+                <div class="mt-1 grid grid-cols-[40px_1fr] gap-x-2 gap-y-0.5 text-[11px]">
+                  <span class="text-muted">変更前</span>
+                  <span class="text-body whitespace-pre-wrap break-words">{{ JSON.stringify(e.old_value) }}</span>
+                  <span class="text-muted">変更後</span>
+                  <span class="text-ink whitespace-pre-wrap break-words">{{ JSON.stringify(e.new_value) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
     </Teleport>
   </div>
 </template>

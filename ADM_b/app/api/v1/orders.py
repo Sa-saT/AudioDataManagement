@@ -38,6 +38,7 @@ from app.models import (
     CreatorProfile,
     CreatorRankPrice,
     Order,
+    OrderBriefEdit,
     OrderCandidateCreator,
     OrderMessage,
     OrderMessageKind,
@@ -645,6 +646,212 @@ def update_draft(
     order.updated_at = func.now()
     db.commit()
     return _to_order_out(_load_order(db, parsed))
+
+
+# ─── Update brief after submit (改訂2.1) ──────────────────────────────────────
+
+# brief field の日本語ラベル (bot メッセージ用)
+BRIEF_FIELD_LABEL: dict[str, str] = {
+    "sound_type": "サウンドタイプ",
+    "purpose": "用途",
+    "purpose_note": "用途補足",
+    "length_sec": "曲の長さ",
+    "bgm_scenes": "BGM シーン",
+    "bgm_loop": "BGM ループ",
+    "bgm_note": "BGM 補足",
+    "se_trigger": "SE トリガー",
+    "se_functions": "SE 役割",
+    "emotions_target": "狙う感情",
+    "emotions_avoid": "避けたい感情",
+    "memory_impression": "イメージ",
+    "tx_organic_electronic": "テクスチャ (有機/電子)",
+    "tx_melody_rhythm": "テクスチャ (メロディ/リズム)",
+    "tx_warm_cold": "テクスチャ (温/冷)",
+    "tx_sparse_dense": "テクスチャ (疎/密)",
+    "tx_static_dynamic": "テクスチャ (静/動)",
+    "reference_urls": "参考 URL",
+    "reference_elements": "参考要素",
+    "reference_avoid": "避ける要素",
+    "delivery_format": "納品形式",
+    "note": "備考",
+}
+
+# 編集可能なステータス (ORDER_SPEC §13.3)
+EDITABLE_AFTER_SUBMIT_STATUSES = {
+    OrderStatus.open, OrderStatus.recruiting, OrderStatus.assigned,
+}
+
+
+class UpdateBriefRequest(BaseModel):
+    brief: dict
+
+
+def _diff_brief(old: dict | None, new: dict) -> list[tuple[str, Any, Any]]:
+    """変更された (field, old_value, new_value) のリストを返す。
+    BRIEF_FIELD_LABEL に載っている key のみ対象 (未知 key は無視)。
+    """
+    old = old or {}
+    out: list[tuple[str, Any, Any]] = []
+    for key in BRIEF_FIELD_LABEL:
+        old_v = old.get(key)
+        new_v = new.get(key)
+        # 空文字列と None は同等扱い (UI 由来の空項目を変更扱いしない)
+        if (old_v in (None, "", [], {})) and (new_v in (None, "", [], {})):
+            continue
+        if old_v != new_v:
+            out.append((key, old_v, new_v))
+    return out
+
+
+def _format_diff_value(v: Any) -> str:
+    """bot メッセージ用に diff 値を 1 行で整形。"""
+    if v is None or v == "":
+        return "(未設定)"
+    if isinstance(v, list):
+        return ", ".join(str(x) for x in v) if v else "(なし)"
+    if isinstance(v, bool):
+        return "ON" if v else "OFF"
+    s = str(v)
+    return s if len(s) <= 60 else s[:57] + "..."
+
+
+def _build_brief_edit_message(diffs: list[tuple[str, Any, Any]]) -> str:
+    """変更内容を bot メッセージ本文に整形。"""
+    lines = ["✏️ ブリーフを編集しました"]
+    for key, old_v, new_v in diffs:
+        label = BRIEF_FIELD_LABEL.get(key, key)
+        lines.append(f"{label}: {_format_diff_value(old_v)} → {_format_diff_value(new_v)}")
+    return "\n".join(lines)
+
+
+@router.patch("/orders/{order_id}/brief-after-submit", response_model=OrderOut)
+def update_brief_after_submit(
+    order_id: str,
+    body: UpdateBriefRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(_require_commission),
+) -> OrderOut:
+    """発注後 (status=open / recruiting / assigned) のブリーフを編集する。
+
+    動作:
+      1. 権限: 発注者本人 または admin
+      2. status 制約: reviewing / done / cancelled では不可
+      3. brief を上書き + 変更差分を `order_brief_edits` に記録
+      4. `length_sec` が変わった場合は `token_cost` を再計算し残量確認
+      5. bot メッセージ (kind=brief_edit) をチャットに自動投稿
+    """
+    parsed = _parse_uuid(order_id)
+    order = db.execute(select(Order).where(Order.id == parsed).with_for_update()).scalar_one_or_none()
+    _check_order_exists(order)
+    is_admin = current_user.role.value == "admin"
+    if order.user_id != current_user.id and not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "FORBIDDEN", "message": "not your order"},
+        )
+    if order.status not in EDITABLE_AFTER_SUBMIT_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "INVALID_STATE",
+                "message": f"発注後ブリーフ編集は open / recruiting / assigned のみ可 (current: {order.status.value})",
+            },
+        )
+
+    diffs = _diff_brief(order.brief, body.brief)
+    if not diffs:
+        # 変更なし → 何もせず返す
+        return _to_order_out(_load_order(db, parsed))
+
+    # 1. 差分を履歴テーブルに記録
+    for field, old_v, new_v in diffs:
+        db.add(OrderBriefEdit(
+            order_id=parsed,
+            editor_id=current_user.id,
+            field_path=field,
+            old_value=old_v,
+            new_value=new_v,
+        ))
+
+    # 2. brief 上書き + 長さ変更時は token 再計算 + 残量確認
+    order.brief = body.brief
+    if any(field == "length_sec" for field, _, _ in diffs):
+        new_length = _extract_length_sec(body.brief)
+        owner = db.get(User, order.user_id)
+        lic = owner.license if owner else None
+        if lic is None:
+            raise HTTPException(status_code=403, detail={"code": "NO_LICENSE", "message": "no license"})
+        # 残量計算: 現在の order.token_cost を「予約済」とみなして判定
+        # (確定消費はまだ done 時のみ。order_owner の他の予定も含めない簡易判定)
+        available = tokens_service.available_tokens(db, owner.id, lic)
+        # 差分だけ追加で必要 (現 token_cost は予約済として扱う)
+        delta = new_length - order.token_cost
+        if delta > 0 and available < delta:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "code": "INSUFFICIENT_TOKENS",
+                    "message": f"曲長を {new_length}秒 にするには追加 {delta} token 必要 (残量 {available})",
+                },
+            )
+        order.token_cost = new_length
+
+    # 3. bot メッセージ (sender_id=None で「システム発」)
+    db.add(OrderMessage(
+        order_id=parsed,
+        sender_id=None,
+        content=_build_brief_edit_message(diffs),
+        kind=OrderMessageKind.brief_edit,
+    ))
+    order.updated_at = func.now()
+    db.commit()
+    return _to_order_out(_load_order(db, parsed))
+
+
+# ─── Brief edit history (改訂2.1) ─────────────────────────────────────────────
+
+class BriefEditHistoryItem(BaseModel):
+    id: str
+    editor_id: str | None
+    editor_name: str | None
+    field_path: str
+    field_label: str
+    old_value: Any
+    new_value: Any
+    created_at: Any
+
+
+@router.get("/orders/{order_id}/brief-edits", response_model=list[BriefEditHistoryItem])
+def list_brief_edits(
+    order_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(_require_commission),
+) -> list[BriefEditHistoryItem]:
+    """発注後ブリーフ編集の差分履歴を新しい順で返す (詳細画面のモーダル表示用)。"""
+    parsed = _parse_uuid(order_id)
+    order = _load_order(db, parsed)
+    _check_access(order, current_user)
+    rows = db.execute(
+        select(OrderBriefEdit)
+        .options(joinedload(OrderBriefEdit.editor))
+        .where(OrderBriefEdit.order_id == parsed)
+        .order_by(OrderBriefEdit.created_at.desc())
+    ).unique().scalars().all()
+    return [
+        BriefEditHistoryItem(
+            id=str(r.id),
+            editor_id=str(r.editor_id) if r.editor_id else None,
+            editor_name=r.editor.username if r.editor else None,
+            field_path=r.field_path,
+            field_label=BRIEF_FIELD_LABEL.get(r.field_path, r.field_path),
+            old_value=r.old_value,
+            new_value=r.new_value,
+            created_at=r.created_at,
+        )
+        for r in rows
+    ]
 
 
 # ─── Update deadline (改訂2) ───────────────────────────────────────────────────

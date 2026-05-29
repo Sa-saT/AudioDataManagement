@@ -31,6 +31,8 @@ class OrderMessageKind(str, enum.Enum):
     submission = "submission"
     rejection = "rejection"
     done = "done"
+    # 改訂2.1: 発注後ブリーフ編集の bot 通知
+    brief_edit = "brief_edit"
 
 
 class SystemSetting(Base):
@@ -154,3 +156,27 @@ class OrderMessage(Base):
 
     order: Mapped["Order"] = relationship("Order", back_populates="messages")
     sender: Mapped["User | None"] = relationship("User", foreign_keys=[sender_id])  # type: ignore[name-defined]
+
+
+# 改訂2.1: ブリーフ事後編集の差分履歴。1 field 1 行で記録する。
+# 同一 PATCH 内で複数 field が変わった場合は、同時刻でレコードが N 行作られる。
+class OrderBriefEdit(Base):
+    __tablename__ = "order_brief_edits"
+
+    id: Mapped[uuid.UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=new_uuid)
+    order_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False
+    )
+    editor_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    # brief の field 名 (例: "emotions_target", "length_sec", "bgm_scenes")
+    field_path: Mapped[str] = mapped_column(Text, nullable=False)
+    old_value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(JSONB, nullable=True)
+    new_value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    order: Mapped["Order"] = relationship("Order", foreign_keys=[order_id])
+    editor: Mapped["User | None"] = relationship("User", foreign_keys=[editor_id])  # type: ignore[name-defined]
