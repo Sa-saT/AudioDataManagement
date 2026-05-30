@@ -1,7 +1,7 @@
 # Direct Message 仕様書 (DM_SPEC)
 
 > 最終更新: 2026-05-31
-> ステータス: **策定中** (未実装)
+> ステータス: **Phase A-D 実装済** (Phase E/F は Phase 4 検討)
 > 関連: [ORDER_SPEC §16](ORDER_SPEC.md) (改訂2.4 で Order 内私信を廃止し、本機能に移行)
 
 ---
@@ -139,10 +139,10 @@ Level 4 (admin > DM タブ > creator 行)  — その creator との未読あり
 
 | Phase | 範囲 | 状態 |
 |---|---|---|
-| **A** | データモデル + 基本 API (送受信 + 既読) | 未着手 |
-| **B** | admin Users タブの [DM] ボタン + モーダル | 未着手 |
-| **C** | creator 用 `/dm` ページ + TopNav `DM ToAdmin` | 未着手 |
-| **D** | NOTIFICATION 統合 (`creator_dm` area 追加) | 未着手 |
+| **A** | データモデル + 基本 API (送受信 + 既読) | ✅ 実装済 (3889d85) — migration 0018 |
+| **B** | admin Users タブの [DM] ボタン + モーダル | ✅ 実装済 (3889d85) |
+| **C** | creator 用 `/dm` ページ + TopNav `DM ToAdmin` | ✅ 実装済 (3889d85) |
+| **D** | NOTIFICATION 統合 (`creator_dm` area 追加) | ✅ 実装済 (3889d85) — [NOTIFICATION_SPEC §4](NOTIFICATION_SPEC.md) |
 | **E** | 添付ファイル対応 | Phase 4 |
 | **F** | WebSocket リアルタイム更新 | Phase 4 |
 
@@ -173,3 +173,4 @@ Level 4 (admin > DM タブ > creator 行)  — その creator との未読あり
 | 日付 | 内容 |
 |---|---|
 | 2026-05-31 | 初版策定 (ORDER_SPEC 改訂2.4 と同時) |
+| 2026-05-31 | Phase A-D 実装完了 (migration 0018 / 7 エンドポイント / TopNav DM ToAdmin / admin Users [DM] モーダル / `/dm` ページ / NOTIFICATION 統合) |

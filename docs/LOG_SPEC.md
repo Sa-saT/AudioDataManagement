@@ -30,8 +30,8 @@
 activity_logs
   id          uuid PRIMARY KEY
   user_id     uuid NOT NULL REFERENCES users(id)
-  kind        enum NOT NULL  -- 'session' | 'order_view' | (将来追加)
-  target_id   uuid NULL      -- kind='order_view' の場合 orders.id
+  kind        enum NOT NULL  -- 'session' | 'order_view' | 'dm_view' | (将来追加)
+  target_id   uuid NULL      -- 'order_view': orders.id / 'dm_view': creator.user_id
   created_at  timestamptz NOT NULL DEFAULT now()
   INDEX (user_id, kind, created_at DESC)
   INDEX (target_id, kind, created_at DESC)
@@ -43,6 +43,7 @@ activity_logs
 |---|---|---|
 | `session` | `POST /me/session/ping` (フロントが主要ページに到達した時) | 直近30分以内の同ユーザ記録があればスキップ |
 | `order_view` | `/orders/[id]` ページ open 時に upsert (`POST /orders/{id}/view`) | しない (履歴を残す) |
+| `dm_view` | DM スレッド open 時 (`POST /admin/dm/creators/{id}/view` / `POST /me/dm/admin/view`)。改訂2.4 で追加 | しない |
 
 将来追加候補: `audio_view` / `search` / `favorite_add` など。
 

@@ -1,7 +1,7 @@
 # 通知システム仕様書 (NOTIFICATION_SPEC)
 
-> 最終更新: 2026-05-30
-> ステータス: **策定中** (Phase A: Commission のみ実装済、Phase B 以降未実装)
+> 最終更新: 2026-05-31
+> ステータス: **Phase A-D 実装済** (Phase E 任意 / Phase F は Phase 4 検討)
 > 適用範囲: **アプリ全体** (Commission に限らず admin 業務全般を含む)
 
 ---
@@ -312,10 +312,10 @@ Body: { "target_id": "<uuid>" }
 | Phase | 範囲 | 状態 |
 |---|---|---|
 | **A** | Commission の Level 1-2 (TopNav バッジ + メニュー Commission 行) | ✅ 実装済 (#41, #43) |
-| **B** | 統合 API `/api/v1/me/notifications` + admin タブ Level 3 (Payout/Commission/将来領域) | 未着手 |
-| **C** | 一覧 Level 4 per-row dot (orders / payouts / lic / etc.) | 未着手 |
-| **D** | Commission クローズ後の **dim 化** (creator 候補だった発注) | 未着手 (= [ORDER_SPEC §9.1 9-A2](ORDER_SPEC.md)) |
-| **E** | 詳細セクション Level 5 (任意、メッセージスレッド内未読位置等) | 未着手 |
+| **B** | 統合 API `/api/v1/me/notifications` + admin タブ Level 3 (Payout/Commission/将来領域) | ✅ 実装済 (3d2f4c1) |
+| **C** | 一覧 Level 4 per-row dot (orders / payouts / lic / etc.) | ✅ 実装済 (2d327f1) |
+| **D** | Commission クローズ後の **dim 化** (creator 候補だった発注) | ✅ 実装済 (1352576、= ORDER_SPEC 9-A2) |
+| **E** | 詳細セクション Level 5 (任意、メッセージスレッド内未読位置等) | 未着手 (任意) |
 | **F** | WebSocket リアルタイム通知 | Phase 4 検討 |
 
 ---
@@ -347,3 +347,4 @@ Body: { "target_id": "<uuid>" }
 | 日付 | 内容 |
 |---|---|
 | 2026-05-30 | 初版策定 (Phase A 実装済を spec 化、Phase B-F を未実装課題として登録) |
+| 2026-05-31 | Phase B/C/D 実装完了 (統合 API + admin タブ Level 3 + 一覧 per-row dot + Commission dim 化)。creator_dm area を追加 ([DM_SPEC](DM_SPEC.md) と統合) |

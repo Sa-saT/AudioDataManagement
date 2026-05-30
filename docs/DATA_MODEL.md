@@ -277,8 +277,41 @@ Redmine のジャーナル相当。User / Admin / Creator の3者がチケット
 | `sender_id` | UUID | FK→users.id, NOT NULL | 送信者 (user/admin/creator いずれも) |
 | `content` | TEXT |  | メッセージ本文 |
 | `attachment_path` | TEXT |  | Creator 提出音源のパス (添付がある場合) |
-| `kind` | ENUM(`comment`,`status_change`,`submission`,`rejection`,`done`) | NOT NULL, DEFAULT `comment` | メッセージ種別 |
+| `kind` | ENUM(`comment`,`status_change`,`submission`,`rejection`,`done`,`brief_edit`) | NOT NULL, DEFAULT `comment` | メッセージ種別。`brief_edit` は改訂2.1 で追加 (bot 通知) |
 | `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
+
+> 改訂2.4 (migration 0016): `visibility` カラムを廃止。admin↔creator 私信は [DM_SPEC](DM_SPEC.md) の `direct_messages` に分離。
+
+### 2.14a `order_memos` (改訂2.4 追加)
+
+Order ごとの共有メモ。1 Order に admin 枠 / creator 枠 各 1。user は完全不可視。
+詳細は [ORDER_SPEC §16.2](ORDER_SPEC.md)。
+
+| 列 | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `id` | UUID | PK | |
+| `order_id` | UUID | FK→orders.id (CASCADE), NOT NULL | |
+| `author_kind` | ENUM(`admin`,`creator`) | NOT NULL | 枠の種別 |
+| `author_id` | UUID | FK→users.id (SET NULL) | 最後の編集者 |
+| `content` | TEXT | NOT NULL, ≤2000 chars (CHECK 制約) | |
+| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
+| UNIQUE | (order_id, author_kind) | | 1 Order に各種別 1 件のみ |
+
+### 2.14b `direct_messages` (改訂2.4 追加)
+
+admin↔creator の継続的やりとり。Order に紐づかない。admin は全員チーム扱いで同一 creator との DM スレッドを共有。詳細は [DM_SPEC](DM_SPEC.md)。
+
+| 列 | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `id` | UUID | PK | |
+| `creator_id` | UUID | FK→users.id (CASCADE), NOT NULL | スレッドを一意に識別する creator |
+| `sender_id` | UUID | FK→users.id (SET NULL) | 実送信者 (admin / creator どちらか) |
+| `sender_kind` | ENUM(`admin`,`creator`) | NOT NULL | UI 表示用 |
+| `content` | TEXT | NOT NULL, ≤4000 chars (CHECK 制約) | |
+| `attachment_path` | TEXT | | Phase 4 で添付対応予定 |
+| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
+| INDEX | (creator_id, created_at) | | スレッド表示用 |
 
 ### 2.15 `download_logs`
 

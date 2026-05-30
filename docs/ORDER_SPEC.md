@@ -243,8 +243,24 @@ melody (メロディライン), rhythm (リズムパターン), density (音の�
 | `sender_id` | UUID FK → users (SET NULL) | NULLはSystem |
 | `content` | TEXT | メッセージ本文 |
 | `attachment_path` | TEXT | 音源提出時のファイルパス |
-| `kind` | ENUM | `comment / status_change / submission / rejection / done` |
+| `kind` | ENUM | `comment / status_change / submission / rejection / done / brief_edit` |
 | `created_at` | TIMESTAMPTZ | |
+
+> 改訂2.4 で `visibility` カラムは廃止 (migration 0016)。admin↔creator 私信は [DM_SPEC](DM_SPEC.md) に分離した。
+
+### `order_memos` テーブル (改訂2.4)
+
+Order ごとの共有メモ。admin / creator 各 1 枠で、user は完全不可視。詳細は [§16.2](#162-メモ仕様) 参照。
+
+| カラム | 型 | 説明 |
+|---|---|---|
+| `id` | UUID PK | |
+| `order_id` | UUID FK → orders (CASCADE) | |
+| `author_kind` | ENUM(`admin`, `creator`) | 枠の種別 |
+| `author_id` | UUID FK → users (SET NULL) | 最後の編集者 |
+| `content` | TEXT (≤2000 chars) | メモ本文 |
+| `created_at` / `updated_at` | TIMESTAMPTZ | |
+| UNIQUE (order_id, author_kind) | | 1 Order に admin 1 / creator 1 |
 
 ### `system_settings` テーブル
 
@@ -443,27 +459,24 @@ Step 2 は `sound_type` (BGM/SE/both) によって表示項目が変わる。
 
 ---
 
-## 9. 未確定・今後の課題 (2026-05-30 棚卸し)
+## 9. 未確定・今後の課題 (2026-05-31 更新)
 
-完了済の項目には ✅、未着手は ○ をつける。優先度順。
+「次に手をつけるべきもの」が一目で見える棚卸し。実装済は §9.2 に移動済。
 
 ### 9.1 未実装 (実装すべき)
 
 | # | 項目 | 優先度 | 備考 |
 |---|---|---|---|
-| 9-A1 | **メッセージ未読カウント** を `activity_logs.order_view` ベースで再計算 (§6.5 A) | 高 | 現状はステータスベース action-required のみ実装。private 私信は別カウントすべきか要設計 |
-| 9-A2 | **情報通知の1週間自動解除 + カード dim 化** (§6.5 B) | 高 | assign 時に候補 creator のカードを dim (opacity 40〜50% + ラベル「クローズ」muted) にし、青バッジを立てる。通知コピーは「クローズされました」のみ (拒絶表現なし)。TTL: 開く or 1週間で解除。バッジ解除後もカード dim は維持 |
 | 9-A3 | **Creator 複数提出のバージョン管理** | 中 | reject → 再提出のたびに `submissions/{id}.wav` が上書きされる。`submissions/{id}_v{n}.wav` 形式 + 履歴メタデータ |
 | 9-A4 | **クリエイター視点 UI 最適化** | 中 | 候補打診時のブリーフ表示は user 視点。creator が一目で要件把握できる別レイアウト |
 | 9-A5 | **SE 納品の複数ファイル対応** | 要検討 | SE は複数バリエーション納品が多い。`submissions/{id}_{slot}.wav` + 必要数フィールド |
 | 9-A6 | **改訂2.1 R2.1-Q1〜Q3** (§13.7) | 要検討 | reviewing 中の編集許可 / 編集回数上限 / length_sec 大幅変更時の自動 assign 取消 |
 | 9-A7 | **改訂2 R2-Q1〜Q3** (§11.6) | 低 | sound_type=both データ migration / 期限切れ order 扱い / draft 自動削除ポリシー |
 | 9-A8 | **本番ストレージ移行** | Phase 4 | ローカル `/storage/*` → S3 互換切替 |
-| 9-A9 | **2.3 §15 admin↔creator 私信 spec ドキュメント追記** | 低 | コード側は実装済、§ を追加して仕様文書化 |
-| 9-A10 | **私信での添付対応** | 低 | 私信メッセージにファイル添付できるべきか要検討 (現状は public のみ submit-file) |
-| 9-A11 | **submission ファイル peaks v2 化** | 中 | WaveformPlayer での視聴に peaks v2 が望ましい。submit-file 時に compute_peaks_v2 して `OrderMessage.attachment_peaks` 等に保存 |
+| 9-A12 | **NOTIFICATION Phase E** | 任意 | 詳細ページ内セクション dot (チャット内未読位置等)。NOTIFICATION_SPEC §9 参照 |
+| 9-A13 | **メモ更新時の dm_view 相当の閲覧マーカー** | 低 | 現状メモは通知を立てない設計。後から「相手が読んだか」を見たい要望が出たら検討 |
 
-### 9.2 実装済 (Phase 3 #31〜#48 で完了)
+### 9.2 実装済
 
 | # | 項目 | 完了コミット |
 |---|---|---|
@@ -475,7 +488,16 @@ Step 2 は `sound_type` (BGM/SE/both) によって表示項目が変わる。
 | ✅ | token 消費を done → close (受け取る) に移動 + 予約ロジック | 0d9a730 / c73ab9b |
 | ✅ | Admin Commission UI 改修 (creator ブラウザ + 候補一覧) | 42d7d30 |
 | ✅ | TopNav 再構成 + Open ボタン + /orders ルート衝突解消 | 94bc2e2 / d666394 / ab8679e |
-| ✅ | 改訂2.3 LINE 風チャット + admin↔creator 私信 + Deactivate→Dashboard | d9c2180 |
+| ✅ | 改訂2.3 LINE 風チャット (admin↔creator 私信は 2.4 で廃止) | d9c2180 |
+| ✅ | **9-A1** メッセージ未読カウント精緻化 (visibility フィルタ) | 1352576 |
+| ✅ | **9-A2** クローズ済み発注の dim 化 (`closed_for_me` + ラベル muted) | 1352576 |
+| ✅ | **9-A11** submission ファイル peaks v2 (migration 0015 + 自動生成) | 55ae650 |
+| ✅ | **NOTIFICATION_SPEC** 横断仕様策定 (UX原則 / 階層伝播 / 領域非依存 API / dim) | 995018f |
+| ✅ | **NOTIFICATION Phase B** 統合 API `/me/notifications` + admin タブ Level 3 ドット | 3d2f4c1 |
+| ✅ | **NOTIFICATION Phase C** 一覧 Level 4 per-row 金ドット (orders + payouts) | 2d327f1 |
+| ✅ | **改訂2.4** 私信廃止 + admin Commission メニュー統合 (R2.4-B) | e3cba8c |
+| ✅ | **改訂2.4** Order 共有メモ (admin/creator 各1枠、左右分割、user 不可視) (R2.4-A) | 75aac99 |
+| ✅ | **改訂2.4** admin↔creator Direct Message (DM_SPEC Phase A-D) | 3889d85 |
 
 ---
 

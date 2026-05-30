@@ -368,6 +368,50 @@ draft → open。ユーザが送信。残 token 確認 (不足で 402)。
 ### POST `/orders/{order_id}/message`
 コメント追加。Request: `{ "content": "..." }`
 
+> 改訂2.4: `private` フィールドは廃止 (admin↔creator 私信機能ごと撤去)。
+
+### POST `/orders/{order_id}/view` (改訂2)
+チケット閲覧記録。`activity_logs` に `kind=order_view, target_id=order_id` を挿入。通知の既読判定に使う ([NOTIFICATION_SPEC §6](NOTIFICATION_SPEC.md))。Response 201.
+
+### PATCH `/orders/{order_id}/deadline` (改訂2)
+希望締切日変更。user / admin のみ。status≠done/cancelled。
+Request: `{ "desired_deadline": "YYYY-MM-DD" }`
+
+### PATCH `/orders/{order_id}/brief-after-submit` (改訂2.1)
+発注後ブリーフ編集。`order_brief_edits` に差分記録 + bot メッセージ自動投稿。
+Request: `{ "brief": {...} }`
+
+### GET `/orders/{order_id}/brief-edits` (改訂2.1)
+ブリーフ編集履歴を取得 (1 field 1 行)。
+
+### POST `/orders/{order_id}/close` (改訂2.2)
+done → close。user が「受け取る」を押したとき。token 消費 + creator_payouts 確定 + closed_at 設定 + アーカイブ移動。
+
+### GET `/orders/{order_id}/submission-stream-url` (改訂2.2)
+提出済み音源プレビュー用 signed URL を返す (reviewing / done で全参加者視聴可)。
+Response 200: `{ "url": "..." }`
+
+### GET `/orders/submission-stream` (改訂2.2)
+signed URL で保護された提出音源のストリーム配信。
+
+### GET `/orders/{order_id}/memos` (改訂2.4)
+Order 共有メモを取得。admin / assigned creator のみアクセス可 (user は 403)。詳細は [ORDER_SPEC §16.2](ORDER_SPEC.md)。
+
+Response 200:
+```json
+{
+  "admin":   { "author_kind":"admin",   "content":"...", "author_name":"root", "updated_at":"..." },
+  "creator": { "author_kind":"creator", "content":"...", "author_name":"demo_creator", "updated_at":"..." },
+  "can_edit_admin":   true,
+  "can_edit_creator": false
+}
+```
+
+### PUT `/orders/{order_id}/memo` (改訂2.4)
+自身の枠 (admin / creator どちらか) を upsert。role から自動判定。
+Request: `{ "content": "..." }` (≤ 2000 chars)
+エラー: `MEMO_TOO_LONG` (422) / `INVALID_STATE` (409: close/cancel 後) / `FORBIDDEN` (403)
+
 ### POST `/orders/{order_id}/respond`
 Creator が候補返信 (recruiting 状態のみ)。
 
@@ -405,6 +449,61 @@ reviewing → done。同時実行:
 2. token_cost 分を user の当月 token から消費
 3. Creator への `creator_payouts` 行を生成 (rank_at_payout × token_cost)
 4. `notified_at` を設定
+
+### GET `/me/notifications` (改訂2.4 / NOTIFICATION_SPEC §5)
+領域非依存の統合通知 API。アプリ全体の「自分が対応すべきもの」を集約。詳細は [NOTIFICATION_SPEC §5](NOTIFICATION_SPEC.md)。
+
+Response 200:
+```json
+{
+  "areas": {
+    "commission":   { "action_count": 2, "has_info": true,  "breakdown": {"action_required":1,"message_unread":1,"info_only":1} },
+    "payouts":      { "action_count": 3, "has_info": false, "breakdown": {"pending_approval":3} },
+    "creator_dm":   { "action_count": 1, "has_info": false, "breakdown": {"unread_threads":1} },
+    "token_grants": { "action_count": 0, "has_info": false, "breakdown": {} },
+    "lic_requests": { "action_count": 0, "has_info": false, "breakdown": {} }
+  },
+  "totals": { "action_count": 6, "has_info": true }
+}
+```
+
+ロール別に表示する area が異なる:
+- user: `commission` のみ
+- creator: `commission`, `creator_dm`
+- admin: 全 area
+
+### GET `/me/commission/unread` (deprecated)
+Commission 単体の旧エンドポイント。後方互換のため残置。新規実装は `/me/notifications.areas.commission` を参照すること。
+
+### GET `/admin/dm/creators` (admin のみ、改訂2.4 / DM_SPEC)
+DM 履歴のある creator スレッド一覧 (新しい順)。`unread` フラグ付き。
+
+Response 200:
+```json
+[
+  { "creator_id":"...", "creator_name":"...", "creator_display_name":"...",
+    "last_message_at":"...", "last_message_preview":"先頭60文字...", "unread": true }
+]
+```
+
+### GET `/admin/dm/creators/{creator_id}` (admin のみ)
+特定 creator との DM 全件 (古い順)。
+
+### POST `/admin/dm/creators/{creator_id}` (admin のみ)
+admin → creator DM 送信。Request: `{ "content": "..." }` (≤ 4000 chars)
+エラー: `EMPTY_CONTENT` / `CONTENT_TOO_LONG` (422)
+
+### POST `/admin/dm/creators/{creator_id}/view` (admin のみ)
+DM スレッド既読化。`activity_logs.dm_view` を記録。
+
+### GET `/me/dm/admin` (creator のみ、改訂2.4)
+自分の admin チーム宛 DM 全件 (古い順)。
+
+### POST `/me/dm/admin` (creator のみ)
+creator → admin DM 送信。Request: `{ "content": "..." }`
+
+### POST `/me/dm/admin/view` (creator のみ)
+DM スレッド既読化。
 
 ### GET `/admin/settings` (admin のみ)
 `system_settings` 全件取得。

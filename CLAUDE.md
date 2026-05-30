@@ -7,7 +7,7 @@
 
 ユーザーが「次に何をすべきか」を考えなくても、UI 側 (通知・階層伝播・状態表現) が自然に導く。
 通知 = 自分の対応業務 / 通知がない = 安心していい — を守る。
-詳細は [docs/NOTIFICATION_SPEC.md](docs/NOTIFICATION_SPEC.md) (予定)。
+詳細は [docs/NOTIFICATION_SPEC.md](docs/NOTIFICATION_SPEC.md)。
 
 本ファイルは Claude 向けのプロジェクトガイド。**詳細仕様は `docs/` 配下を参照** (本ファイルは概観のみ)。
 
@@ -43,7 +43,7 @@ AudioDataManagement/
 │   │   ├── composables/                 useApi / useStreamPlayer
 │   │   ├── layouts/                     default.vue
 │   │   ├── pages/                       index / dashboard / activate / uploads / downloads
-│   │   │                                / orders / orders/[id] / admin
+│   │   │                                / orders / orders/[id] / admin / dm
 │   │   ├── stores/                      auth / audios / system (Pinia)
 │   │   ├── types/                       audio / auth
 │   │   └── utils/                       errorMessageJa
@@ -54,12 +54,12 @@ AudioDataManagement/
 │   │   ├── main.py                      FastAPI エントリ
 │   │   ├── config.py                    pydantic-settings (.env 読込)
 │   │   ├── db.py                        SQLAlchemy engine/session
-│   │   ├── api/v1/                      auth / audios / me / admin / admin_logs / orders
-│   │   ├── models/                      ORM (user / creator / audio / payment / log / order)
+│   │   ├── api/v1/                      auth / audios / me / admin / admin_logs / orders / dm
+│   │   ├── models/                      ORM (user / creator / audio / payment / log / order / dm)
 │   │   ├── schemas/                     Pydantic (audio / auth)
 │   │   ├── security/                    deps / jwt / license / signed_url
 │   │   └── services/                    audio_file / tokens
-│   ├── migrations/                      Alembic (0001 〜 0011)
+│   ├── migrations/                      Alembic (0001 〜 0018)
 │   ├── scripts/init_db.sh               冪等な DB / role / 依存 / migration 一括初期化
 │   ├── .env.example                     環境変数テンプレ
 │   ├── alembic.ini / requirements.txt / venv/
@@ -174,7 +174,7 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 | 3 | Creator / Admin / Commission / 通知 / ログ / Shader 波形 / エラーポップアップ | ✅ **ローカル完了** |
 | 4 | 本番運用 (CDN, 監視, バックアップ, S3 互換ストレージ) | 未着手 |
 
-### Phase 3 タスク (#31〜#46 全完了)
+### Phase 3 タスク (#31〜#49 全完了)
 
 | # | 内容 | 完了コミット |
 |---|---|---|
@@ -187,25 +187,22 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 | 45 | 波形描画 Shader 化 (peaks v2 + WebGL + wavesurfer.js 撤去 / 単色 + dim + EQ ビジュアライザ) | f4cad0a / 4c69897 |
 | 46 | アップロード エラーの日本語ポップアップ (`ErrorPopup.vue`) | b99834a |
 | 47 | Commission 改訂2.1 — 発注後ブリーフ編集 (diff色 + bot通知 + 履歴) + admin 代理表示モーダル | 659f927 / ca99847 |
-| 48 | Commission 改訂2.2 + 2.3 — REDMINE / 受け取る / アーカイブ / LINE 風チャット / admin↔creator 私信 / token 予約 | 7ca5a28 〜 d9c2180 |
+| 48 | Commission 改訂2.2 + 2.3 — REDMINE / 受け取る / アーカイブ / LINE 風チャット / token 予約 | 7ca5a28 〜 d9c2180 |
+| 49 | **NOTIFICATION_SPEC 策定 + Phase B/C/D 実装** (統合通知 API / admin タブ Level 3 / 一覧 per-row dot / クローズ dim 化 / メッセージ未読精緻化 / submission peaks v2) | 995018f 〜 2d327f1 |
+| 50 | **改訂2.4** — Order 内私信廃止 + Order 共有メモ (admin/creator 各1枠、左右分割、user 不可視) + admin↔creator Direct Message (DM_SPEC Phase A-D) + admin Commission メニュー統合 | 14a5fc5 〜 3889d85 |
 
 ### Phase 3 残スコープ → Phase 4 前に整備
 
 詳細は **[docs/ORDER_SPEC.md §9.1](docs/ORDER_SPEC.md)** (棚卸し済) を一次ソースとする。
 
-**高優先 (次回着手候補):**
-- メッセージ未読カウントを `activity_logs.order_view` ベースで精緻化 (9-A1)
-- info_only 通知の **1週間自動解除** (9-A2)
-- submission ファイルの **peaks v2 化** (9-A11)
-
 **中優先:**
 - Creator 複数提出のバージョン管理 (9-A3) / クリエイター視点 UI 最適化 (9-A4)
 
 **低 / 要検討:**
-- 私信 + 添付 / user→admin 私信 / SE 複数納品 / draft 自動削除ポリシー
+- SE 複数納品 (9-A5) / 改訂2.1 残課題 (9-A6) / 改訂2 残課題 (9-A7) / NOTIFICATION Phase E 詳細セクション dot (9-A12)
 
 **本番準備 (Phase 4):**
-- S3 互換ストレージ切替 / CDN / 監視 / バックアップ
+- S3 互換ストレージ切替 (9-A8) / CDN / 監視 / バックアップ
 
 ## 9. 用語 (要点)
 
