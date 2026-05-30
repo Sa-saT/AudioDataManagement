@@ -138,6 +138,8 @@ class OrderListItem(BaseModel):
     assigned_creator_name: str | None
     notified_at: Any
     closed_at: Any  # 改訂2.2
+    # NOTIFICATION_SPEC §8.4: viewer 視点で「クローズ済み」=dim 表示対象か
+    closed_for_me: bool = False
     created_at: Any
     updated_at: Any
 
@@ -199,7 +201,23 @@ def _to_order_out(order: Order, viewer: User | None = None) -> OrderOut:
     )
 
 
-def _to_list_item(order: Order) -> OrderListItem:
+def _is_closed_for(order: Order, viewer: User) -> bool:
+    """NOTIFICATION_SPEC §8.4: viewer 視点で「クローズ済み」(dim 表示) とみなすか。
+
+    - 全ロール: cancelled / closed_at セット済 → dim
+    - creator: 自分以外が assigned された (= 自分は候補だったが落選) → dim
+    """
+    if order.status == OrderStatus.cancelled:
+        return True
+    if order.closed_at is not None:
+        return True
+    if viewer.role.value == "creator":
+        if order.assigned_creator_id is not None and order.assigned_creator_id != viewer.id:
+            return True
+    return False
+
+
+def _to_list_item(order: Order, viewer: User | None = None) -> OrderListItem:
     return OrderListItem(
         id=str(order.id),
         title=order.title,
@@ -213,6 +231,7 @@ def _to_list_item(order: Order) -> OrderListItem:
         ),
         notified_at=order.notified_at,
         closed_at=order.closed_at,
+        closed_for_me=_is_closed_for(order, viewer) if viewer else False,
         created_at=order.created_at,
         updated_at=order.updated_at,
     )
@@ -307,6 +326,9 @@ def _participant_order_ids_subq(user: User):
 def _count_message_unread(db: Session, user: User) -> int:
     """チケット内メッセージ未読数。
     自分以外が送信した最新メッセージが、自分の最終 order_view より新しい order の数。
+
+    visibility フィルタ: user は admin↔creator 私信 (admin_creator) を見えない
+    ため、自分が閲覧不能なメッセージは未読カウントから除外する。
     """
     participant_subq = _participant_order_ids_subq(user).subquery()
 
@@ -324,13 +346,22 @@ def _count_message_unread(db: Session, user: User) -> int:
         .subquery()
     )
 
-    # 自分以外が送った最新メッセージ時刻 (per order)
+    # 自分が閲覧可能な visibility の一覧
+    # user: public のみ / creator・admin: 全て
+    visible = [OrderMessageVisibility.public]
+    if user.role.value in ("creator", "admin"):
+        visible.append(OrderMessageVisibility.admin_creator)
+
+    # 自分以外が送った最新メッセージ時刻 (per order) — 自分が見える visibility のみ
     last_msg = (
         select(
             OrderMessage.order_id.label("order_id"),
             func.max(OrderMessage.created_at).label("last_msg_at"),
         )
-        .where(OrderMessage.sender_id != user.id)
+        .where(
+            OrderMessage.sender_id != user.id,
+            OrderMessage.visibility.in_(visible),
+        )
         .group_by(OrderMessage.order_id)
         .subquery()
     )
@@ -453,7 +484,7 @@ def list_orders(
             q = base.where(Order.closed_at.is_(None))
 
     rows = db.execute(q.order_by(Order.updated_at.desc())).unique().scalars().all()
-    return [_to_list_item(o) for o in rows]
+    return [_to_list_item(o, current_user) for o in rows]
 
 
 # ─── Create order ─────────────────────────────────────────────────────────────

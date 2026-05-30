@@ -22,6 +22,8 @@ interface OrderListItem {
   user_name: string
   assigned_creator_name: string | null
   notified_at: string | null
+  closed_at: string | null
+  closed_for_me: boolean
   created_at: string
   updated_at: string
 }
@@ -364,19 +366,28 @@ const BGM_SCENE_L: Record<string, string> = {
               v-for="order in activeOrders"
               :key="order.id"
               :to="`/orders/${order.id}`"
-              class="card flex items-center gap-4 px-4 py-3 transition-colors hover:border-primary/40"
+              class="card flex items-center gap-4 px-4 py-3 transition-colors"
+              :class="order.closed_for_me
+                ? 'opacity-50 pointer-events-auto hover:opacity-60'
+                : 'hover:border-primary/40'"
             >
               <span
                 class="shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold"
-                :class="STATUS_CLASS[order.status] ?? 'bg-hairline-soft text-body'"
-              >{{ STATUS_LABEL[order.status] ?? order.status }}</span>
+                :class="order.closed_for_me
+                  ? 'bg-hairline-soft text-muted'
+                  : (STATUS_CLASS[order.status] ?? 'bg-hairline-soft text-body')"
+              >{{ order.closed_for_me ? 'クローズ' : (STATUS_LABEL[order.status] ?? order.status) }}</span>
 
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2">
-                  <span class="shrink-0 rounded bg-ink/5 px-1.5 py-0.5 font-mono text-[10px] text-ink">#{{ order.serial }}</span>
-                  <span class="truncate text-[14px] font-medium text-ink">{{ stripSerialFromTitle(order.title) }}</span>
+                  <span class="shrink-0 rounded bg-ink/5 px-1.5 py-0.5 font-mono text-[10px]"
+                    :class="order.closed_for_me ? 'text-muted' : 'text-ink'"
+                  >#{{ order.serial }}</span>
+                  <span class="truncate text-[14px] font-medium"
+                    :class="order.closed_for_me ? 'text-muted' : 'text-ink'"
+                  >{{ stripSerialFromTitle(order.title) }}</span>
                   <span
-                    v-if="order.status === 'done' && order.notified_at"
+                    v-if="order.status === 'done' && order.notified_at && !order.closed_for_me"
                     class="h-1.5 w-1.5 shrink-0 rounded-full bg-[#2ecc71]"
                     title="完了"
                   />
