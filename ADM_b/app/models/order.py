@@ -96,6 +96,8 @@ class Order(Base):
     # 改訂2.2: user が「受け取る」を押すと設定される。user/creator の一覧から非表示にする目印
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     file_path: Mapped[str | None] = mapped_column(Text)
+    # NOTIFICATION_SPEC §9.1 9-A11: submission ファイルの peaks v2 ({n,max,min,rms})
+    submission_peaks: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

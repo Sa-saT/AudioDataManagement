@@ -84,6 +84,8 @@ interface OrderDetail {
   candidates: Candidate[]
   messages: Message[]
   file_path: string | null
+  // NOTIFICATION_SPEC §9.1 9-A11: WaveformPlayer 用 peaks v2 ({n,max,min,rms})
+  submission_peaks: { n: number; max: number[]; min: number[]; rms: number[] } | null
   notified_at: string | null
   created_at: string
   updated_at: string

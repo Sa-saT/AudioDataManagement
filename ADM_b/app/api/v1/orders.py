@@ -60,6 +60,7 @@ from app.security.signed_url import (
     verify_submission_stream,
 )
 from app.services import tokens as tokens_service
+from app.services.audio_file import compute_peaks_v2
 
 settings = get_settings()
 router = APIRouter(tags=["orders"])
@@ -122,6 +123,8 @@ class OrderOut(BaseModel):
     candidates: list[CandidateOut] = []
     messages: list[MessageOut] = []
     file_path: str | None
+    # NOTIFICATION_SPEC §9.1 9-A11: WaveformPlayer 用の peaks v2 ({n,max,min,rms})
+    submission_peaks: dict | None = None
     notified_at: Any
     closed_at: Any  # 改訂2.2: user が受け取った時刻 (archive flag)
     created_at: Any
@@ -194,6 +197,7 @@ def _to_order_out(order: Order, viewer: User | None = None) -> OrderOut:
         candidates=[_to_candidate(c) for c in order.candidates],
         messages=[_to_message(m) for m in _visible_messages(order, viewer)],
         file_path=order.file_path,
+        submission_peaks=order.submission_peaks,
         notified_at=order.notified_at,
         closed_at=order.closed_at,
         created_at=order.created_at,
@@ -1243,6 +1247,12 @@ def submit_file(
         _shutil.copy2(tmp_path, dest)
     finally:
         tmp_path.unlink(missing_ok=True)
+
+    # WaveformPlayer プレビュー用 peaks v2。失敗してもアップロード自体は成功扱い
+    try:
+        order.submission_peaks = compute_peaks_v2(dest)
+    except Exception:
+        order.submission_peaks = None
 
     order.status = OrderStatus.reviewing
     order.updated_at = func.now()
