@@ -278,6 +278,8 @@ Redmine のジャーナル相当。User / Admin / Creator の3者がチケット
 | `content` | TEXT |  | メッセージ本文 |
 | `attachment_path` | TEXT |  | Creator 提出音源のパス (添付がある場合) |
 | `kind` | ENUM(`comment`,`status_change`,`submission`,`rejection`,`done`,`brief_edit`) | NOT NULL, DEFAULT `comment` | メッセージ種別。`brief_edit` は改訂2.1 で追加 (bot 通知) |
+| `submission_version` | INT |  | 改訂2.5 (9-A3): kind=submission のみ。Order ごとに 1..N |
+| `attachment_peaks` | JSONB |  | 改訂2.5 (9-A3): 提出 wav の peaks v2 (per version) |
 | `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
 
 > 改訂2.4 (migration 0016): `visibility` カラムを廃止。admin↔creator 私信は [DM_SPEC](DM_SPEC.md) の `direct_messages` に分離。

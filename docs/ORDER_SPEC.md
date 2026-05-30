@@ -244,9 +244,12 @@ melody (メロディライン), rhythm (リズムパターン), density (音の�
 | `content` | TEXT | メッセージ本文 |
 | `attachment_path` | TEXT | 音源提出時のファイルパス |
 | `kind` | ENUM | `comment / status_change / submission / rejection / done / brief_edit` |
+| `submission_version` | INT NULL | 改訂2.5: kind=submission のみセット。Order ごとに 1..N |
+| `attachment_peaks` | JSONB NULL | 改訂2.5: 提出 wav の peaks v2 (per version) |
 | `created_at` | TIMESTAMPTZ | |
 
 > 改訂2.4 で `visibility` カラムは廃止 (migration 0016)。admin↔creator 私信は [DM_SPEC](DM_SPEC.md) に分離した。
+> 改訂2.5 (migration 0019): submission を版数管理。ファイル命名は `submissions/{order_id}_v{n}.wav`。
 
 ### `order_memos` テーブル (改訂2.4)
 
@@ -467,7 +470,6 @@ Step 2 は `sound_type` (BGM/SE/both) によって表示項目が変わる。
 
 | # | 項目 | 優先度 | 備考 |
 |---|---|---|---|
-| 9-A3 | **Creator 複数提出のバージョン管理** | 中 | reject → 再提出のたびに `submissions/{id}.wav` が上書きされる。`submissions/{id}_v{n}.wav` 形式 + 履歴メタデータ |
 | 9-A4 | **クリエイター視点 UI 最適化** | 中 | 候補打診時のブリーフ表示は user 視点。creator が一目で要件把握できる別レイアウト |
 | 9-A5 | **SE 納品の複数ファイル対応** | 要検討 | SE は複数バリエーション納品が多い。`submissions/{id}_{slot}.wav` + 必要数フィールド |
 | 9-A6 | **改訂2.1 R2.1-Q1〜Q3** (§13.7) | 要検討 | reviewing 中の編集許可 / 編集回数上限 / length_sec 大幅変更時の自動 assign 取消 |
@@ -498,6 +500,7 @@ Step 2 は `sound_type` (BGM/SE/both) によって表示項目が変わる。
 | ✅ | **改訂2.4** 私信廃止 + admin Commission メニュー統合 (R2.4-B) | e3cba8c |
 | ✅ | **改訂2.4** Order 共有メモ (admin/creator 各1枠、左右分割、user 不可視) (R2.4-A) | 75aac99 |
 | ✅ | **改訂2.4** admin↔creator Direct Message (DM_SPEC Phase A-D) | 3889d85 |
+| ✅ | **9-A3** Creator 複数提出のバージョン管理 (`submissions/{id}_v{n}.wav` + peaks v2 per version + GET /submissions + 履歴 UI) + リテラルルート順序バグ修正 | (改訂2.5 / migration 0019) |
 
 ---
 

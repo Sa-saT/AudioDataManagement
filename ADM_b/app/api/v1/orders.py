@@ -105,6 +105,9 @@ class MessageOut(BaseModel):
     content: str | None
     attachment_path: str | None
     kind: str
+    # 改訂2.5 (9-A3): kind=submission のみセット
+    submission_version: int | None = None
+    attachment_peaks: dict | None = None
     created_at: Any
 
 class OrderOut(BaseModel):
@@ -167,6 +170,8 @@ def _to_message(m: OrderMessage) -> MessageOut:
         content=m.content,
         attachment_path=m.attachment_path,
         kind=m.kind.value,
+        submission_version=m.submission_version,
+        attachment_peaks=m.attachment_peaks,
         created_at=m.created_at,
     )
 
@@ -629,6 +634,81 @@ def create_order(
     return _to_order_out(_load_order(db, order.id), viewer=current_user)
 
 
+# ─── Public signed-URL endpoints (リテラルパス) ────────────────────────────────
+# 重要: `/orders/submission-stream` / `/orders/download-file` は
+# `/orders/{order_id}` より**前**に定義する必要がある。後だと FastAPI が
+# `/orders/{order_id}` に先にマッチし、JWT 必須となって 401 になる。
+
+@router.get("/orders/submission-stream")
+def submission_stream(
+    order_id: str = Query(...),
+    start: int = Query(0, ge=0),
+    exp: int = Query(...),
+    sig: str = Query(...),
+    version: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+) -> Any:
+    """signed URL の検証 → submission ファイルから 10秒チャンクを切り出して返す。
+    JWT 不要 (短命 signed URL で代替)。version=0 で最新。"""
+    try:
+        verify_submission_stream(order_id, start, exp, sig, version)
+    except SignedURLError as exc:
+        raise HTTPException(status_code=403, detail={"code": exc.code, "message": exc.message})
+
+    parsed = _parse_uuid(order_id)
+    path = _resolve_submission_path(db, parsed, version)
+    if path is None or not path.exists():
+        raise HTTPException(status_code=404, detail={"code": "FILE_NOT_FOUND", "message": "no submission file"})
+
+    import subprocess
+    from fastapi.responses import StreamingResponse
+    proc = subprocess.Popen(
+        [
+            "ffmpeg", "-loglevel", "error",
+            "-ss", str(start), "-t", "10",
+            "-i", str(path),
+            "-c:a", "copy",
+            "-f", "wav", "pipe:1",
+        ],
+        stdout=subprocess.PIPE,
+    )
+
+    def _iter_chunks():
+        try:
+            while True:
+                chunk = proc.stdout.read(65536)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            proc.kill()
+
+    return StreamingResponse(_iter_chunks(), media_type="audio/wav")
+
+
+@router.get("/orders/download-file")
+def download_order_file(
+    order_id: str = Query(...),
+    user_id: str = Query(...),
+    exp: int = Query(...),
+    sig: str = Query(...),
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    try:
+        verify_order_download(order_id, user_id, exp, sig)
+    except SignedURLError as exc:
+        raise HTTPException(status_code=403, detail={"code": exc.code, "message": exc.message})
+
+    parsed = _parse_uuid(order_id)
+    order = db.execute(select(Order).where(Order.id == parsed)).scalar_one_or_none()
+    if order is None or order.file_path is None:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "file not found"})
+    fp = Path(order.file_path)
+    if not fp.exists():
+        raise HTTPException(status_code=404, detail={"code": "FILE_NOT_FOUND", "message": "file missing"})
+    return FileResponse(path=str(fp), media_type="audio/wav", filename=f"{order.title}.wav")
+
+
 # ─── Order detail ─────────────────────────────────────────────────────────────
 
 @router.get("/orders/{order_id}", response_model=OrderOut)
@@ -1088,12 +1168,119 @@ def close_order(
     return _to_order_out(_load_order(db, parsed), viewer=current_user)
 
 
+# ─── Submission versions (改訂2.5 / 9-A3) ────────────────────────────────────
+
+class SubmissionVersionOut(BaseModel):
+    version: int
+    message_id: str
+    sender_id: str | None
+    sender_name: str | None
+    note: str | None
+    file_available: bool
+    peaks: dict | None
+    rejected: bool
+    rejection_reason: str | None
+    created_at: Any
+
+
+@router.get("/orders/{order_id}/submissions", response_model=list[SubmissionVersionOut])
+def list_submissions(
+    order_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(_require_commission),
+) -> list[SubmissionVersionOut]:
+    """改訂2.5 (9-A3): submission の全 version 一覧 + 各 rejection 情報。
+    タイムライン順 (古い順) で返す。最新は配列末尾。
+    """
+    parsed = _parse_uuid(order_id)
+    order = _load_order(db, parsed)
+    _check_access(order, current_user)
+
+    # submission + rejection を時系列で全部取得
+    msgs = db.execute(
+        select(OrderMessage)
+        .where(
+            OrderMessage.order_id == parsed,
+            OrderMessage.kind.in_([OrderMessageKind.submission, OrderMessageKind.rejection]),
+        )
+        .options(joinedload(OrderMessage.sender))
+        .order_by(OrderMessage.created_at.asc())
+    ).scalars().all()
+
+    out: list[SubmissionVersionOut] = []
+    pending_submission: OrderMessage | None = None
+
+    def flush_pending(rejected: bool, reason: str | None) -> None:
+        nonlocal pending_submission
+        if pending_submission is None:
+            return
+        m = pending_submission
+        out.append(SubmissionVersionOut(
+            version=m.submission_version or 0,
+            message_id=str(m.id),
+            sender_id=str(m.sender_id) if m.sender_id else None,
+            sender_name=m.sender.username if m.sender else None,
+            note=m.content,
+            file_available=m.attachment_path is not None,
+            peaks=m.attachment_peaks,
+            rejected=rejected,
+            rejection_reason=reason,
+            created_at=m.created_at,
+        ))
+        pending_submission = None
+
+    for m in msgs:
+        if m.kind == OrderMessageKind.submission:
+            # 前回の submission がリジェクト無く次の submission に到達した = リジェクトされず差し戻し以外の理由で再提出された可能性は無い
+            # 構造上 reject → assigned → submit-file の流れなので、未 reject の旧 submission は通常無い
+            # 念のため flush しておく (rejected=False)
+            flush_pending(False, None)
+            pending_submission = m
+        else:  # rejection
+            flush_pending(True, m.content)
+
+    # 最後の submission を未 reject として確定
+    flush_pending(False, None)
+    return out
+
+
 # ─── Submission stream (改訂2.2: 受け取る前のプレビュー) ─────────────────────
+
+def _resolve_submission_path(db: Session, order_id: uuid.UUID, version: int) -> Path | None:
+    """改訂2.5: 指定 version (0=latest) の submission ファイルパスを解決。
+    新形式 (_vN.wav) → 旧形式 (.wav) → done 後の確定ファイル (orders/{id}.wav) の順でフォールバック。
+    """
+    sub_dir = Path(settings.ORDERS_DIR) / "submissions"
+    if version == 0:
+        # 最新 version をクエリ
+        latest_v = db.execute(
+            select(func.max(OrderMessage.submission_version))
+            .where(
+                OrderMessage.order_id == order_id,
+                OrderMessage.kind == OrderMessageKind.submission,
+            )
+        ).scalar_one()
+        if latest_v:
+            p = sub_dir / f"{order_id}_v{latest_v}.wav"
+            if p.exists():
+                return p
+        # 旧形式フォールバック (migration 前のデータや done 後の確定ファイル)
+        old = sub_dir / f"{order_id}.wav"
+        if old.exists():
+            return old
+        final = Path(settings.ORDERS_DIR) / f"{order_id}.wav"
+        return final if final.exists() else None
+    else:
+        p = sub_dir / f"{order_id}_v{version}.wav"
+        return p if p.exists() else None
+
 
 @router.get("/orders/{order_id}/submission-stream-url")
 def get_submission_stream_url(
     order_id: str,
     start: int = Query(0, ge=0),
+    version: int = Query(0, ge=0, description="0 = latest (改訂2.5 / 9-A3)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     _: None = Depends(_require_commission),
@@ -1110,57 +1297,8 @@ def get_submission_stream_url(
             status_code=409,
             detail={"code": "NO_SUBMISSION_FILE", "message": "submission file not available"},
         )
-    params = issue_submission_stream(str(parsed), start)
+    params = issue_submission_stream(str(parsed), start, version)
     return {"url": _build_url("/api/v1/orders/submission-stream", params)}
-
-
-@router.get("/orders/submission-stream")
-def submission_stream(
-    order_id: str = Query(...),
-    start: int = Query(0, ge=0),
-    exp: int = Query(...),
-    sig: str = Query(...),
-    db: Session = Depends(get_db),
-) -> Any:
-    """signed URL の検証 → submission ファイルから 10秒チャンクを切り出して返す。
-    JWT 不要 (短命 signed URL で代替)。"""
-    try:
-        verify_submission_stream(order_id, start, exp, sig)
-    except SignedURLError as exc:
-        raise HTTPException(status_code=403, detail={"code": exc.code, "message": exc.message})
-
-    parsed = _parse_uuid(order_id)
-    # 提出ファイル: reviewing は submissions/{id}.wav, done は {id}.wav (どちらかを使う)
-    sub_path = Path(settings.ORDERS_DIR) / "submissions" / f"{parsed}.wav"
-    final_path = Path(settings.ORDERS_DIR) / f"{parsed}.wav"
-    path = sub_path if sub_path.exists() else final_path
-    if not path.exists():
-        raise HTTPException(status_code=404, detail={"code": "FILE_NOT_FOUND", "message": "no submission file"})
-
-    import subprocess
-    from fastapi.responses import StreamingResponse
-    proc = subprocess.Popen(
-        [
-            "ffmpeg", "-loglevel", "error",
-            "-ss", str(start), "-t", "10",
-            "-i", str(path),
-            "-c:a", "copy",
-            "-f", "wav", "pipe:1",
-        ],
-        stdout=subprocess.PIPE,
-    )
-
-    def _iter_chunks():
-        try:
-            while True:
-                chunk = proc.stdout.read(65536)
-                if not chunk:
-                    break
-                yield chunk
-        finally:
-            proc.kill()
-
-    return StreamingResponse(_iter_chunks(), media_type="audio/wav")
 
 
 # ─── Cancel ───────────────────────────────────────────────────────────────────
@@ -1281,12 +1419,19 @@ def submit_file(
     if order.status != OrderStatus.assigned:
         raise HTTPException(status_code=409, detail={"code": "INVALID_STATE", "message": f"expected assigned, got {order.status.value}"})
 
-    # 提出ファイルは submissions/ サブディレクトリへ。
-    # 最終納品パス `{ORDERS_DIR}/{order_id}.wav` は admin の done 承認時に確定する
-    # → 差し戻し中の reviewing→assigned で誤って user が DL するのを防ぐ
+    # 改訂2.5 (9-A3): バージョン管理。次の version 番号を採番し
+    # `submissions/{order_id}_v{n}.wav` に保存。過去の version は残す
+    next_version = int(db.execute(
+        select(func.coalesce(func.max(OrderMessage.submission_version), 0) + 1)
+        .where(
+            OrderMessage.order_id == parsed,
+            OrderMessage.kind == OrderMessageKind.submission,
+        )
+    ).scalar_one())
+
     sub_dir = Path(settings.ORDERS_DIR) / "submissions"
     sub_dir.mkdir(parents=True, exist_ok=True)
-    dest = sub_dir / f"{parsed}.wav"
+    dest = sub_dir / f"{parsed}_v{next_version}.wav"
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
         tmp_path = Path(tmp.name)
     try:
@@ -1299,20 +1444,25 @@ def submit_file(
 
     # WaveformPlayer プレビュー用 peaks v2。失敗してもアップロード自体は成功扱い
     try:
-        order.submission_peaks = compute_peaks_v2(dest)
+        peaks = compute_peaks_v2(dest)
     except Exception:
-        order.submission_peaks = None
+        peaks = None
 
+    # Order 側 submission_peaks は最新版のミラー (UI の既存導線で参照)
+    order.submission_peaks = peaks
     order.status = OrderStatus.reviewing
     order.updated_at = func.now()
+
     db.add(OrderMessage(
         order_id=parsed,
         sender_id=current_user.id,
         content=note or "音源を提出しました。",
         attachment_path=str(dest),
         kind=OrderMessageKind.submission,
+        submission_version=next_version,
+        attachment_peaks=peaks,
     ))
-    _add_status_message(db, parsed, current_user.id, "reviewing")
+    _add_status_message(db, parsed, current_user.id, "reviewing", f"v{next_version}")
     db.commit()
     return _to_order_out(_load_order(db, parsed), viewer=current_user)
 
@@ -1336,29 +1486,6 @@ def get_order_file_url(
     params = issue_order_download(str(parsed), str(current_user.id))
     qs = "&".join(f"{k}={v}" for k, v in params.items())
     return {"url": f"/api/v1/orders/download-file?{qs}"}
-
-
-@router.get("/orders/download-file")
-def download_order_file(
-    order_id: str = Query(...),
-    user_id: str = Query(...),
-    exp: int = Query(...),
-    sig: str = Query(...),
-    db: Session = Depends(get_db),
-) -> FileResponse:
-    try:
-        verify_order_download(order_id, user_id, exp, sig)
-    except SignedURLError as exc:
-        raise HTTPException(status_code=403, detail={"code": exc.code, "message": exc.message})
-
-    parsed = _parse_uuid(order_id)
-    order = db.execute(select(Order).where(Order.id == parsed)).scalar_one_or_none()
-    if order is None or order.file_path is None:
-        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "file not found"})
-    fp = Path(order.file_path)
-    if not fp.exists():
-        raise HTTPException(status_code=404, detail={"code": "FILE_NOT_FOUND", "message": "file missing"})
-    return FileResponse(path=str(fp), media_type="audio/wav", filename=f"{order.title}.wav")
 
 
 # ─── Admin: nominate candidates ───────────────────────────────────────────────

@@ -154,6 +154,10 @@ class OrderMessage(Base):
         nullable=False,
         default=OrderMessageKind.comment,
     )
+    # 改訂2.5 (9-A3): kind=submission のみセット。Order ごとに created_at 順で 1..N
+    submission_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 提出音源の peaks v2。WaveformPlayer で各 version を視聴するため
+    attachment_peaks: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

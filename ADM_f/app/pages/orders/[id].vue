@@ -111,18 +111,23 @@ onMounted(async () => {
     // 改訂2.1: 編集履歴を取得 (highlight + 履歴モーダル用)
     await fetchBriefEdits()
     // 改訂2.2: 音源プレビュー URL を取得 (reviewing / done のみ)
-    if (hasSubmission.value) await loadPreview()
+    if (hasSubmission.value) {
+      await fetchSubmissions()
+      await loadPreview()
+    }
     // チャット最下部までスクロール (LINE 風)
     await scrollToBottom()
   }
 })
 
-// status 変化で preview を再ロード
+// status 変化で preview を再ロード + 履歴も再取得 (新規 submission で版数増加)
 watch(() => order.value?.status, async (s) => {
   if (s && ['reviewing', 'done'].includes(s)) {
+    await fetchSubmissions()
     await loadPreview()
   } else {
     audioPreviewUrl.value = null
+    submissions.value = []
   }
 })
 
@@ -169,7 +174,7 @@ const subjectDisplay = computed(() => {
   return t.replace(/\s*#\d+\s*$/, '')
 })
 
-// ─── 音源プレビュー (改訂2.2) ───────────────────
+// ─── 音源プレビュー (改訂2.2) + バージョン管理 (改訂2.5 / 9-A3) ───────────────
 const audioPreviewUrl = ref<string | null>(null)
 const audioPreviewLoading = ref(false)
 const audioPreviewError = ref<string | null>(null)
@@ -177,14 +182,43 @@ const hasSubmission = computed(() =>
   order.value && ['reviewing', 'done'].includes(order.value.status),
 )
 
-async function loadPreview() {
+interface SubmissionVersion {
+  version: number
+  message_id: string
+  sender_id: string | null
+  sender_name: string | null
+  note: string | null
+  file_available: boolean
+  peaks: { n: number; max: number[]; min: number[]; rms: number[] } | null
+  rejected: boolean
+  rejection_reason: string | null
+  created_at: string
+}
+
+const submissions = ref<SubmissionVersion[]>([])
+const selectedVersion = ref<number>(0)  // 0 = latest
+
+async function fetchSubmissions() {
+  if (!order.value) return
+  try {
+    submissions.value = await api.get<SubmissionVersion[]>(
+      `/api/v1/orders/${orderId.value}/submissions`,
+    )
+    // 初期選択: 最新 version (リストの末尾)
+    if (submissions.value.length > 0) {
+      selectedVersion.value = submissions.value[submissions.value.length - 1].version
+    }
+  } catch { /* silent: バージョン履歴は補助情報 */ }
+}
+
+async function loadPreview(version = 0) {
   if (!hasSubmission.value) return
   audioPreviewLoading.value = true
   audioPreviewError.value = null
   try {
     const { url } = await api.get<{ url: string }>(
       `/api/v1/orders/${orderId.value}/submission-stream-url`,
-      { query: { start: 0 } },
+      { query: { start: 0, version } },
     )
     const config = useRuntimeConfig()
     const base = config.public.apiBaseUrl as string
@@ -194,6 +228,18 @@ async function loadPreview() {
   } finally {
     audioPreviewLoading.value = false
   }
+}
+
+function selectVersion(v: number) {
+  selectedVersion.value = v
+  // version=0 で最新が確実に取れるよう、末尾なら 0、それ以外は具体的な v を渡す
+  const isLatest = submissions.value.length > 0 &&
+    v === submissions.value[submissions.value.length - 1].version
+  loadPreview(isLatest ? 0 : v)
+}
+
+function formatVersionTime(iso: string): string {
+  return new Date(iso).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 // ─── 受け取る (close) (改訂2.2) ─────────────────
@@ -1045,6 +1091,7 @@ const myCandidate = computed(() =>
         </div>
 
         <!-- 改訂2.2: 音源プレビュー (reviewing / done で全参加者視聴可) -->
+        <!-- 改訂2.5 (9-A3): 複数 version の履歴を表示、選択切替 -->
         <div
           v-if="hasSubmission"
           class="card shrink-0 border-primary/30 bg-primary/5 px-4 py-3"
@@ -1063,6 +1110,34 @@ const myCandidate = computed(() =>
               @click="receiveAndClose"
             >{{ closeLoading ? '…' : '受け取る' }}</button>
           </div>
+
+          <!-- バージョン履歴 (改訂2.5 / 9-A3) — 2件以上の時のみ表示 -->
+          <div v-if="submissions.length > 1" class="mt-3 space-y-1">
+            <p class="text-[10px] font-semibold uppercase tracking-widest text-muted">提出履歴</p>
+            <div class="space-y-1">
+              <button
+                v-for="s in [...submissions].reverse()"
+                :key="s.message_id"
+                type="button"
+                class="flex w-full items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-[11px] transition-colors"
+                :class="selectedVersion === s.version
+                  ? 'border-primary bg-primary/10'
+                  : s.rejected
+                    ? 'border-hairline-soft bg-white/30 opacity-60 hover:opacity-100'
+                    : 'border-hairline-soft bg-white/50 hover:border-primary/40'"
+                @click="selectVersion(s.version)"
+              >
+                <span class="shrink-0 rounded-full bg-ink/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ink">v{{ s.version }}</span>
+                <span v-if="s.rejected" class="shrink-0 rounded bg-accent/20 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-accent">REJECTED</span>
+                <span class="flex-1 truncate" :class="s.rejected ? 'text-muted' : 'text-ink'">{{ s.note ?? '(メモなし)' }}</span>
+                <span class="shrink-0 font-mono text-[10px] text-muted">{{ formatVersionTime(s.created_at) }}</span>
+              </button>
+            </div>
+            <p v-if="submissions.find(s => s.version === selectedVersion)?.rejected" class="px-1 text-[10px] text-accent">
+              ⊘ {{ submissions.find(s => s.version === selectedVersion)?.rejection_reason ?? '差し戻されました' }}
+            </p>
+          </div>
+
           <div v-if="audioPreviewLoading" class="mt-2 text-[12px] text-muted">読み込み中…</div>
           <div v-else-if="audioPreviewError" class="mt-2 text-[12px] text-accent">{{ audioPreviewError }}</div>
           <audio

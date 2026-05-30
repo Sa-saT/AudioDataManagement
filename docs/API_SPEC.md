@@ -419,6 +419,25 @@ Request: `{ "response": "accepted" | "declined", "content": "..." }`
 
 ### POST `/orders/{order_id}/submit-file`
 Creator が .wav を提出 → assigned → reviewing。multipart: `file` + `note`。
+改訂2.5 (9-A3): 各提出は自動採番で `submissions/{order_id}_v{n}.wav` に保存される。
+peaks v2 は version ごとに OrderMessage.attachment_peaks に格納。
+
+### GET `/orders/{order_id}/submissions` (改訂2.5 / 9-A3)
+提出履歴 (version 一覧 + rejection 情報) を時系列順 (古い順) で返す。
+
+Response 200:
+```json
+[
+  { "version": 1, "message_id": "...", "sender_name": "demo_creator", "note": "初回提出",
+    "file_available": true, "peaks": { "n": 1000, "max": [...], "min": [...], "rms": [...] },
+    "rejected": true, "rejection_reason": "テンポ早すぎ", "created_at": "..." },
+  { "version": 2, ..., "rejected": false, "rejection_reason": null }
+]
+```
+
+### GET `/orders/{order_id}/submission-stream-url`
+チケット参加者向けの 10 秒チャンク signed URL を発行。
+クエリ: `start=N`(秒, default 0) / `version=N`(default 0 = latest、改訂2.5)。
 
 ### GET `/orders/{order_id}/file-url`
 Done 済み音源の signed URL 発行 (user/admin のみ)。
