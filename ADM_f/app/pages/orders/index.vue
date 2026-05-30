@@ -24,6 +24,8 @@ interface OrderListItem {
   notified_at: string | null
   closed_at: string | null
   closed_for_me: boolean
+  // NOTIFICATION_SPEC §3 Level 4: 行先頭の橙ドット
+  action_required: boolean
   created_at: string
   updated_at: string
 }
@@ -366,11 +368,18 @@ const BGM_SCENE_L: Record<string, string> = {
               v-for="order in activeOrders"
               :key="order.id"
               :to="`/orders/${order.id}`"
-              class="card flex items-center gap-4 px-4 py-3 transition-colors"
+              class="card relative flex items-center gap-4 px-4 py-3 transition-colors"
               :class="order.closed_for_me
                 ? 'opacity-50 pointer-events-auto hover:opacity-60'
                 : 'hover:border-primary/40'"
             >
+              <!-- NOTIFICATION_SPEC §3 Level 4: 左上の金ドット (要対応行のみ) -->
+              <span
+                v-if="order.action_required"
+                class="absolute -left-0.5 -top-0.5 h-2 w-2 rounded-full"
+                style="background:#ffd700;box-shadow:0 0 4px #ffd700cc;"
+                aria-label="要対応"
+              />
               <span
                 class="shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold"
                 :class="order.closed_for_me

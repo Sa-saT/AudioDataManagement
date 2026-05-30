@@ -964,10 +964,17 @@ watch(tab, (t) => {
         <div v-else class="space-y-1.5">
           <div v-for="g in creatorGroups" :key="g.creator_id">
             <button
-              class="card w-full cursor-pointer px-4 py-3 text-left transition-colors hover:border-primary"
+              class="card relative w-full cursor-pointer px-4 py-3 text-left transition-colors hover:border-primary"
               :class="expandedCreators.has(g.creator_id) ? 'border-primary' : ''"
               @click="toggleCreator(g.creator_id)"
             >
+              <!-- NOTIFICATION_SPEC §3 Level 4: 未払いがあれば金ドット -->
+              <span
+                v-if="g.pending_count > 0"
+                class="absolute -left-0.5 -top-0.5 h-2 w-2 rounded-full"
+                style="background:#ffd700;box-shadow:0 0 4px #ffd700cc;"
+                aria-label="未払いあり"
+              />
               <div class="flex items-center gap-4">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
                   class="shrink-0 text-muted transition-transform"
@@ -985,8 +992,15 @@ watch(tab, (t) => {
             <div v-if="expandedCreators.has(g.creator_id)" class="ml-4 mt-1 space-y-1">
               <div
                 v-for="p in g.payouts" :key="p.id"
-                class="flex items-center gap-3 rounded-lg border border-hairline-soft bg-white/50 px-4 py-2.5"
+                class="relative flex items-center gap-3 rounded-lg border border-hairline-soft bg-white/50 px-4 py-2.5"
               >
+                <!-- NOTIFICATION_SPEC §3 Level 4: 未払い行に金ドット -->
+                <span
+                  v-if="p.status === 'pending'"
+                  class="absolute -left-0.5 -top-0.5 h-2 w-2 rounded-full"
+                  style="background:#ffd700;box-shadow:0 0 4px #ffd700cc;"
+                  aria-label="未払い"
+                />
                 <div class="min-w-0 flex-1">
                   <p class="truncate text-[12px] font-medium text-ink">{{ p.audio_title ?? '(不明)' }}</p>
                   <p class="font-mono text-[10px] text-muted">{{ new Date(p.created_at).toLocaleDateString('ja-JP') }}</p>

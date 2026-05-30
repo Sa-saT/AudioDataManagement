@@ -143,6 +143,8 @@ class OrderListItem(BaseModel):
     closed_at: Any  # 改訂2.2
     # NOTIFICATION_SPEC §8.4: viewer 視点で「クローズ済み」=dim 表示対象か
     closed_for_me: bool = False
+    # NOTIFICATION_SPEC §3 Level 4: この行が viewer の対応待ちか (左上ドット用)
+    action_required: bool = False
     created_at: Any
     updated_at: Any
 
@@ -221,7 +223,89 @@ def _is_closed_for(order: Order, viewer: User) -> bool:
     return False
 
 
-def _to_list_item(order: Order, viewer: User | None = None) -> OrderListItem:
+def _order_action_required(
+    order: Order,
+    viewer: User,
+    unread_order_ids: set[uuid.UUID],
+) -> bool:
+    """NOTIFICATION_SPEC §3 Level 4: この order が viewer の対応待ちか。
+    クローズ済みは除外する (dim 表示の行に対応 dot は立てない)。
+    """
+    if _is_closed_for(order, viewer):
+        return False
+    if order.id in unread_order_ids:
+        return True
+    role = viewer.role.value
+    if role == "user":
+        if order.user_id != viewer.id:
+            return False
+        if order.status == OrderStatus.reviewing:
+            return True
+        if order.status == OrderStatus.done and order.closed_at is None:
+            return True
+    elif role == "creator":
+        if order.assigned_creator_id == viewer.id and order.status == OrderStatus.assigned:
+            return True
+        for cand in order.candidates:
+            if (
+                cand.creator_id == viewer.id
+                and cand.response_status == CandidateResponseStatus.pending
+            ):
+                return True
+    else:  # admin
+        if order.status in (OrderStatus.open, OrderStatus.reviewing):
+            return True
+    return False
+
+
+def _orders_with_unread_messages(db: Session, viewer: User) -> set[uuid.UUID]:
+    """viewer にとってメッセージ未読がある order_id 集合。"""
+    participant_subq = _participant_order_ids_subq(viewer).subquery()
+    last_view = (
+        select(
+            ActivityLog.target_id.label("order_id"),
+            func.max(ActivityLog.created_at).label("last_view_at"),
+        )
+        .where(
+            ActivityLog.user_id == viewer.id,
+            ActivityLog.kind == ActivityKind.order_view,
+        )
+        .group_by(ActivityLog.target_id)
+        .subquery()
+    )
+    visible = [OrderMessageVisibility.public]
+    if viewer.role.value in ("creator", "admin"):
+        visible.append(OrderMessageVisibility.admin_creator)
+    last_msg = (
+        select(
+            OrderMessage.order_id.label("order_id"),
+            func.max(OrderMessage.created_at).label("last_msg_at"),
+        )
+        .where(
+            OrderMessage.sender_id != viewer.id,
+            OrderMessage.visibility.in_(visible),
+        )
+        .group_by(OrderMessage.order_id)
+        .subquery()
+    )
+    rows = db.execute(
+        select(last_msg.c.order_id)
+        .select_from(last_msg)
+        .join(participant_subq, participant_subq.c.id == last_msg.c.order_id)
+        .outerjoin(last_view, last_view.c.order_id == last_msg.c.order_id)
+        .where(
+            (last_view.c.last_view_at.is_(None)) |
+            (last_msg.c.last_msg_at > last_view.c.last_view_at)
+        )
+    ).all()
+    return {r[0] for r in rows}
+
+
+def _to_list_item(
+    order: Order,
+    viewer: User | None = None,
+    unread_order_ids: set[uuid.UUID] | None = None,
+) -> OrderListItem:
     return OrderListItem(
         id=str(order.id),
         title=order.title,
@@ -236,6 +320,10 @@ def _to_list_item(order: Order, viewer: User | None = None) -> OrderListItem:
         notified_at=order.notified_at,
         closed_at=order.closed_at,
         closed_for_me=_is_closed_for(order, viewer) if viewer else False,
+        action_required=(
+            _order_action_required(order, viewer, unread_order_ids or set())
+            if viewer else False
+        ),
         created_at=order.created_at,
         updated_at=order.updated_at,
     )
@@ -466,6 +554,7 @@ def list_orders(
         .options(
             joinedload(Order.user),
             joinedload(Order.assigned_creator),
+            joinedload(Order.candidates),
         )
     )
     if role == "user":
@@ -488,7 +577,8 @@ def list_orders(
             q = base.where(Order.closed_at.is_(None))
 
     rows = db.execute(q.order_by(Order.updated_at.desc())).unique().scalars().all()
-    return [_to_list_item(o, current_user) for o in rows]
+    unread = _orders_with_unread_messages(db, current_user)
+    return [_to_list_item(o, current_user, unread) for o in rows]
 
 
 # ─── Create order ─────────────────────────────────────────────────────────────
