@@ -190,14 +190,12 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 | 48 | Commission 改訂2.2 + 2.3 — REDMINE / 受け取る / アーカイブ / LINE 風チャット / token 予約 | 7ca5a28 〜 d9c2180 |
 | 49 | **NOTIFICATION_SPEC 策定 + Phase B/C/D 実装** (統合通知 API / admin タブ Level 3 / 一覧 per-row dot / クローズ dim 化 / メッセージ未読精緻化 / submission peaks v2) | 995018f 〜 2d327f1 |
 | 50 | **改訂2.4** — Order 内私信廃止 + Order 共有メモ (admin/creator 各1枠、左右分割、user 不可視) + admin↔creator Direct Message (DM_SPEC Phase A-D) + admin Commission メニュー統合 | 14a5fc5 〜 3889d85 |
-| 51 | **9-A3 改訂2.5** — Creator 複数提出のバージョン管理 (submissions/{id}_v{n}.wav + peaks v2 per version + GET /submissions + 履歴 UI) + リテラルルート順序バグ修正 | (this) |
+| 51 | **9-A3 改訂2.5** — Creator 複数提出のバージョン管理 (submissions/{id}_v{n}.wav + peaks v2 per version + GET /submissions + 履歴 UI) + リテラルルート順序バグ修正 | 3d2566b |
+| 52 | **9-A4** — クリエイター視点 brief UI (役割優先順序 + tx_* スライダー視覚化 + 視点切替トグル / localStorage) | (this) |
 
 ### Phase 3 残スコープ → Phase 4 前に整備
 
 詳細は **[docs/ORDER_SPEC.md §9.1](docs/ORDER_SPEC.md)** (棚卸し済) を一次ソースとする。
-
-**中優先:**
-- クリエイター視点 UI 最適化 (9-A4)
 
 **低 / 要検討:**
 - SE 複数納品 (9-A5) / 改訂2.1 残課題 (9-A6) / 改訂2 残課題 (9-A7) / NOTIFICATION Phase E 詳細セクション dot (9-A12)

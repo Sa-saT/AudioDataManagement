@@ -101,6 +101,8 @@ const fetchError = ref<string | null>(null)
 
 onMounted(async () => {
   auth.hydrate()
+  // 9-A4: auth.role 確定後に briefView の既定を適用
+  applyBriefViewDefault()
   await fetchOrder()
   await fetchMemos()
   // 改訂2: チケット閲覧を記録 (通知バッジの既読判定に使う)
@@ -405,6 +407,36 @@ const isAdmin = computed(() => auth.role === 'admin')
 const isCreator = computed(() => auth.role === 'creator' || auth.role === 'admin')
 const isOwner = computed(() => order.value?.user_id === auth.user?.id)
 const isAssignedCreator = computed(() => order.value?.assigned_creator_id === auth.user?.id)
+
+// ─── 9-A4: クリエイター視点 brief 表示 ────────────────
+// role=creator は creator view、user は user view、admin は creator view を既定
+// localStorage に保存して次回も復元
+const BRIEF_VIEW_KEY = 'pathfinder.briefView'
+type BriefView = 'user' | 'creator'
+const briefView = ref<BriefView>('creator')  // 仮値、auth.hydrate 後に正値を再設定
+function applyBriefViewDefault() {
+  if (typeof window === 'undefined') return
+  const saved = localStorage.getItem(BRIEF_VIEW_KEY) as BriefView | null
+  briefView.value = saved ?? (auth.role === 'user' ? 'user' : 'creator')
+}
+function toggleBriefView() {
+  briefView.value = briefView.value === 'creator' ? 'user' : 'creator'
+  if (typeof window !== 'undefined') localStorage.setItem(BRIEF_VIEW_KEY, briefView.value)
+}
+// 締切までの残日数 (creator view 用)
+const daysToDeadline = computed(() => {
+  if (!order.value?.desired_deadline) return null
+  const dl = new Date(order.value.desired_deadline)
+  const diff = Math.ceil((dl.getTime() - Date.now()) / 86400000)
+  return diff
+})
+// tx_* スライダー位置 (0〜100%)
+function txPosition(value: string | undefined, left: string, mid: string, right: string): number {
+  if (value === left) return 10
+  if (value === mid) return 50
+  if (value === right) return 90
+  return 50
+}
 
 // ─── 改訂2.4: 共有メモ ─────────────────────────────
 interface MemoOut {
@@ -888,6 +920,12 @@ const myCandidate = computed(() =>
           <div class="flex items-center justify-between">
             <p class="text-[10px] font-semibold text-ink/40 tracking-widest uppercase">サウンドブリーフ</p>
             <div class="flex items-center gap-2">
+              <!-- 9-A4: 視点切替トグル -->
+              <button
+                class="flex items-center gap-1 rounded-md border border-hairline-soft bg-white/60 px-2 py-0.5 text-[10px] text-muted transition-colors hover:border-primary hover:text-primary-active"
+                :title="briefView === 'creator' ? 'ユーザ視点に切替' : 'クリエイター視点に切替'"
+                @click="toggleBriefView"
+              >{{ briefView === 'creator' ? '🎵 クリエイター視点' : '👤 ユーザ視点' }}</button>
               <!-- 履歴アイコン -->
               <button
                 v-if="briefEdits.length > 0"
@@ -916,6 +954,113 @@ const myCandidate = computed(() =>
             </div>
           </div>
 
+          <!-- 9-A4: クリエイター視点 (役割優先順序) ─────────────────────── -->
+          <template v-if="briefView === 'creator'">
+            <!-- 📦 つくるもの (最重要: タイプ + 長さ + 報酬 + 締切) -->
+            <div class="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+              <p class="text-[10px] font-semibold uppercase tracking-widest text-primary-active">📦 つくるもの</p>
+              <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1.5 text-[14px] font-medium text-ink">
+                <span v-if="order.brief.sound_type" class="rounded-full bg-ink px-2.5 py-0.5 text-[12px] text-canvas">{{ { bgm: 'BGM', se: 'SE', both: 'BGM + SE' }[order.brief.sound_type] }}</span>
+                <span v-if="order.brief.length_sec"><span class="font-mono">{{ order.brief.length_sec }}</span> <span class="text-[11px] text-muted">秒</span></span>
+                <span class="text-accent"><span class="font-mono">{{ order.token_cost }}</span> <span class="text-[11px]">tk</span></span>
+                <span v-if="order.desired_deadline" class="text-[12px]">
+                  締切 <span class="font-mono">{{ formatDeadline(order.desired_deadline) }}</span>
+                  <span v-if="daysToDeadline !== null && daysToDeadline >= 0" class="text-muted">(あと {{ daysToDeadline }} 日)</span>
+                  <span v-else-if="daysToDeadline !== null" class="text-accent">(期限超過)</span>
+                </span>
+              </div>
+              <p v-if="order.brief.purpose" class="text-[12px] text-body">
+                用途: <span class="text-ink">{{ { game: 'ゲーム', video: '映像', podcast: 'ポッドキャスト', other: 'その他' }[order.brief.purpose] ?? order.brief.purpose }}</span>
+                <span v-if="order.brief.purpose_note" class="text-muted">— {{ order.brief.purpose_note }}</span>
+              </p>
+            </div>
+
+            <!-- 🎵 雰囲気・感情 -->
+            <div v-if="order.brief.emotions_target?.length || order.brief.bgm_scenes?.length || order.brief.memory_impression" class="space-y-1.5">
+              <p class="text-[10px] font-semibold uppercase tracking-widest text-ink/40">🎵 雰囲気・感情</p>
+              <div v-if="order.brief.emotions_target?.length" class="flex flex-wrap gap-1.5">
+                <span
+                  v-for="e in order.brief.emotions_target"
+                  :key="e"
+                  class="rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary-active"
+                >{{ { excitement: '高揚感/興奮', tension: '緊張感', fear: '恐怖/不安', relief: '安らぎ/安心', loneliness: '孤独感', grandeur: '壮大さ', speed: '疾走感', sadness: '哀愁', mystery: '神秘/異世界感', achievement: '達成感', heaviness: '重厚感', comfort: '心地よさ', euphoria: '爽快感', dread: 'じわじわ恐怖', wonder: '驚き/発見' }[e] ?? e }}</span>
+              </div>
+              <div v-if="order.brief.bgm_scenes?.length" class="flex flex-wrap items-center gap-1.5">
+                <span class="text-muted">シーン:</span>
+                <span
+                  v-for="s in order.brief.bgm_scenes"
+                  :key="s"
+                  class="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-body border border-white/10"
+                >{{ { battle: 'バトル/戦闘', boss: 'ボス戦', explore: '探索/フィールド', menu: 'メニュー/UI', title: 'タイトル', event: 'イベント/ムービー', ending: 'エンディング', ambient: 'アンビエント', other: 'その他' }[s] ?? s }}</span>
+              </div>
+              <p v-if="order.brief.memory_impression" class="rounded-md border-l-2 border-primary/40 bg-primary/5 pl-2.5 py-1.5 text-[12px] italic text-body whitespace-pre-wrap">「{{ order.brief.memory_impression }}」</p>
+            </div>
+
+            <!-- 🔊 SE 設計 (SE のみ) -->
+            <div v-if="order.brief.se_trigger || order.brief.se_functions?.length" class="space-y-1.5">
+              <p class="text-[10px] font-semibold uppercase tracking-widest text-ink/40">🔊 SE 設計</p>
+              <p v-if="order.brief.se_trigger" class="text-[12px]"><span class="text-muted">トリガー:</span> <span class="text-ink">{{ order.brief.se_trigger }}</span></p>
+              <div v-if="order.brief.se_functions?.length" class="flex flex-wrap gap-1.5">
+                <span
+                  v-for="f in order.brief.se_functions"
+                  :key="f"
+                  class="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-body border border-white/10"
+                >{{ { success: '成功/達成', danger: '危険/警告', ui: 'UI操作', operation: '操作の手応え', immersion: '没入/演出', character: 'キャラ感情' }[f] ?? f }}</span>
+              </div>
+            </div>
+
+            <!-- 🔗 参考音源 (大きく表示) -->
+            <div v-if="order.brief.reference_urls || order.brief.reference_elements?.length || order.brief.reference_avoid" class="space-y-1.5 rounded-md border border-hairline-soft bg-white/30 p-2.5">
+              <p class="text-[10px] font-semibold uppercase tracking-widest text-ink/40">🔗 参考音源</p>
+              <p v-if="order.brief.reference_urls" class="whitespace-pre-wrap break-all text-[12px] font-mono text-primary-active">{{ order.brief.reference_urls }}</p>
+              <div v-if="order.brief.reference_elements?.length" class="flex flex-wrap items-center gap-1">
+                <span class="text-[11px] text-muted">参考要素:</span>
+                <span
+                  v-for="r in order.brief.reference_elements"
+                  :key="r"
+                  class="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-body border border-white/10"
+                >{{ { atmosphere: '空気感/雰囲気', bass: '低音/ベース感', progression: '展開/構成', tempo: 'テンポ/グルーヴ', timbre: '音色/サウンドデザイン', melody: 'メロディライン', rhythm: 'リズムパターン', density: '音の密度/空間感' }[r] ?? r }}</span>
+              </div>
+              <p v-if="order.brief.reference_avoid" class="text-[11px]"><span class="text-muted">避けたい:</span> <span class="text-accent">{{ order.brief.reference_avoid }}</span></p>
+            </div>
+
+            <!-- 🎛️ 方向性スライダー -->
+            <div v-if="order.brief.tx_warm_cold || order.brief.tx_sparse_dense || order.brief.tx_static_dynamic" class="space-y-2">
+              <p class="text-[10px] font-semibold uppercase tracking-widest text-ink/40">🎛️ 方向性</p>
+              <div v-if="order.brief.tx_warm_cold" class="grid grid-cols-[60px_1fr_60px] items-center gap-2 text-[11px]">
+                <span class="text-right text-muted">温かい</span>
+                <div class="relative h-1.5 rounded-full bg-hairline-soft">
+                  <span class="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-primary shadow-sm" :style="`left:${txPosition(order.brief.tx_warm_cold, 'warm', 'mid', 'cold')}%`" />
+                </div>
+                <span class="text-muted">冷たい</span>
+              </div>
+              <div v-if="order.brief.tx_sparse_dense" class="grid grid-cols-[60px_1fr_60px] items-center gap-2 text-[11px]">
+                <span class="text-right text-muted">シンプル</span>
+                <div class="relative h-1.5 rounded-full bg-hairline-soft">
+                  <span class="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-primary shadow-sm" :style="`left:${txPosition(order.brief.tx_sparse_dense, 'sparse', 'mid', 'dense')}%`" />
+                </div>
+                <span class="text-muted">重厚</span>
+              </div>
+              <div v-if="order.brief.tx_static_dynamic" class="grid grid-cols-[60px_1fr_60px] items-center gap-2 text-[11px]">
+                <span class="text-right text-muted">静的</span>
+                <div class="relative h-1.5 rounded-full bg-hairline-soft">
+                  <span class="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-primary shadow-sm" :style="`left:${txPosition(order.brief.tx_static_dynamic, 'static', 'mid', 'dynamic')}%`" />
+                </div>
+                <span class="text-muted">激しい</span>
+              </div>
+            </div>
+
+            <!-- ⚙️ 技術仕様 (末尾、コンパクト) -->
+            <div v-if="order.brief.delivery_format || order.brief.bgm_loop !== undefined || order.brief.budget_range || order.brief.note" class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted">
+              <span v-if="order.brief.delivery_format">📀 {{ { wav48k24b: '48kHz / 24bit', wav44k16b: '44.1kHz / 16bit', any: '形式: どちらでも' }[order.brief.delivery_format] }}</span>
+              <span v-if="order.brief.bgm_loop !== undefined">🔁 {{ order.brief.bgm_loop ? 'ループ必要' : 'ループ不要' }}</span>
+              <span v-if="order.brief.budget_range">💰 {{ { '5000': '〜¥5,000', '10000': '〜¥10,000', negotiable: '予算: 要相談' }[order.brief.budget_range] }}</span>
+              <p v-if="order.brief.note" class="mt-1 w-full whitespace-pre-wrap text-body">{{ order.brief.note }}</p>
+            </div>
+          </template>
+
+          <!-- 👤 ユーザ視点 (既存レイアウト、入力エコー) ───────────────────── -->
+          <template v-else>
           <!-- 基本 -->
           <div class="space-y-1">
             <p class="text-[10px] font-semibold text-ink/30 tracking-widest uppercase">基本</p>
@@ -1049,6 +1194,7 @@ const myCandidate = computed(() =>
             </div>
             <p v-if="order.brief.note" class="mt-1 text-body whitespace-pre-wrap">{{ order.brief.note }}</p>
           </div>
+          </template>
         </div>
 
         <!-- 改訂2.4: admin/creator 共有メモ (user 不可視) -->

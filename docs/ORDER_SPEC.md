@@ -470,7 +470,6 @@ Step 2 は `sound_type` (BGM/SE/both) によって表示項目が変わる。
 
 | # | 項目 | 優先度 | 備考 |
 |---|---|---|---|
-| 9-A4 | **クリエイター視点 UI 最適化** | 中 | 候補打診時のブリーフ表示は user 視点。creator が一目で要件把握できる別レイアウト |
 | 9-A5 | **SE 納品の複数ファイル対応** | 要検討 | SE は複数バリエーション納品が多い。`submissions/{id}_{slot}.wav` + 必要数フィールド |
 | 9-A6 | **改訂2.1 R2.1-Q1〜Q3** (§13.7) | 要検討 | reviewing 中の編集許可 / 編集回数上限 / length_sec 大幅変更時の自動 assign 取消 |
 | 9-A7 | **改訂2 R2-Q1〜Q3** (§11.6) | 低 | sound_type=both データ migration / 期限切れ order 扱い / draft 自動削除ポリシー |
@@ -501,6 +500,7 @@ Step 2 は `sound_type` (BGM/SE/both) によって表示項目が変わる。
 | ✅ | **改訂2.4** Order 共有メモ (admin/creator 各1枠、左右分割、user 不可視) (R2.4-A) | 75aac99 |
 | ✅ | **改訂2.4** admin↔creator Direct Message (DM_SPEC Phase A-D) | 3889d85 |
 | ✅ | **9-A3** Creator 複数提出のバージョン管理 (`submissions/{id}_v{n}.wav` + peaks v2 per version + GET /submissions + 履歴 UI) + リテラルルート順序バグ修正 | (改訂2.5 / migration 0019) |
+| ✅ | **9-A4** クリエイター視点 UI 最適化 (役割優先順序の brief 再構成 + tx_* スライダー視覚化 + 視点切替トグル + localStorage 保存) | (改訂2.5) |
 
 ---
 
