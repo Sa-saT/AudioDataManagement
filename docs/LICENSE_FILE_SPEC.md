@@ -94,7 +94,60 @@ Admin (発行画面)
 - localStorage 保存は Phase 1 限定。Phase 2 以降は JWT に置き換える (lic は再アクティベート時のみ送信)。
 - admin 用 lic は短期失効 (90日) を必須化することを推奨。
 
-## 7. バージョニング
+## 7. 暗号化方針
+
+> 詳細リテラシーは [PRODUCTION_OPERATIONS_GUIDE.md §11](PRODUCTION_OPERATIONS_GUIDE.md) を参照。
+
+### 7.1 フェーズ別フォーマット
+
+| Phase | フォーマット | 内容秘匿 | 改ざん検知 |
+|---|---|---|---|
+| A (現在) | JSON 平文 + HMAC-SHA256 署名 | ❌ | ✅ |
+| B (次回) | JWE (ECDH-ES + A256GCM) | ✅ | ✅ (GCM tag) |
+| C (本番前) | バイナリ magic blob (AES-256-GCM) + Ed25519 署名 | ✅ | ✅ |
+
+`schemaVersion` フィールドでフォーマット世代を判別し、移行期間中は複数世代を受け入れる。
+
+### 7.2 Phase B — JWE 形式
+
+ファイルの内容はコンパクト JWE トークン 1行:
+
+```
+eyJhbGciOiJFQ0RILUVTIiwiZW5jIjoiQTI1NkdDTSIsImtpZCI6ImFkbS12MSJ9..IV.ciphertext.tag
+```
+
+- アルゴリズム: `ECDH-ES` + `A256GCM`
+- claims (暗号化されたペイロード) は §2.1 の JSON フィールドと同一
+- `kid` で鍵世代を識別。サーバは対応する EC 秘密鍵で復号
+
+### 7.3 Phase C — バイナリ形式
+
+```
+[8B magic "ADMLIC\x01\x00"][12B nonce][N bytes AES-256-GCM ciphertext + 16B tag]
+```
+
+- magic bytes でフォーマット検出 / バージョン管理
+- nonce は発行ごとにランダム生成 (使い回し禁止)
+- GCM tag で改ざん検知を兼ねるため HMAC 署名は不要
+
+### 7.4 鍵管理規則
+
+- 秘密鍵は必ず環境変数 (`ADM_LIC_EC_PRIVATE_KEY` / `ADM_LIC_ENC_KEY`) で管理。コード・ファイルへの埋め込み禁止。
+- 鍵ローテーション時は旧 `kid` の鍵を保持し、旧世代の lic を復号できる状態を維持する。
+- EC 公開鍵は管理 UI / Admin 発行スクリプトに配置。漏洩しても復号不可。
+
+### 7.5 検証エラーコード
+
+| エラー | HTTP | 説明 |
+|---|---|---|
+| `INVALID_LICENSE_SIGNATURE` | 401 | HMAC 不一致 / GCM tag 不一致 / JWE 復号失敗 |
+| `INVALID_LICENSE_FORMAT` | 400 | 既知 schemaVersion でない / magic bytes 不一致 |
+| `LICENSE_REVOKED` | 401 | DB 上で `revoked_at` が設定済み |
+| `LICENSE_EXPIRED` | 401 | `expiresAt` を過ぎている |
+
+---
+
+## 8. バージョニング
 
 将来の互換のため、`schemaVersion: 1` フィールドを Phase 2 で追加する。  
 未指定の lic は schemaVersion=1 とみなす。

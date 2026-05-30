@@ -385,3 +385,220 @@ staging を「**自分の音源テスト場**」として運用し、user 影響
 5. **β リリース対象ユーザを 10〜20人に絞って** 1ヶ月運用、本ガイドの所要時間を実測
 
 実測した値が本ガイドと乖離していたら、その時点で構成見直し。
+
+---
+
+## 11. licファイルの暗号化 — リテラシーと実装指針
+
+> 作成: 2026-05-31 / 目的: 実装前に「何を守るか」と「どの技術が適切か」を整理する
+
+---
+
+### 11.1 現状の問題と脅威モデル
+
+#### 現在の lic ファイル
+
+```json
+{
+  "username": "saaaaa",
+  "role": "user",
+  "licenseId": "LIC-2026-0001",
+  "monthlyQuotaTokens": 18000,
+  "issuedAt": "2026-05-26T00:00:00Z",
+  "signature": "base64(HMAC-SHA256(...))"
+}
+```
+
+テキストエディタで開けば全フィールドが読める。
+
+#### 何が守れていて、何が守れていないか
+
+| 脅威 | 現状の対応 | 不足 |
+|---|---|---|
+| **改ざん** (role を admin に書き換える) | HMAC署名で検知 → サーバが 401 | ✅ すでに守れる |
+| **リプレイ** (他人の lic を使う) | DB 側 `revoked_at` チェック | ✅ すでに守れる |
+| **内容の盗み見** (quota / role を確認される) | **なし。JSON 平文なので丸見え** | ❌ 暗号化が必要 |
+| **フォーマット解析** (自作クライアントで形式を模倣) | **なし。構造が自明** | △ バイナリ化で緩和 |
+| **鍵の漏洩** (HMAC key が流出) | 環境変数管理のみ | △ key rotation で緩和 |
+
+**結論:** 改ざん・リプレイはすでに防げている。追加で守るのは **「内容の隠蔽」と「フォーマット難読化」**。
+
+---
+
+### 11.2 一般的なアプローチ (技術カタログ)
+
+#### A. HMAC 署名のみ (現状)
+
+```
+[JSON平文] + [HMAC-SHA256 署名]
+```
+
+- 改ざん検知 ✅ / 内容秘匿 ❌
+- Base64 デコードすれば誰でも読める
+- Vercel / Stripe 等の webhook 検証はこの方式
+
+#### B. JWT (JSON Web Token) — 署名付き、非暗号化
+
+```
+eyJhbGciOiJIUzI1NiJ9.eyJ1c2VybmFtZSI6InNhYWFhYSIsInJvbGUiOiJ1c2VyIn0.xxxx
+```
+
+- 3つのドット区切り: `Header.Payload.Signature`
+- Payload は Base64URL エンコードのみ → **デコードすれば読める**
+- 署名アルゴリズム: HS256 (HMAC) / RS256 (RSA) / ES256 (ECDSA) / EdDSA (Ed25519)
+- 現状の HMAC 署名 JSON を JWT 形式にしただけで内容秘匿にはならない
+- **用途:** 現状から移行する最小コストの標準化。ツールが豊富 (pyjwt, jose)
+
+#### C. JWE (JSON Web Encryption) — 暗号化 JWT
+
+```
+eyJhbGciOiJSU0EtT0FFUCIsImVuYyI6IkEyNTZHQ00ifQ.xxxx.xxxx.xxxx.xxxx
+```
+
+- 5つのドット区切り: `Header.EncryptedKey.IV.Ciphertext.Tag`
+- **Payload が完全に暗号化されており、鍵なしでは読めない**
+- アルゴリズム例:
+  - `RSA-OAEP` + `A256GCM`: RSA で鍵を暗号化、AES-GCM でペイロードを暗号化
+  - `ECDH-ES` + `A256GCM`: 楕円曲線 DH で鍵合意、AES-GCM で暗号化 (鍵配送が不要)
+- Python: `joserfc` / `python-jose` / `authlib`
+- **用途:** JWT の延長線で内容を隠したい場合の最有力候補
+
+#### D. 対称暗号 AES-256-GCM (バイナリ形式)
+
+```
+[8B magic "ADMLIC\x01\x00"] [12B nonce] [N bytes ciphertext] [16B GCM tag]
+```
+
+- **AES-GCM**: Authenticated Encryption。暗号化 + 改ざん検知を同時に提供
+- nonce (IV) は暗号化ごとにランダム生成 (12 byte / 96 bit)
+- 鍵は 256 bit (32 byte)、環境変数 `ADM_LIC_ENC_KEY` に保管
+- バイナリなので `.lic` を開いても文字化けのみ
+- Python: `cryptography` パッケージの `AESGCM` クラス (3行で実装可)
+
+```python
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+import os
+
+KEY = bytes.fromhex(os.environ["ADM_LIC_ENC_KEY"])  # 32 bytes
+MAGIC = b"ADMLIC\x01\x00"
+
+def encrypt_lic(payload: bytes) -> bytes:
+    nonce = os.urandom(12)
+    ct = AESGCM(KEY).encrypt(nonce, payload, MAGIC)  # MAGIC = AAD
+    return MAGIC + nonce + ct  # GCM tag は ct の末尾 16 bytes に含まれる
+
+def decrypt_lic(blob: bytes) -> bytes:
+    assert blob[:8] == MAGIC
+    nonce, ct = blob[8:20], blob[20:]
+    return AESGCM(KEY).decrypt(nonce, ct, MAGIC)
+```
+
+- **用途:** 完全バイナリ化 + 内容秘匿が最優先な場合
+
+#### E. 非対称署名 Ed25519 (ソフトウェアライセンスの定番)
+
+```
+[JSON平文 または CBOR] + [Ed25519 署名 64 bytes]
+```
+
+- 秘密鍵 (server only) で署名、公開鍵 (アプリに埋め込み) で検証
+- **内容は読めるが偽造が数学的に不可能** (HMAC より鍵管理が楽: 公開鍵は漏れても問題ない)
+- JetBrains, HashiCorp, 多くの OSS 商用ライセンスがこの方式
+- Python: `cryptography` の `Ed25519PrivateKey`
+
+#### F. ハードウェアバインド + オンライン検証 (エンタープライズ DRM)
+
+- MAC アドレス / マシン ID をハッシュして lic に埋め込み
+- 起動のたびにサーバに ping して有効性確認
+- Adobe Creative Cloud / Microsoft 365 がこの方式
+- **ADM のユースケースには過剰** (副業規模には不要)
+
+---
+
+### 11.3 実務での配布ファイルの扱い
+
+#### lic ファイルを「秘密」にすべきか
+
+lic ファイルはユーザが持つものなので「秘密」にはできない。設計の核心は:
+
+> lic ファイルはユーザが手元に持つが、**サーバ側の検証なしに役に立たない**設計にする。
+
+具体的には:
+
+1. **ライセンスの権限はサーバ DB が master** — lic ファイルの内容だけでは何もできない
+2. `/auth/activate` での検証時にのみ lic を使い、以降は JWT セッションに切り替える
+3. 失効 (`revoked_at`) は DB 側で管理し、lic ファイル自体を無効化できる
+
+この設計ができていれば、**lic の暗号化は「UX としての格」と「内容漏洩への備え」**であり、セキュリティの根幹ではない。
+
+#### 配布チャネルの注意点
+
+| チャネル | リスク | 対策 |
+|---|---|---|
+| メール添付 | 盗み見、誤送信 | 暗号化で中身を隠す / TLS 前提 |
+| DM (Slack/LINE) | ログに残る | 短命 URL (signed URL で 1回のみ DL) |
+| Admin UI からダウンロード | 正規フロー | ✅ 問題なし |
+| 再利用 (他人に渡す) | licenseId 共有 | DB 側で「最終アクティベート日時/IP」を記録し異常検知 |
+
+---
+
+### 11.4 ADM への推奨実装案
+
+#### フェーズ分け
+
+| フェーズ | 内容 | 工数 |
+|---|---|---|
+| **Phase A (現在)** | JSON + HMAC 署名 (読める) | 完了済み |
+| **Phase B (次回)** | JWE (ECDH-ES + A256GCM) に移行。内容暗号化、形式は標準 JWT | 1〜2日 |
+| **Phase C (本番前)** | バイナリ magic header 付与 (AES-GCM blob) + Ed25519 署名の二重構造 | 2〜3日 |
+
+#### Phase B 推奨設計 (JWE)
+
+```
+# lic ファイルの内容
+eyJhbGciOiJFQ0RILUVTIiwiZW5jIjoiQTI1NkdDTSIsImtpZCI6ImFkbS12MSJ9.
+.xxxxxxxx.xxxxxxxxxxxxxxxx.xxxxxxxx
+```
+
+- アルゴリズム: `ECDH-ES` + `A256GCM` (鍵配送なし、公開鍵だけでも暗号化可能)
+- サーバの EC 秘密鍵で復号、lic 発行時は EC 公開鍵で暗号化
+- ファイルを開いても `eyJ...` の文字列のみ (JWT と同じ見た目だが復号できない)
+- 既存の `licenseId` + `signature` フィールドは JWE の claims に統合
+
+```python
+# 発行 (authlib を使う例)
+from authlib.jose import JsonWebEncryption
+
+jwe = JsonWebEncryption()
+header = {"alg": "ECDH-ES", "enc": "A256GCM", "kid": "adm-v1"}
+token = jwe.serialize_compact(header, payload_bytes, ec_public_key)
+
+# 検証 (/auth/activate)
+data = jwe.deserialize_compact(token, ec_private_key)
+```
+
+#### 鍵管理
+
+```
+# 鍵生成 (初回のみ)
+from cryptography.hazmat.primitives.asymmetric.ec import generate_private_key, SECP256R1
+private_key = generate_private_key(SECP256R1())
+# PEM を環境変数 ADM_LIC_EC_PRIVATE_KEY に保存
+# public_key は管理 UI に埋め込み (漏れても暗号化には使えるが復号できない)
+```
+
+- **鍵ローテーション:** `kid` (Key ID) で世代管理。古い lic は旧鍵で復号できるよう旧鍵も保持。
+- **鍵の保管場所:** Fly.io secrets / GitHub Actions secrets / Vault。`.env` に直書き禁止。
+
+---
+
+### 11.5 実装チェックリスト
+
+実装前に確認すること:
+
+- [ ] 鍵を環境変数で管理し、コードに埋め込まない
+- [ ] nonce / IV は暗号化ごとに必ずランダム生成 (使い回し = 致命的な脆弱性)
+- [ ] GCM tag / JWE の整合性検証が失敗したら **必ず 401 を返す** (サイレント成功禁止)
+- [ ] 旧フォーマット (JSON 平文) の lic も移行期間中は受け入れる仕組み (`schemaVersion` で判別)
+- [ ] 鍵ローテーション手順を Runbook に記載 (kid + 旧鍵の保持期間)
+- [ ] バックアップに lic 発行用の EC 秘密鍵のバックアップを含める

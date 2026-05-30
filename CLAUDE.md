@@ -63,8 +63,8 @@ AudioDataManagement/
 │   ├── scripts/init_db.sh               冪等な DB / role / 依存 / migration 一括初期化
 │   ├── .env.example                     環境変数テンプレ
 │   ├── alembic.ini / requirements.txt / venv/
-├── docs/                                 仕様ドキュメント (§7 参照)
-├── images/                               UI 参考画像 (デザイン基準)
+├── docs/                                 仕様ドキュメント (§7 参照) + 本番運用ガイド
+├── images/                               UI 参考画像・モックアップ
 ├── DESIGN.md                             UIデザイントークン
 └── CLAUDE.md                             本ファイル
 ```
@@ -163,6 +163,7 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 - **通知システム (横断)**: [docs/NOTIFICATION_SPEC.md](docs/NOTIFICATION_SPEC.md)
 - **DM (admin↔creator)**: [docs/DM_SPEC.md](docs/DM_SPEC.md)
 - **波形描画 Shader**: [docs/WAVEFORM_SHADER_SPEC.md](docs/WAVEFORM_SHADER_SPEC.md)
+- **本番運用 / 副業可能性 / licファイル暗号化方針**: [docs/PRODUCTION_OPERATIONS_GUIDE.md](docs/PRODUCTION_OPERATIONS_GUIDE.md)
 - UIデザイン: [DESIGN.md](DESIGN.md)
 
 ## 8. 進捗フェーズ
@@ -174,7 +175,7 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 | 3 | Creator / Admin / Commission / 通知 / ログ / Shader 波形 / エラーポップアップ | ✅ **ローカル完了** |
 | 4 | 本番運用 (CDN, 監視, バックアップ, S3 互換ストレージ) | 未着手 |
 
-### Phase 3 タスク (#31〜#51 全完了)
+### Phase 3 タスク (#31〜#52 全完了)
 
 | # | 内容 | 完了コミット |
 |---|---|---|
@@ -191,7 +192,7 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 | 49 | **NOTIFICATION_SPEC 策定 + Phase B/C/D 実装** (統合通知 API / admin タブ Level 3 / 一覧 per-row dot / クローズ dim 化 / メッセージ未読精緻化 / submission peaks v2) | 995018f 〜 2d327f1 |
 | 50 | **改訂2.4** — Order 内私信廃止 + Order 共有メモ (admin/creator 各1枠、左右分割、user 不可視) + admin↔creator Direct Message (DM_SPEC Phase A-D) + admin Commission メニュー統合 | 14a5fc5 〜 3889d85 |
 | 51 | **9-A3 改訂2.5** — Creator 複数提出のバージョン管理 (submissions/{id}_v{n}.wav + peaks v2 per version + GET /submissions + 履歴 UI) + リテラルルート順序バグ修正 | 3d2566b |
-| 52 | **9-A4** — クリエイター視点 brief UI (役割優先順序 + tx_* スライダー視覚化 + 視点切替トグル / localStorage) | (this) |
+| 52 | **9-A4** — クリエイター視点 brief UI (役割優先順序 + tx_* スライダー視覚化 + 視点切替トグル / localStorage) | 24e31d8 |
 
 ### Phase 3 残スコープ → Phase 4 前に整備
 
