@@ -1,18 +1,42 @@
 <script setup lang="ts">
 import { useAuthStore } from '~/stores/auth'
+import { useSystemStore } from '~/stores/system'
 import { errorMessageJa } from '~/utils/errorMessageJa'
 
 definePageMeta({ layout: 'default' })
 useHead({ title: 'Admin — Pathfinder' })
 
 const auth = useAuthStore()
+const system = useSystemStore()
 const api = useApi()
 const router = useRouter()
 
 onMounted(() => {
   auth.hydrate()
   if (auth.role !== 'admin') router.replace('/dashboard')
+  // NOTIFICATION_SPEC §5: Level 3 タブドット用に通知サマリを取得
+  system.fetchCommissionUnread()
 })
+
+// NOTIFICATION_SPEC §3.2: タブ単位の通知ドット (Level 3)
+// 未実装領域 (token_grants / lic_requests) は 0 なのでドットが立たない
+function tabArea(tabKey: Tab): { action: number; info: boolean } {
+  // タブ名 → area 名のマッピング
+  const map: Record<Tab, string | null> = {
+    users: null,
+    payouts: 'payouts',
+    tokens: 'token_grants',
+    licenses: 'lic_requests',
+    orders: 'commission',
+    archive: null,
+    logs: null,
+    settings: null,
+  }
+  const areaName = map[tabKey]
+  if (!areaName) return { action: 0, info: false }
+  const a = system.areaFor(areaName)
+  return { action: a.action_count, info: a.has_info }
+}
 
 // ─── Tab ─────────────────────────────────────────────────────────────────────
 type Tab = 'users' | 'payouts' | 'tokens' | 'licenses' | 'orders' | 'archive' | 'logs' | 'settings'
@@ -657,10 +681,25 @@ watch(tab, (t) => {
       <button
         v-for="t in ([['users','ユーザ管理'],['payouts','Payout'],['tokens','Token付与'],['licenses','lic発行'],['orders','Commission'],['archive','アーカイブ'],['logs','ログ'],['settings','設定']] as [Tab, string][])"
         :key="t[0]"
-        class="relative pb-2 text-[14px] font-semibold text-ink transition-all"
-        :class="tab === t[0] ? 'filter-active' : 'opacity-40 hover:opacity-70'"
+        class="relative pb-2 text-[14px] font-semibold transition-all"
+        :class="[
+          tab === t[0] ? 'filter-active' : 'opacity-40 hover:opacity-70',
+          tabArea(t[0]).action > 0 || tabArea(t[0]).info ? 'text-[#ffa500]' : 'text-ink',
+        ]"
         @click="t[0] === 'orders' ? router.push('/orders') : (tab = t[0])"
       >
+        <!-- NOTIFICATION_SPEC §3 Level 3: 要対応なら件数、情報のみなら小ドット -->
+        <span
+          v-if="tabArea(t[0]).action > 0"
+          class="mr-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 align-middle font-mono text-[10px] font-bold text-white"
+          style="background:#ffa500;"
+        >{{ tabArea(t[0]).action }}</span>
+        <span
+          v-else-if="tabArea(t[0]).info"
+          class="mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle"
+          style="background:#ffa500;"
+          title="確認が必要な情報があります"
+        />
         {{ t[1] }}
         <span v-if="tab === t[0]" class="absolute inset-x-0 -bottom-px h-0.5 rounded-sm bg-primary" />
       </button>

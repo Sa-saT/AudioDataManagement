@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -14,8 +14,10 @@ from app.models import (
     ActivityKind,
     ActivityLog,
     Audio,
+    CreatorPayout,
     DownloadKind,
     DownloadLog,
+    PayoutStatus,
     TokenConsumption,
 )
 from app.models.audio import AudioTag, Tag
@@ -244,3 +246,73 @@ def session_ping(
     db.commit()
     response.status_code = status.HTTP_201_CREATED
     return {"recorded": True}
+
+
+# ─── 統合通知 (NOTIFICATION_SPEC §5) ─────────────────────────────────────────────
+
+def _count_payouts_pending(db: Session) -> int:
+    return int(db.execute(
+        select(func.count())
+        .select_from(CreatorPayout)
+        .where(CreatorPayout.status == PayoutStatus.pending)
+    ).scalar_one())
+
+
+@router.get("/notifications")
+def notifications(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+) -> dict:
+    """NOTIFICATION_SPEC §5: 領域非依存の統合通知 API。
+
+    レスポンス構造:
+      areas: { <area_name>: { action_count, has_info, breakdown } }
+      totals: { action_count, has_info }
+
+    領域追加時はここに area を1つ足すだけで、フロントは map で回しているので
+    UI 側の改修なしに新領域の通知が表示される (NOTIFICATION_SPEC §5.1)。
+    """
+    # Commission の集計関数は orders.py に既存
+    from app.api.v1.orders import (
+        _count_action_required,
+        _count_info_only,
+        _count_message_unread,
+    )
+
+    role = current_user.role.value
+    areas: dict[str, dict] = {}
+
+    action_required = _count_action_required(db, current_user)
+    message_unread = _count_message_unread(db, current_user)
+    info_only = _count_info_only(db, current_user)
+    areas["commission"] = {
+        "action_count": action_required + message_unread,
+        "has_info": info_only > 0,
+        "breakdown": {
+            "action_required": action_required,
+            "message_unread": message_unread,
+            "info_only": info_only,
+        },
+    }
+
+    if role == "admin":
+        payouts_pending = _count_payouts_pending(db)
+        areas["payouts"] = {
+            "action_count": payouts_pending,
+            "has_info": False,
+            "breakdown": {"pending_approval": payouts_pending},
+        }
+        # 未実装領域: spec で枠だけ確保 (Phase B 以降に実装が来ても UI 改修不要)
+        areas["token_grants"] = {"action_count": 0, "has_info": False, "breakdown": {}}
+        areas["lic_requests"] = {"action_count": 0, "has_info": False, "breakdown": {}}
+
+    totals_action = sum(a["action_count"] for a in areas.values())
+    totals_has_info = any(a["has_info"] for a in areas.values())
+
+    return {
+        "areas": areas,
+        "totals": {
+            "action_count": totals_action,
+            "has_info": totals_has_info,
+        },
+    }

@@ -110,14 +110,18 @@ const isAdmin = computed(() => auth.role === 'admin')
 // 改訂: admin にも Commission メニューを表示 (Admin タブ Commission からも遷移可能、
 // メニュー導線も残して通知バッジを admin にも届ける)
 const showCommission = computed(() => auth.isActivated && system.commissionEnabled)
-// 改訂2: 通知二系統
-//   要対応 (action_count > 0) → 橙 + 件数バッジ + 金ドット
-//   情報のみ (action_count == 0 && has_info) → 橙のみ (件数なし)
-//   両方ゼロ → デフォルト
+// 改訂2 / NOTIFICATION_SPEC §3: 階層伝播
+//   Root (Level 1): 全領域の合算 (totals)
+//   Commission menu line (Level 2): commission 単体
+//   Admin menu line (Level 2): admin 専用領域の合算 (commission は別 line)
 const actionCount = computed(() => system.commissionActionCount)
 const hasInfo = computed(() => system.commissionHasInfo)
-const hasAction = computed(() => actionCount.value > 0)
-const isHighlighted = computed(() => hasAction.value || hasInfo.value)
+const adminActionCount = computed(() => system.adminAreasActionCount)
+const adminHasInfo = computed(() => system.adminAreasHasInfo)
+const adminHasAction = computed(() => adminActionCount.value > 0)
+const adminIsHighlighted = computed(() => adminHasAction.value || adminHasInfo.value)
+const hasAction = computed(() => system.totals.action_count > 0)
+const isHighlighted = computed(() => hasAction.value || system.totals.has_info)
 </script>
 
 <template>
@@ -188,11 +192,29 @@ const isHighlighted = computed(() => hasAction.value || hasInfo.value)
                 class="flex cursor-pointer items-center gap-2 px-4 py-2.5 transition-colors hover:bg-white/80"
                 @click="goTo('/admin')"
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shrink-0">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                  :stroke="adminIsHighlighted ? '#ffa500' : 'currentColor'"
+                  stroke-width="1.8" class="shrink-0"
+                >
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                 </svg>
-                <span class="flex-1 text-[13px] text-ink">Admin</span>
-                <span class="mr-1 rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[9px] text-accent">admin</span>
+                <span class="flex-1 text-[13px] font-medium"
+                  :class="adminIsHighlighted ? 'text-[#ffa500]' : 'text-ink'"
+                >Admin</span>
+                <!-- 要対応: 件数バッジ -->
+                <span
+                  v-if="adminHasAction"
+                  class="mr-1 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 font-mono text-[10px] font-bold text-white"
+                  style="background:#ffa500;"
+                >{{ adminActionCount }}</span>
+                <!-- 情報のみ: 小ドット -->
+                <span
+                  v-else-if="adminHasInfo"
+                  class="mr-1 h-1.5 w-1.5 shrink-0 rounded-full"
+                  style="background:#ffa500;"
+                  title="確認が必要な情報があります"
+                />
+                <span v-else class="mr-1 rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[9px] text-accent">admin</span>
                 <button
                   class="group rounded-full p-0.5 transition-opacity"
                   :class="infoOpen === 'admin' ? 'text-ink' : ''"
