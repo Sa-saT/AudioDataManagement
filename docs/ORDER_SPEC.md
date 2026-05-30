@@ -353,7 +353,8 @@ melody (メロディライン), rhythm (リズムパターン), density (音の�
 
 ## 6.5 通知ルール (改訂2)
 
-通知は2系統に分ける:
+> **通知の横断仕様は [NOTIFICATION_SPEC.md](NOTIFICATION_SPEC.md) を参照。**
+> ここでは Commission 固有の通知源マッピングのみ記述する。
 
 ### A. 要対応通知 (action-required)
 
@@ -367,10 +368,7 @@ melody (メロディライン), rhythm (リズムパターン), density (音の�
 | assign 確定 | 選ばれた creator | 音源提出 |
 | 提出 (reviewing) | admin | done / reject |
 | チケット内メッセージ送信 | 自分以外の宛先 (user / creator / admin) | チケットを開く (= `activity_logs` に `order_view` 追加) |
-| done | 発注 user | チケットを開く |
-
-**バッジ表示:** 未対応件数を数値で表示 (例: Commission 行に `3`)。  
-**色:** メニューバー / Commission 行が **橙 (#ffa500)** + 金 (#ffd700) ドット (実装済み)。
+| done | 発注 user | チケットを開く (= 受け取り) |
 
 ### B. 情報通知 (info-only)
 
@@ -378,16 +376,26 @@ melody (メロディライン), rhythm (リズムパターン), density (音の�
 
 | イベント | 受信側 | 解除条件 |
 |---|---|---|
-| 「できる送信したのに選ばれなかった」 | 選ばれなかった候補 creator | **Commission を開く** OR **1週間経過** で自動解除 |
+| オーダーがクローズされた (他 creator にアサイン済) | 候補だった creator | **Commission を開く** OR **1週間経過** で自動解除 |
 
-**バッジ表示:** 件数は出さず Commission 行の色変化のみ。
+**通知コピー:** 「『${title}』のオーダーがクローズされました。」
+　("選ばれなかった" を主語にしない。時間的フレームで表現)
+
+### C. dim (クローズ済みカードの視覚表現)
+
+assign 確定 / cancelled / close 後の対象チケットは **dim 化** する (詳細は [NOTIFICATION_SPEC §8](NOTIFICATION_SPEC.md))。
+
+- 該当 status: 候補 creator にとって `assigned`(他者) / `cancelled`、user にとって `cancelled` / `close` 後
+- ステータスラベルは「**クローズ**」に変更 (muted カラー)
+- バッジ (青ドット) が解除されてもカードの dim は **維持**
 
 ### 内部実装
 
 - `activity_logs` (`kind=order_view`, `target_id=order_id`) を「既読」マーカーとして使う
-- 各通知ロジックは:  
+- 各通知ロジックは:
   「最後に `order_view` した時刻 < 通知発生時刻 (status_change / message.created_at)」を未読と判定
 - 情報通知の 1週間自動解除は: `order.updated_at < now - 7days` で除外
+- 視覚仕様 (色・dim ルール) は [NOTIFICATION_SPEC §7-8](NOTIFICATION_SPEC.md) に従う
 
 ---
 
@@ -444,7 +452,7 @@ Step 2 は `sound_type` (BGM/SE/both) によって表示項目が変わる。
 | # | 項目 | 優先度 | 備考 |
 |---|---|---|---|
 | 9-A1 | **メッセージ未読カウント** を `activity_logs.order_view` ベースで再計算 (§6.5 A) | 高 | 現状はステータスベース action-required のみ実装。private 私信は別カウントすべきか要設計 |
-| 9-A2 | **情報通知の1週間自動解除** (§6.5 B) | 高 | 「できる送信したのに選ばれなかった」creator への info_only 通知の TTL 実装 |
+| 9-A2 | **情報通知の1週間自動解除 + カード dim 化** (§6.5 B) | 高 | assign 時に候補 creator のカードを dim (opacity 40〜50% + ラベル「クローズ」muted) にし、青バッジを立てる。通知コピーは「クローズされました」のみ (拒絶表現なし)。TTL: 開く or 1週間で解除。バッジ解除後もカード dim は維持 |
 | 9-A3 | **Creator 複数提出のバージョン管理** | 中 | reject → 再提出のたびに `submissions/{id}.wav` が上書きされる。`submissions/{id}_v{n}.wav` 形式 + 履歴メタデータ |
 | 9-A4 | **クリエイター視点 UI 最適化** | 中 | 候補打診時のブリーフ表示は user 視点。creator が一目で要件把握できる別レイアウト |
 | 9-A5 | **SE 納品の複数ファイル対応** | 要検討 | SE は複数バリエーション納品が多い。`submissions/{id}_{slot}.wav` + 必要数フィールド |
@@ -512,7 +520,7 @@ Step 2 は `sound_type` (BGM/SE/both) によって表示項目が変わる。
 |---|---|
 | R2-09 | 通知を **要対応 (action-required)** / **情報 (info-only)** に二分類 |
 | R2-10 | メッセージ未読: `activity_logs.order_view` の最終時刻と比較して件数バッジ表示 |
-| R2-11 | 「できる送信したのに選ばれなかった」(情報) は **開く** OR **1週間** で自動解除 |
+| R2-11 | オーダークローズ通知 (情報・青バッジ) は **開く** OR **1週間** で自動解除。カードは dim (opacity 40〜50% + ラベル「クローズ」muted) を維持。コピーはタイトル＋「クローズされました」のみ (拒絶表現なし) |
 | R2-12 | `POST /orders/{id}/view` を追加し、詳細ページ open 時に activity_logs へ記録 |
 
 ### 11.4 admin 権限の明文化
@@ -592,7 +600,7 @@ sequenceDiagram
     T-->>A: 要対応: 1人を assign する番
     A->>T: 1人を assign (status=assigned)
     T-->>Cx: 通知: あなたに割り当て
-    T-->>C1: 通知 (情報のみ: 選ばれなかった<br/>1週間 or 開封で自動解除)
+    T-->>C1: 通知 (情報・青バッジ: オーダークローズ<br/>カード dim化・1週間 or 開封で自動解除)
     loop チャット (U / Cx / A の3者参加)
         U-->>T: メッセージ
         T-->>Cx: 通知 (未読件数バッジ)

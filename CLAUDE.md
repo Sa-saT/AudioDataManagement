@@ -1,6 +1,14 @@
 # Audio Data Management — Project Guide
 
 サウンドクリエイター向け音響データ管理アプリ (Pathfinder)。
+
+**アプリの核となる UX 原則:**
+> **必要 & やりたいコトを解りやすく導いてくれるアプリ。**
+
+ユーザーが「次に何をすべきか」を考えなくても、UI 側 (通知・階層伝播・状態表現) が自然に導く。
+通知 = 自分の対応業務 / 通知がない = 安心していい — を守る。
+詳細は [docs/NOTIFICATION_SPEC.md](docs/NOTIFICATION_SPEC.md) (予定)。
+
 本ファイルは Claude 向けのプロジェクトガイド。**詳細仕様は `docs/` 配下を参照** (本ファイルは概観のみ)。
 
 ## 1. 技術スタック
@@ -152,6 +160,7 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 - licファイル: [docs/LICENSE_FILE_SPEC.md](docs/LICENSE_FILE_SPEC.md)
 - **Commission発注**: [docs/ORDER_SPEC.md](docs/ORDER_SPEC.md)
 - **Admin ログ**: [docs/LOG_SPEC.md](docs/LOG_SPEC.md)
+- **通知システム (横断)**: [docs/NOTIFICATION_SPEC.md](docs/NOTIFICATION_SPEC.md)
 - **波形描画 Shader**: [docs/WAVEFORM_SHADER_SPEC.md](docs/WAVEFORM_SHADER_SPEC.md)
 - UIデザイン: [DESIGN.md](DESIGN.md)
 
