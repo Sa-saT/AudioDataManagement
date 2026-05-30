@@ -15,6 +15,8 @@ from app.models import (
     ActivityLog,
     Audio,
     CreatorPayout,
+    DirectMessage,
+    DMSenderKind,
     DownloadKind,
     DownloadLog,
     PayoutStatus,
@@ -258,6 +260,64 @@ def _count_payouts_pending(db: Session) -> int:
     ).scalar_one())
 
 
+def _count_admin_dm_unread_threads(db: Session, admin_user) -> int:
+    """admin 視点: creator から最新メッセージが来ていて、admin の dm_view 後の未読スレッド数。"""
+    last_view = (
+        select(
+            ActivityLog.target_id.label("creator_id"),
+            func.max(ActivityLog.created_at).label("last_view_at"),
+        )
+        .where(
+            ActivityLog.user_id == admin_user.id,
+            ActivityLog.kind == ActivityKind.dm_view,
+        )
+        .group_by(ActivityLog.target_id)
+        .subquery()
+    )
+    last_creator_msg = (
+        select(
+            DirectMessage.creator_id.label("creator_id"),
+            func.max(DirectMessage.created_at).label("last_msg_at"),
+        )
+        .where(DirectMessage.sender_kind == DMSenderKind.creator)
+        .group_by(DirectMessage.creator_id)
+        .subquery()
+    )
+    rows = db.execute(
+        select(last_creator_msg.c.creator_id)
+        .select_from(last_creator_msg)
+        .outerjoin(last_view, last_view.c.creator_id == last_creator_msg.c.creator_id)
+        .where(
+            (last_view.c.last_view_at.is_(None)) |
+            (last_creator_msg.c.last_msg_at > last_view.c.last_view_at)
+        )
+    ).all()
+    return len(rows)
+
+
+def _creator_dm_unread(db: Session, current_user) -> int:
+    """creator 視点: 自分への admin DM が dm_view 後にあれば 1、なければ 0。"""
+    last_view_at = db.execute(
+        select(func.max(ActivityLog.created_at))
+        .where(
+            ActivityLog.user_id == current_user.id,
+            ActivityLog.kind == ActivityKind.dm_view,
+        )
+    ).scalar_one_or_none()
+    last_admin_msg_at = db.execute(
+        select(func.max(DirectMessage.created_at))
+        .where(
+            DirectMessage.creator_id == current_user.id,
+            DirectMessage.sender_kind == DMSenderKind.admin,
+        )
+    ).scalar_one_or_none()
+    if last_admin_msg_at is None:
+        return 0
+    if last_view_at is None or last_admin_msg_at > last_view_at:
+        return 1
+    return 0
+
+
 @router.get("/notifications")
 def notifications(
     db: Session = Depends(get_db),
@@ -302,9 +362,22 @@ def notifications(
             "has_info": False,
             "breakdown": {"pending_approval": payouts_pending},
         }
+        dm_unread = _count_admin_dm_unread_threads(db, current_user)
+        areas["creator_dm"] = {
+            "action_count": dm_unread,
+            "has_info": False,
+            "breakdown": {"unread_threads": dm_unread},
+        }
         # 未実装領域: spec で枠だけ確保 (Phase B 以降に実装が来ても UI 改修不要)
         areas["token_grants"] = {"action_count": 0, "has_info": False, "breakdown": {}}
         areas["lic_requests"] = {"action_count": 0, "has_info": False, "breakdown": {}}
+    elif role == "creator":
+        dm_unread = _creator_dm_unread(db, current_user)
+        areas["creator_dm"] = {
+            "action_count": dm_unread,
+            "has_info": False,
+            "breakdown": {"unread_threads": dm_unread},
+        }
 
     totals_action = sum(a["action_count"] for a in areas.values())
     totals_has_info = any(a["has_info"] for a in areas.values())

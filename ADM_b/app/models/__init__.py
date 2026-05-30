@@ -28,6 +28,7 @@ from app.models.order import (
     MemoAuthorKind,
     OrderBriefEdit,
 )
+from app.models.dm import DirectMessage, DMSenderKind
 
 __all__ = [
     "Base",
@@ -59,4 +60,6 @@ __all__ = [
     "OrderMemo",
     "MemoAuthorKind",
     "OrderBriefEdit",
+    "DirectMessage",
+    "DMSenderKind",
 ]

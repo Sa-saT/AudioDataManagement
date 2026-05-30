@@ -115,13 +115,17 @@ const showCommission = computed(() =>
 // 改訂2 / NOTIFICATION_SPEC §3: 階層伝播
 //   Root (Level 1): 全領域の合算 (totals)
 //   Commission menu line (Level 2): commission 単体
-//   Admin menu line (Level 2): admin 専用領域の合算 (commission は別 line)
+//   Admin menu line (Level 2): admin 全集約 (commission 含む、§16.07)
+//   DM ToAdmin (Level 2, creator のみ): creator_dm 単体
 const actionCount = computed(() => system.commissionActionCount)
 const hasInfo = computed(() => system.commissionHasInfo)
 const adminActionCount = computed(() => system.adminAreasActionCount)
 const adminHasInfo = computed(() => system.adminAreasHasInfo)
 const adminHasAction = computed(() => adminActionCount.value > 0)
 const adminIsHighlighted = computed(() => adminHasAction.value || adminHasInfo.value)
+const dmArea = computed(() => system.areaFor('creator_dm'))
+const dmHasAction = computed(() => dmArea.value.action_count > 0)
+const dmIsHighlighted = computed(() => dmHasAction.value || dmArea.value.has_info)
 const hasAction = computed(() => system.totals.action_count > 0)
 const isHighlighted = computed(() => hasAction.value || system.totals.has_info)
 </script>
@@ -274,6 +278,40 @@ const isHighlighted = computed(() => hasAction.value || system.totals.has_info)
               </div>
               <div v-if="infoOpen === 'commission'" class="border-t border-hairline-soft bg-white/40 px-4 pb-2.5 pt-2 text-[11px] leading-relaxed text-muted">
                 {{ INFO.commission }}
+              </div>
+            </div>
+
+            <!-- DM ToAdmin (creator only, admin は使わない) -->
+            <div v-if="auth.role === 'creator'" class="border-t border-hairline-soft">
+              <div
+                class="flex cursor-pointer items-center gap-2 px-4 py-2.5 transition-colors hover:bg-white/80"
+                @click="goTo('/dm')"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                  :stroke="dmIsHighlighted ? '#ffa500' : 'currentColor'"
+                  stroke-width="1.8" class="shrink-0"
+                >
+                  <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+                </svg>
+                <span class="flex-1 text-[13px] font-medium"
+                  :class="dmIsHighlighted ? 'text-[#ffa500]' : 'text-ink'"
+                >DM ToAdmin</span>
+                <span
+                  v-if="dmHasAction"
+                  class="mr-1 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 font-mono text-[10px] font-bold text-white"
+                  style="background:#ffa500;"
+                >{{ dmArea.action_count }}</span>
+                <button
+                  class="group rounded-full p-0.5 transition-opacity"
+                  :class="infoOpen === 'dm' ? 'text-ink' : ''"
+                  @click.stop="toggleInfo('dm')"
+                  aria-label="説明"
+                >
+                  <img src="/information.png" alt="info" class="h-[18px] w-[18px] opacity-50 transition-opacity group-hover:opacity-80" />
+                </button>
+              </div>
+              <div v-if="infoOpen === 'dm'" class="border-t border-hairline-soft bg-white/40 px-4 pb-2.5 pt-2 text-[11px] leading-relaxed text-muted">
+                admin チームへの直接メッセージ (Order に紐づかない継続的やりとり)
               </div>
             </div>
 

@@ -52,13 +52,14 @@ export const useSystemStore = defineStore('system', {
     commissionUnreadCount(): number {
       return this.commissionActionCount
     },
-    // NOTIFICATION_SPEC §3.2: admin Level 2 = admin 専用領域の合算 (commission は別 line)
+    // NOTIFICATION_SPEC §3.2: admin Level 2 = admin 専用領域の合算
+    // R2.4: admin の Commission 通知も合算 (TopNav の Commission line 撤去のため)
     adminAreasActionCount(): number {
-      const admin = ['payouts', 'token_grants', 'lic_requests']
+      const admin = ['commission', 'payouts', 'creator_dm', 'token_grants', 'lic_requests']
       return admin.reduce((sum, key) => sum + (this.areas[key]?.action_count ?? 0), 0)
     },
     adminAreasHasInfo(): boolean {
-      const admin = ['payouts', 'token_grants', 'lic_requests']
+      const admin = ['commission', 'payouts', 'creator_dm', 'token_grants', 'lic_requests']
       return admin.some(key => this.areas[key]?.has_info ?? false)
     },
     areaFor(): (name: string) => AreaNotification {

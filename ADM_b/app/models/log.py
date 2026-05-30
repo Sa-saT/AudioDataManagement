@@ -55,6 +55,8 @@ class Favorite(Base):
 class ActivityKind(str, enum.Enum):
     session = "session"
     order_view = "order_view"
+    # 改訂2.4: DM スレッド (creator 単位) の既読マーカー
+    dm_view = "dm_view"
 
 
 # 統合活動ログ。session ping と order view を1テーブルで扱う (改訂2)。

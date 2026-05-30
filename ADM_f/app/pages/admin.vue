@@ -21,9 +21,9 @@ onMounted(() => {
 // NOTIFICATION_SPEC §3.2: タブ単位の通知ドット (Level 3)
 // 未実装領域 (token_grants / lic_requests) は 0 なのでドットが立たない
 function tabArea(tabKey: Tab): { action: number; info: boolean } {
-  // タブ名 → area 名のマッピング
+  // タブ名 → area 名のマッピング (Users タブは creator_dm を担う = DM ボタンの導線)
   const map: Record<Tab, string | null> = {
-    users: null,
+    users: 'creator_dm',
     payouts: 'payouts',
     tokens: 'token_grants',
     licenses: 'lic_requests',
@@ -41,6 +41,71 @@ function tabArea(tabKey: Tab): { action: number; info: boolean } {
 // ─── Tab ─────────────────────────────────────────────────────────────────────
 type Tab = 'users' | 'payouts' | 'tokens' | 'licenses' | 'orders' | 'archive' | 'logs' | 'settings'
 const tab = ref<Tab>('users')
+
+// ─── DM modal (改訂2.4) ──────────────────────────────────────────────────────
+interface DMItem {
+  id: string
+  sender_id: string | null
+  sender_name: string | null
+  sender_kind: 'admin' | 'creator'
+  content: string
+  attachment_path: string | null
+  created_at: string
+}
+const dmOpen = ref<{ id: string; name: string } | null>(null)
+const dmMessages = ref<DMItem[]>([])
+const dmLoading = ref(false)
+const dmDraft = ref('')
+const dmSending = ref(false)
+const dmListRef = ref<HTMLDivElement | null>(null)
+
+async function openDmModal(creatorId: string, name: string) {
+  dmOpen.value = { id: creatorId, name }
+  dmMessages.value = []
+  dmDraft.value = ''
+  dmLoading.value = true
+  try {
+    dmMessages.value = await api.get<DMItem[]>(`/api/v1/admin/dm/creators/${creatorId}`)
+    await api.post(`/api/v1/admin/dm/creators/${creatorId}/view`, { body: {} })
+    await system.fetchCommissionUnread()
+    await nextTick()
+    if (dmListRef.value) dmListRef.value.scrollTop = dmListRef.value.scrollHeight
+  } catch (err) {
+    alert(errorMessageJa(err))
+  } finally {
+    dmLoading.value = false
+  }
+}
+function closeDm() {
+  dmOpen.value = null
+  dmMessages.value = []
+  dmDraft.value = ''
+}
+async function sendDm() {
+  if (!dmOpen.value) return
+  const content = dmDraft.value.trim()
+  if (!content) return
+  dmSending.value = true
+  try {
+    const msg = await api.post<DMItem>(`/api/v1/admin/dm/creators/${dmOpen.value.id}`, {
+      body: { content },
+    })
+    dmMessages.value.push(msg)
+    dmDraft.value = ''
+    await nextTick()
+    if (dmListRef.value) dmListRef.value.scrollTop = dmListRef.value.scrollHeight
+  } catch (err) {
+    alert(errorMessageJa(err))
+  } finally {
+    dmSending.value = false
+  }
+}
+function dmIsMine(m: DMItem): boolean {
+  return m.sender_kind === 'admin'
+}
+function dmFormatTime(iso: string): string {
+  return new Date(iso).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface UserItem {
@@ -789,8 +854,13 @@ watch(tab, (t) => {
                   </p>
                 </div>
 
-                <!-- rank selector -->
+                <!-- rank selector + DM button -->
                 <div class="shrink-0 flex items-center gap-1.5" @click.stop>
+                  <button
+                    class="rounded border border-hairline-strong bg-white/80 px-2 py-1 font-mono text-[11px] text-body transition-colors hover:border-accent hover:text-accent"
+                    title="creator に DM を送る"
+                    @click="openDmModal(u.id, u.display_name || u.username)"
+                  >DM</button>
                   <select
                     class="rounded border border-hairline-strong bg-white/80 px-2 py-1 font-mono text-[11px] text-ink outline-none"
                     :value="u.rank ?? 'bronze'"
@@ -1524,6 +1594,74 @@ watch(tab, (t) => {
       </div>
 
     </div>
+
+    <!-- 改訂2.4: DM モーダル -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div
+          v-if="dmOpen"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          @click.self="closeDm"
+        >
+          <div class="flex h-[600px] w-full max-w-[560px] flex-col rounded-lg bg-canvas shadow-xl">
+            <div class="flex shrink-0 items-center justify-between border-b border-hairline-soft px-5 py-3">
+              <div>
+                <p class="text-[10px] font-semibold uppercase tracking-widest text-muted">DM</p>
+                <p class="text-[14px] font-semibold text-ink">{{ dmOpen.name }}</p>
+              </div>
+              <button class="text-muted hover:text-ink" @click="closeDm">×</button>
+            </div>
+            <div ref="dmListRef" class="flex-1 overflow-y-auto px-4 py-3">
+              <div v-if="dmLoading" class="py-8 text-center text-[12px] text-muted">読み込み中…</div>
+              <div v-else-if="dmMessages.length === 0" class="py-12 text-center text-[12px] text-muted">
+                メッセージはまだありません。
+              </div>
+              <div v-else class="space-y-1.5">
+                <div
+                  v-for="m in dmMessages"
+                  :key="m.id"
+                  class="flex gap-2"
+                  :class="dmIsMine(m) ? 'flex-row-reverse' : 'flex-row'"
+                >
+                  <div
+                    class="grid h-7 w-7 shrink-0 place-items-center rounded-full font-mono text-[11px] font-bold"
+                    :class="dmIsMine(m) ? 'bg-accent text-white' : 'bg-primary text-white'"
+                  >{{ dmIsMine(m) ? 'A' : 'C' }}</div>
+                  <div class="max-w-[75%]" :class="dmIsMine(m) ? 'text-right' : 'text-left'">
+                    <p class="mb-0.5 flex items-center gap-1.5 px-1 text-[10px]" :class="dmIsMine(m) ? 'justify-end' : 'justify-start'">
+                      <span class="font-medium text-body-strong">{{ dmIsMine(m) ? `${m.sender_name ?? 'Admin'} (Admin)` : (m.sender_name ?? 'Creator') }}</span>
+                      <span class="text-muted">{{ dmFormatTime(m.created_at) }}</span>
+                    </p>
+                    <div
+                      class="inline-block rounded-2xl px-3.5 py-2 text-left text-[13px] leading-relaxed whitespace-pre-wrap break-words shadow-sm"
+                      :class="dmIsMine(m) ? 'bg-accent text-white' : 'bg-surface-strong/60 text-ink'"
+                    >{{ m.content }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="shrink-0 border-t border-hairline-soft p-3">
+              <textarea
+                v-model="dmDraft"
+                rows="2"
+                maxlength="4000"
+                placeholder="creator にメッセージを送る…"
+                class="w-full resize-none rounded-md border border-hairline bg-white px-3 py-2 text-[13px] text-ink outline-none focus:border-accent"
+                @keydown.ctrl.enter.prevent="sendDm"
+              />
+              <div class="mt-1.5 flex items-center justify-between">
+                <span class="font-mono text-[10px] text-muted">{{ dmDraft.length }} / 4000</span>
+                <button
+                  class="rounded-md bg-ink px-3 py-1 text-[11px] font-medium text-canvas hover:bg-primary disabled:opacity-50"
+                  :disabled="dmSending || !dmDraft.trim()"
+                  @click="sendDm"
+                >{{ dmSending ? '…' : '送信' }}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
