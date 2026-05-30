@@ -102,6 +102,7 @@ const fetchError = ref<string | null>(null)
 onMounted(async () => {
   auth.hydrate()
   await fetchOrder()
+  await fetchMemos()
   // 改訂2: チケット閲覧を記録 (通知バッジの既読判定に使う)
   if (order.value) {
     try {
@@ -358,6 +359,56 @@ const isAdmin = computed(() => auth.role === 'admin')
 const isCreator = computed(() => auth.role === 'creator' || auth.role === 'admin')
 const isOwner = computed(() => order.value?.user_id === auth.user?.id)
 const isAssignedCreator = computed(() => order.value?.assigned_creator_id === auth.user?.id)
+
+// ─── 改訂2.4: 共有メモ ─────────────────────────────
+interface MemoOut {
+  author_kind: 'admin' | 'creator'
+  content: string
+  author_name: string | null
+  updated_at: string
+}
+interface MemosResponse {
+  admin: MemoOut | null
+  creator: MemoOut | null
+  can_edit_admin: boolean
+  can_edit_creator: boolean
+}
+const memosState = ref<MemosResponse>({
+  admin: null, creator: null, can_edit_admin: false, can_edit_creator: false,
+})
+const canViewMemos = computed(() => isAdmin.value || isAssignedCreator.value)
+
+async function fetchMemos() {
+  if (!order.value || !canViewMemos.value) return
+  try {
+    memosState.value = await api.get<MemosResponse>(`/api/v1/orders/${orderId.value}/memos`)
+  } catch { /* silent: メモは補助情報 */ }
+}
+
+const memoEditOpen = ref<'admin' | 'creator' | null>(null)
+const memoEditContent = ref('')
+const memoSaving = ref(false)
+
+function openMemoEdit(kind: 'admin' | 'creator') {
+  memoEditOpen.value = kind
+  memoEditContent.value = (kind === 'admin' ? memosState.value.admin?.content : memosState.value.creator?.content) ?? ''
+}
+function closeMemoEdit() {
+  memoEditOpen.value = null
+  memoEditContent.value = ''
+}
+async function saveMemo() {
+  if (!memoEditOpen.value) return
+  memoSaving.value = true
+  try {
+    await api.put(`/api/v1/orders/${orderId.value}/memo`, {
+      body: { content: memoEditContent.value },
+    })
+    await fetchMemos()
+    closeMemoEdit()
+  } catch (err) { alert(errorMessageJa(err)) }
+  finally { memoSaving.value = false }
+}
 
 // ─── Submit order (draft → open) ─────────────────
 const submitLoading = ref(false)
@@ -954,6 +1005,45 @@ const myCandidate = computed(() =>
           </div>
         </div>
 
+        <!-- 改訂2.4: admin/creator 共有メモ (user 不可視) -->
+        <div v-if="canViewMemos" class="card px-4 py-3">
+          <p class="mb-2 text-[10px] font-semibold uppercase tracking-widest text-ink/40">共有メモ (user には非表示)</p>
+          <div class="grid grid-cols-2 gap-3">
+            <!-- Admin 枠 -->
+            <div class="rounded-md border border-hairline-soft bg-white/40 p-2">
+              <div class="mb-1 flex items-center justify-between">
+                <span class="text-[10px] font-semibold uppercase tracking-widest text-accent">📝 Admin</span>
+                <button
+                  v-if="memosState.can_edit_admin"
+                  class="rounded border border-hairline px-2 py-0.5 text-[10px] text-body transition-colors hover:border-accent hover:text-accent"
+                  @click="openMemoEdit('admin')"
+                >メモ</button>
+              </div>
+              <p v-if="memosState.admin?.content" class="whitespace-pre-wrap text-[12px] text-ink">{{ memosState.admin.content }}</p>
+              <p v-else class="text-[11px] italic text-muted">(未記入)</p>
+              <p v-if="memosState.admin?.author_name" class="mt-1 font-mono text-[9px] text-muted">
+                — {{ memosState.admin.author_name }} / {{ formatDate(memosState.admin.updated_at) }}
+              </p>
+            </div>
+            <!-- Creator 枠 -->
+            <div class="rounded-md border border-hairline-soft bg-white/40 p-2">
+              <div class="mb-1 flex items-center justify-between">
+                <span class="text-[10px] font-semibold uppercase tracking-widest text-[#0e7a74]">📝 Creator</span>
+                <button
+                  v-if="memosState.can_edit_creator"
+                  class="rounded border border-hairline px-2 py-0.5 text-[10px] text-body transition-colors hover:border-[#0e7a74] hover:text-[#0e7a74]"
+                  @click="openMemoEdit('creator')"
+                >メモ</button>
+              </div>
+              <p v-if="memosState.creator?.content" class="whitespace-pre-wrap text-[12px] text-ink">{{ memosState.creator.content }}</p>
+              <p v-else class="text-[11px] italic text-muted">(未記入)</p>
+              <p v-if="memosState.creator?.author_name" class="mt-1 font-mono text-[9px] text-muted">
+                — {{ memosState.creator.author_name }} / {{ formatDate(memosState.creator.updated_at) }}
+              </p>
+            </div>
+          </div>
+        </div>
+
         <!-- 改訂2.2: 音源プレビュー (reviewing / done で全参加者視聴可) -->
         <div
           v-if="hasSubmission"
@@ -1447,6 +1537,47 @@ const myCandidate = computed(() =>
                   <span class="text-ink whitespace-pre-wrap break-words">{{ JSON.stringify(e.new_value) }}</span>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- 改訂2.4: メモ編集モーダル -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div
+          v-if="memoEditOpen"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          @click.self="closeMemoEdit"
+        >
+          <div class="w-full max-w-[480px] rounded-lg bg-canvas px-5 py-4 shadow-xl">
+            <div class="mb-3 flex items-center justify-between">
+              <h3 class="text-[14px] font-semibold text-ink">
+                {{ memoEditOpen === 'admin' ? '📝 Admin メモ' : '📝 Creator メモ' }}
+              </h3>
+              <button class="text-muted hover:text-ink" @click="closeMemoEdit">×</button>
+            </div>
+            <textarea
+              v-model="memoEditContent"
+              rows="6"
+              maxlength="2000"
+              placeholder="この Order についてのメモ (user には表示されません)…"
+              class="w-full resize-none rounded-md border border-hairline bg-white px-3 py-2 text-[13px] text-ink outline-none focus:border-primary"
+            />
+            <div class="mt-1 flex items-center justify-between">
+              <span class="font-mono text-[10px] text-muted">{{ memoEditContent.length }} / 2000</span>
+            </div>
+            <div class="mt-3 flex justify-end gap-2">
+              <button
+                class="rounded-md border border-hairline px-3 py-1.5 text-[12px] text-body hover:border-ink hover:text-ink"
+                @click="closeMemoEdit"
+              >キャンセル</button>
+              <button
+                class="rounded-md bg-ink px-3 py-1.5 text-[12px] font-medium text-canvas hover:bg-primary disabled:opacity-50"
+                :disabled="memoSaving"
+                @click="saveMemo"
+              >{{ memoSaving ? '…' : '保存' }}</button>
             </div>
           </div>
         </div>

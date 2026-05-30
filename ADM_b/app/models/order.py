@@ -162,6 +162,38 @@ class OrderMessage(Base):
     sender: Mapped["User | None"] = relationship("User", foreign_keys=[sender_id])  # type: ignore[name-defined]
 
 
+# 改訂2.4: Order 共有メモ。1 Order に admin / creator 各 1 枠。user 不可視。
+class MemoAuthorKind(str, enum.Enum):
+    admin = "admin"
+    creator = "creator"
+
+
+class OrderMemo(Base):
+    __tablename__ = "order_memos"
+
+    id: Mapped[uuid.UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=new_uuid)
+    order_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False
+    )
+    author_kind: Mapped[MemoAuthorKind] = mapped_column(
+        Enum(MemoAuthorKind, name="memo_author_kind", native_enum=True, create_type=False),
+        nullable=False,
+    )
+    author_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    order: Mapped["Order"] = relationship("Order", foreign_keys=[order_id])
+    author: Mapped["User | None"] = relationship("User", foreign_keys=[author_id])  # type: ignore[name-defined]
+
+
 # 改訂2.1: ブリーフ事後編集の差分履歴。1 field 1 行で記録する。
 # 同一 PATCH 内で複数 field が変わった場合は、同時刻でレコードが N 行作られる。
 class OrderBriefEdit(Base):

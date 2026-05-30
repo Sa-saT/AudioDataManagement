@@ -37,9 +37,11 @@ from app.models import (
     CreatorPayout,
     CreatorProfile,
     CreatorRankPrice,
+    MemoAuthorKind,
     Order,
     OrderBriefEdit,
     OrderCandidateCreator,
+    OrderMemo,
     OrderMessage,
     OrderMessageKind,
     OrderStatus,
@@ -1569,3 +1571,142 @@ def _parse_uuid(s: str) -> uuid.UUID:
 def _check_order_exists(order: Order | None) -> None:
     if order is None:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "order not found"})
+
+
+# ─── Order memos (改訂2.4) ─────────────────────────────────────────────────────
+# admin / creator 各 1 枠の共有メモ。user は完全不可視。
+# 自身の枠のみ編集可。close/cancel 後は read-only。
+
+MEMO_MAX_LENGTH = 2000
+
+
+class MemoOut(BaseModel):
+    author_kind: str  # 'admin' | 'creator'
+    content: str
+    author_name: str | None
+    updated_at: Any
+
+
+class MemosResponse(BaseModel):
+    admin: MemoOut | None
+    creator: MemoOut | None
+    can_edit_admin: bool
+    can_edit_creator: bool
+
+
+class UpdateMemoRequest(BaseModel):
+    content: str
+
+
+def _can_view_memos(order: Order, viewer: User) -> bool:
+    """user 不可視。候補のみの creator も不可視。assigned creator と admin のみ可。"""
+    role = viewer.role.value
+    if role == "admin":
+        return True
+    if role == "creator" and order.assigned_creator_id == viewer.id:
+        return True
+    return False
+
+
+def _memo_editable(order: Order) -> bool:
+    """close/cancel 後は read-only (履歴凍結)。"""
+    if order.status == OrderStatus.cancelled:
+        return False
+    if order.closed_at is not None:
+        return False
+    return True
+
+
+def _to_memo_out(m: OrderMemo) -> MemoOut:
+    return MemoOut(
+        author_kind=m.author_kind.value,
+        content=m.content,
+        author_name=m.author.username if m.author else None,
+        updated_at=m.updated_at,
+    )
+
+
+@router.get("/orders/{order_id}/memos", response_model=MemosResponse)
+def get_order_memos(
+    order_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(_require_commission),
+) -> MemosResponse:
+    parsed = _parse_uuid(order_id)
+    order = db.execute(select(Order).where(Order.id == parsed)).scalar_one_or_none()
+    _check_order_exists(order)
+    if not _can_view_memos(order, current_user):
+        raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "cannot view memos"})
+
+    memos = db.execute(
+        select(OrderMemo).where(OrderMemo.order_id == parsed)
+        .options(joinedload(OrderMemo.author))
+    ).scalars().all()
+    by_kind = {m.author_kind: m for m in memos}
+    editable = _memo_editable(order)
+    role = current_user.role.value
+    return MemosResponse(
+        admin=_to_memo_out(by_kind[MemoAuthorKind.admin]) if MemoAuthorKind.admin in by_kind else None,
+        creator=_to_memo_out(by_kind[MemoAuthorKind.creator]) if MemoAuthorKind.creator in by_kind else None,
+        can_edit_admin=editable and role == "admin",
+        can_edit_creator=editable and role == "creator" and order.assigned_creator_id == current_user.id,
+    )
+
+
+@router.put("/orders/{order_id}/memo", response_model=MemoOut)
+def upsert_order_memo(
+    order_id: str,
+    body: UpdateMemoRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(_require_commission),
+) -> MemoOut:
+    parsed = _parse_uuid(order_id)
+    order = db.execute(select(Order).where(Order.id == parsed)).scalar_one_or_none()
+    _check_order_exists(order)
+
+    role = current_user.role.value
+    if role == "admin":
+        kind = MemoAuthorKind.admin
+    elif role == "creator" and order.assigned_creator_id == current_user.id:
+        kind = MemoAuthorKind.creator
+    else:
+        raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "cannot edit memo"})
+
+    if not _memo_editable(order):
+        raise HTTPException(status_code=409, detail={"code": "INVALID_STATE", "message": "order is closed/cancelled"})
+
+    content = body.content or ""
+    if len(content) > MEMO_MAX_LENGTH:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "MEMO_TOO_LONG", "message": f"memo must be <= {MEMO_MAX_LENGTH} chars"},
+        )
+
+    memo = db.execute(
+        select(OrderMemo).where(
+            OrderMemo.order_id == parsed,
+            OrderMemo.author_kind == kind,
+        )
+    ).scalar_one_or_none()
+    if memo is None:
+        memo = OrderMemo(
+            order_id=parsed,
+            author_kind=kind,
+            author_id=current_user.id,
+            content=content,
+        )
+        db.add(memo)
+    else:
+        memo.content = content
+        memo.author_id = current_user.id
+        memo.updated_at = func.now()
+    db.commit()
+    db.refresh(memo)
+    return MemoOut(
+        author_kind=memo.author_kind.value,
+        content=memo.content,
+        author_name=current_user.username,
+        updated_at=memo.updated_at,
+    )

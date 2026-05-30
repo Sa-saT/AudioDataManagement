@@ -24,6 +24,8 @@ from app.models.order import (
     CandidateResponseStatus,
     OrderMessage,
     OrderMessageKind,
+    OrderMemo,
+    MemoAuthorKind,
     OrderBriefEdit,
 )
 
@@ -54,5 +56,7 @@ __all__ = [
     "CandidateResponseStatus",
     "OrderMessage",
     "OrderMessageKind",
+    "OrderMemo",
+    "MemoAuthorKind",
     "OrderBriefEdit",
 ]
