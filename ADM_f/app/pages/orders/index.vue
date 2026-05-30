@@ -5,7 +5,7 @@ import { useSystemStore } from '~/stores/system'
 import { errorMessageJa } from '~/utils/errorMessageJa'
 
 definePageMeta({ layout: 'default' })
-useHead({ title: '発注 — Pathfinder' })
+useHead({ title: 'Commission — Pathfinder' })
 
 const auth = useAuthStore()
 const system = useSystemStore()
@@ -253,9 +253,22 @@ const BGM_SCENE_L: Record<string, string> = {
 
     <!-- Header -->
     <div class="flex shrink-0 items-end justify-between gap-4 pb-3 pt-5">
-      <div>
-        <h1 class="text-[20px] font-normal tracking-[-0.0125em] text-ink">発注 (Commission)</h1>
-        <p class="mt-0.5 text-[12px] text-muted">オリジナル音源の制作依頼</p>
+      <div class="flex items-end gap-3">
+        <!-- Admin 限定: Admin ページへ戻る -->
+        <button
+          v-if="isAdmin"
+          class="flex shrink-0 items-center justify-center text-ink/70 transition-colors hover:text-ink"
+          title="Admin に戻る"
+          @click="router.push('/admin')"
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+        </button>
+        <div>
+          <h1 class="text-[20px] font-normal tracking-[-0.0125em] text-ink">Commission (発注)</h1>
+          <p class="mt-0.5 text-[12px] text-muted">オリジナル音源の制作依頼</p>
+        </div>
       </div>
       <button
         v-if="auth.isActivated && system.commissionEnabled && isUser"

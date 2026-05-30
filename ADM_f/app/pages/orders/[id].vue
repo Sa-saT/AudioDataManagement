@@ -92,7 +92,7 @@ interface OrderDetail {
 
 type int = number
 
-useHead(computed(() => ({ title: `発注 — Pathfinder` })))
+useHead(computed(() => ({ title: `Commission — Pathfinder` })))
 
 // ─── Fetch ────────────────────────────────────────
 const order = ref<OrderDetail | null>(null)
@@ -513,6 +513,8 @@ async function cancelOrder() {
 const msgContent = ref('')
 const msgLoading = ref(false)
 const messagesRef = ref<HTMLDivElement | null>(null)
+// brief / memo / submission / messages を一本に貫通させるスクロール参照
+const contentScrollRef = ref<HTMLDivElement | null>(null)
 
 async function sendMessage() {
   if (!msgContent.value.trim()) return
@@ -570,8 +572,9 @@ function formatTime(iso: string) {
 }
 async function scrollToBottom() {
   await nextTick()
-  const el = messagesRef.value
-  if (el) el.scrollTop = el.scrollHeight
+  // 親スクロール (brief 〜 messages を貫通) を下端へ
+  const scroll = contentScrollRef.value
+  if (scroll) scroll.scrollTop = scroll.scrollHeight
 }
 
 // ─── Creator: respond ─────────────────────────────
@@ -826,8 +829,12 @@ const myCandidate = computed(() =>
 
     <!-- Header -->
     <div class="flex shrink-0 items-center gap-3 pb-3 pt-5">
-      <button class="text-muted hover:text-ink" @click="router.push('/orders')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <button
+        class="flex shrink-0 items-center justify-center text-ink/70 transition-colors hover:text-ink"
+        title="Commission 一覧に戻る"
+        @click="router.push('/orders')"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="15 18 9 12 15 6"/>
         </svg>
       </button>
@@ -909,6 +916,9 @@ const myCandidate = computed(() =>
 
       <!-- Left: messages + reply -->
       <div class="flex flex-1 flex-col gap-3 overflow-hidden">
+
+        <!-- スクロール領域 (brief / memo / submission / messages を1本のスクロールで貫通) -->
+        <div ref="contentScrollRef" class="flex flex-1 flex-col gap-3 overflow-y-auto pr-1">
 
         <!-- Description -->
         <div v-if="order.description" class="card px-4 py-3">
@@ -1295,8 +1305,8 @@ const myCandidate = computed(() =>
           />
         </div>
 
-        <!-- Messages (改訂2.3: LINE 風チャット吹き出し) -->
-        <div ref="messagesRef" class="flex-1 overflow-y-auto px-2 py-2">
+        <!-- Messages (改訂2.3: LINE 風チャット吹き出し)。スクロールは親 contentScrollRef に統合 -->
+        <div ref="messagesRef" class="px-2 py-2">
           <div v-if="order.messages.length === 0" class="py-12 text-center text-[12px] text-muted">
             メッセージはまだありません。
           </div>
@@ -1354,6 +1364,8 @@ const myCandidate = computed(() =>
             </div>
           </div>
         </div>
+
+        </div><!-- /contentScrollRef: チャット入力は下に固定するためスクロール領域から外す -->
 
         <!-- 改訂2.2: チャット入力 (テキスト + 音源添付 + 送信) -->
         <div
