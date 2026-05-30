@@ -28,7 +28,6 @@ interface Message {
   content: string | null
   attachment_path: string | null
   kind: string
-  visibility?: string  // 改訂2.3: 'public' | 'admin_creator'
   created_at: string
 }
 
@@ -384,7 +383,6 @@ async function cancelOrder() {
 // ─── Message ─────────────────────────────────────
 const msgContent = ref('')
 const msgLoading = ref(false)
-const msgPrivate = ref(false)  // 改訂2.3: admin/creator のみ、user 非表示の私信
 const messagesRef = ref<HTMLDivElement | null>(null)
 
 async function sendMessage() {
@@ -392,17 +390,13 @@ async function sendMessage() {
   msgLoading.value = true
   try {
     order.value = await api.post<OrderDetail>(`/api/v1/orders/${orderId.value}/message`, {
-      body: { content: msgContent.value.trim(), private: msgPrivate.value },
+      body: { content: msgContent.value.trim() },
     })
     msgContent.value = ''
-    msgPrivate.value = false
     await scrollToBottom()
   } catch (err) { alert(errorMessageJa(err)) }
   finally { msgLoading.value = false }
 }
-
-// 私信送信可否 (admin / creator のみ)
-const canSendPrivate = computed(() => isAdmin.value || (isCreator.value && !isAdmin.value))
 
 // ─── LINE 風チャット表示ヘルパ (改訂2.3) ──────────
 function isMyMessage(m: Message): boolean {
@@ -439,10 +433,6 @@ function senderLabel(m: Message): string {
   return m.sender_name
 }
 function bubbleClass(m: Message): string {
-  const priv = m.visibility === 'admin_creator'
-  if (priv) {
-    return 'border border-[#9333ea]/30 bg-[#f3e8ff]/70 text-ink shadow-sm'
-  }
   if (isMyMessage(m)) return 'bg-primary text-white shadow-sm'
   return 'bg-surface-strong/60 text-ink shadow-sm'
 }
@@ -1023,11 +1013,6 @@ const myCandidate = computed(() =>
               >
                 <span class="font-medium text-body-strong">{{ senderLabel(msg) }}</span>
                 <span class="text-muted">{{ formatTime(msg.created_at) }}</span>
-                <span
-                  v-if="msg.visibility === 'admin_creator'"
-                  class="rounded-full bg-[#9333ea]/15 px-1.5 py-0.5 text-[9px] font-semibold text-[#7e22ce]"
-                  title="admin↔creator 私信 — user には見えません"
-                >🔒 私信</span>
               </div>
 
               <!-- 吹き出し本体 -->
@@ -1103,25 +1088,12 @@ const myCandidate = computed(() =>
                 class="hidden"
                 @change="onAttachChange"
               />
-              <!-- 私信トグル (admin / creator のみ、改訂2.3) -->
-              <label
-                v-if="canSendPrivate && !attachedFile"
-                class="flex cursor-pointer items-center gap-1 rounded-md border border-[#9333ea]/30 bg-[#f3e8ff]/40 px-2 py-1 text-[11px] transition-colors"
-                :class="msgPrivate ? 'bg-[#9333ea]/15 text-[#7e22ce]' : 'text-body hover:bg-[#f3e8ff]/70'"
-                title="user に見えない admin↔creator 私信として送信"
-              >
-                <input v-model="msgPrivate" type="checkbox" class="h-3 w-3 accent-[#7e22ce]" />
-                🔒 私信
-              </label>
             </div>
             <button
-              class="rounded-md px-3 py-1 text-[11px] font-medium transition-colors disabled:opacity-50"
-              :class="msgPrivate
-                ? 'bg-[#7e22ce] text-white hover:bg-[#6b1eab]'
-                : 'bg-ink text-canvas hover:bg-primary'"
+              class="rounded-md bg-ink px-3 py-1 text-[11px] font-medium text-canvas transition-colors hover:bg-primary disabled:opacity-50"
               :disabled="msgLoading || attachLoading || (!msgContent.trim() && !attachedFile)"
               @click="sendChat"
-            >{{ attachLoading ? '提出中…' : (attachedFile ? '提出' : (msgLoading ? '…' : (msgPrivate ? '私信送信' : '送信'))) }}</button>
+            >{{ attachLoading ? '提出中…' : (attachedFile ? '提出' : (msgLoading ? '…' : '送信')) }}</button>
           </div>
         </div>
       </div>

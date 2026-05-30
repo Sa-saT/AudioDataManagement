@@ -107,9 +107,11 @@ function goTo(path: string) {
 
 const isCreator = computed(() => auth.role === 'creator' || auth.role === 'admin')
 const isAdmin = computed(() => auth.role === 'admin')
-// 改訂: admin にも Commission メニューを表示 (Admin タブ Commission からも遷移可能、
-// メニュー導線も残して通知バッジを admin にも届ける)
-const showCommission = computed(() => auth.isActivated && system.commissionEnabled)
+// R2.4-07: admin の Commission メニューは撤去 (Admin → Commission タブに統合)。
+// user / creator のみメニューバーに表示する。
+const showCommission = computed(() =>
+  auth.isActivated && system.commissionEnabled && !isAdmin.value,
+)
 // 改訂2 / NOTIFICATION_SPEC §3: 階層伝播
 //   Root (Level 1): 全領域の合算 (totals)
 //   Commission menu line (Level 2): commission 単体

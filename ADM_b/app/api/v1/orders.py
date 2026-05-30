@@ -42,7 +42,6 @@ from app.models import (
     OrderCandidateCreator,
     OrderMessage,
     OrderMessageKind,
-    OrderMessageVisibility,
     OrderStatus,
     CandidateResponseStatus,
     PayoutStatus,
@@ -104,7 +103,6 @@ class MessageOut(BaseModel):
     content: str | None
     attachment_path: str | None
     kind: str
-    visibility: str = "public"  # 改訂2.3: 'public' | 'admin_creator'
     created_at: Any
 
 class OrderOut(BaseModel):
@@ -167,17 +165,8 @@ def _to_message(m: OrderMessage) -> MessageOut:
         content=m.content,
         attachment_path=m.attachment_path,
         kind=m.kind.value,
-        visibility=m.visibility.value,
         created_at=m.created_at,
     )
-
-
-def _visible_messages(order: Order, viewer: User | None) -> list[OrderMessage]:
-    """改訂2.3: viewer の role に応じて messages を絞り込む。
-    user は admin_creator 私信を見られない。creator / admin は全部見える。"""
-    if viewer is None or viewer.role.value == "user":
-        return [m for m in order.messages if m.visibility != OrderMessageVisibility.admin_creator]
-    return list(order.messages)
 
 
 def _to_order_out(order: Order, viewer: User | None = None) -> OrderOut:
@@ -197,7 +186,7 @@ def _to_order_out(order: Order, viewer: User | None = None) -> OrderOut:
             order.assigned_creator.display_name if order.assigned_creator else None
         ),
         candidates=[_to_candidate(c) for c in order.candidates],
-        messages=[_to_message(m) for m in _visible_messages(order, viewer)],
+        messages=[_to_message(m) for m in order.messages],
         file_path=order.file_path,
         submission_peaks=order.submission_peaks,
         notified_at=order.notified_at,
@@ -273,18 +262,12 @@ def _orders_with_unread_messages(db: Session, viewer: User) -> set[uuid.UUID]:
         .group_by(ActivityLog.target_id)
         .subquery()
     )
-    visible = [OrderMessageVisibility.public]
-    if viewer.role.value in ("creator", "admin"):
-        visible.append(OrderMessageVisibility.admin_creator)
     last_msg = (
         select(
             OrderMessage.order_id.label("order_id"),
             func.max(OrderMessage.created_at).label("last_msg_at"),
         )
-        .where(
-            OrderMessage.sender_id != viewer.id,
-            OrderMessage.visibility.in_(visible),
-        )
+        .where(OrderMessage.sender_id != viewer.id)
         .group_by(OrderMessage.order_id)
         .subquery()
     )
@@ -418,13 +401,9 @@ def _participant_order_ids_subq(user: User):
 def _count_message_unread(db: Session, user: User) -> int:
     """チケット内メッセージ未読数。
     自分以外が送信した最新メッセージが、自分の最終 order_view より新しい order の数。
-
-    visibility フィルタ: user は admin↔creator 私信 (admin_creator) を見えない
-    ため、自分が閲覧不能なメッセージは未読カウントから除外する。
     """
     participant_subq = _participant_order_ids_subq(user).subquery()
 
-    # 自分が最後に order_view した時刻 (per order)
     last_view = (
         select(
             ActivityLog.target_id.label("order_id"),
@@ -438,27 +417,16 @@ def _count_message_unread(db: Session, user: User) -> int:
         .subquery()
     )
 
-    # 自分が閲覧可能な visibility の一覧
-    # user: public のみ / creator・admin: 全て
-    visible = [OrderMessageVisibility.public]
-    if user.role.value in ("creator", "admin"):
-        visible.append(OrderMessageVisibility.admin_creator)
-
-    # 自分以外が送った最新メッセージ時刻 (per order) — 自分が見える visibility のみ
     last_msg = (
         select(
             OrderMessage.order_id.label("order_id"),
             func.max(OrderMessage.created_at).label("last_msg_at"),
         )
-        .where(
-            OrderMessage.sender_id != user.id,
-            OrderMessage.visibility.in_(visible),
-        )
+        .where(OrderMessage.sender_id != user.id)
         .group_by(OrderMessage.order_id)
         .subquery()
     )
 
-    # 参加 order && メッセージあり && (未閲覧 OR メッセージ > 閲覧)
     q = (
         select(func.count())
         .select_from(last_msg)
@@ -1219,9 +1187,6 @@ def cancel_order(
 
 class AddMessageRequest(BaseModel):
     content: str
-    # 改訂2.3: True なら admin↔creator 私信 (user 不可視)。
-    # user が True を投げても無視 (公開扱い)。
-    private: bool = False
 
 
 @router.post("/orders/{order_id}/message", response_model=OrderOut)
@@ -1239,19 +1204,11 @@ def add_message(
     if order.status in (OrderStatus.done, OrderStatus.cancelled):
         raise HTTPException(status_code=409, detail={"code": "INVALID_STATE", "message": "order is closed"})
 
-    # 改訂2.3: admin / creator のみが私信を送れる (user の private=true は無視)
-    sender_role = current_user.role.value
-    if body.private and sender_role in ("admin", "creator"):
-        vis = OrderMessageVisibility.admin_creator
-    else:
-        vis = OrderMessageVisibility.public
-
     db.add(OrderMessage(
         order_id=parsed,
         sender_id=current_user.id,
         content=body.content,
         kind=OrderMessageKind.comment,
-        visibility=vis,
     ))
     order.updated_at = func.now()
     db.commit()
