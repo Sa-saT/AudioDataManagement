@@ -774,7 +774,86 @@ LINE 風チャット + admin↔creator 私信 + 細部 UX。
 
 | # | 内容 | 優先度 |
 |---|---|---|
-| R2.3-Q1 | 私信メッセージで添付 (音源/画像) を許可するか? 現状は public のみ submit-file 経路 | 低 |
-| R2.3-Q2 | 「user→admin だけの私信」(creator 不可視) も必要か? 現状は admin↔creator のみ | 要検討 |
-| R2.3-Q3 | 私信メッセージの未読カウントは public とは別にすべきか? | 中 |
 | R2.3-Q4 | チケット LINE UI での 「タイピング中…」 表示 / リアルタイム更新 (WebSocket) | Phase 4 |
+
+> R2.3-Q1〜Q3 は **改訂2.4 で私信機能ごと廃止** されたため終了 (§16 参照)。
+
+---
+
+## 16. 改訂2.4 サマリ (2026-05-31)
+
+Order 内 admin↔creator 私信を **廃止** し、用途別に2機能へ分離する:
+
+| 機能 | 場所 | 用途 |
+|---|---|---|
+| **共有メモ** (Memo) | Order 内 (brief 下部) | この Order についての admin / creator のメモ書き |
+| **DM (Direct Message)** | Order と独立 | admin ↔ creator の継続的やりとり (詳細は [DM_SPEC.md](DM_SPEC.md)) |
+
+### 16.1 変更概要
+
+| # | 変更 | 実装場所 |
+|---|---|---|
+| R2.4-01 | `order_messages.visibility` カラム削除 (data 削除) | migration 0016 |
+| R2.4-02 | `_visible_messages()` の visibility フィルタ削除、`AddMessageRequest.private` 廃止 | orders.py |
+| R2.4-03 | チャット LINE UI から「私信送信」UI を撤去 | orders/[id].vue |
+| R2.4-04 | 新規 `order_memos` テーブル (admin 枠 / creator 枠 各1) | migration 0017 |
+| R2.4-05 | brief 下部に左右分割メモ UI (左=admin / 右=creator) | orders/[id].vue |
+| R2.4-06 | `[メモ]` ボタンで自身の枠のみ編集可。user 不可視 | orders/[id].vue |
+| R2.4-07 | TopNav: admin の Commission メニュー項目を撤去 (Admin → Commission タブに統合) | TopNav.vue |
+| R2.4-08 | DM 機能は [DM_SPEC.md](DM_SPEC.md) を一次ソースとする | (別 spec) |
+
+### 16.2 メモ仕様
+
+#### データモデル
+
+| カラム | 型 | 説明 |
+|---|---|---|
+| id | UUID PK | |
+| order_id | UUID FK | Order への参照 |
+| author_kind | ENUM('admin','creator') | 枠の種別 (Order ごとに各1) |
+| author_id | UUID FK users.id | 最後に編集した admin / creator (記録用) |
+| content | TEXT (≤2000 chars) | メモ本文 |
+| created_at / updated_at | TIMESTAMPTZ | |
+| UNIQUE (order_id, author_kind) | | 1 Order に admin 1 / creator 1 |
+
+#### アクセス制御
+
+| ロール | 閲覧 | 編集 |
+|---|---|---|
+| user | × (完全不可視) | × |
+| creator (assigned) | ○ (両枠) | ○ (creator 枠のみ) |
+| creator (候補のみ・未assigned) | × | × |
+| admin | ○ (両枠) | ○ (admin 枠のみ) |
+
+- 候補段階の creator はメモ不可視 (assigned 確定後に出現)
+- メモは `status in (cancelled, close後)` で **編集不可 (履歴凍結)**。閲覧は可
+- 文字数上限: **2000 文字**
+- 通知: メモ更新は **通知しない** (確認時に見るだけのもの。NOTIFICATION_SPEC の原則「やること=通知」に従う)
+
+#### API
+
+| Method | Path | 説明 |
+|---|---|---|
+| GET | `/orders/{id}/memos` | 両枠のメモを返す (user は 403) |
+| PUT | `/orders/{id}/memo` | 自分の枠のメモを upsert (body: `{content: str}`) |
+
+#### UI 配置
+
+```
+[ブリーフ詳細]
+  狙う感情 / 長さ / シーン / 参考 ...
+
+  ┌────────────────────────┬────────────────────────┐
+  │ 📝 Admin メモ      [メモ] │ 📝 Creator メモ    [メモ] │
+  │ このクライアントは癖あり…   │ サビは爽快感を意識します。  │
+  └────────────────────────┴────────────────────────┘
+
+[チャット]
+  ...
+```
+
+### 16.3 既存データの扱い
+
+- `order_messages.visibility = 'admin_creator'` のレコードは **migration 0016 で物理削除**
+- 既存の `public` メッセージ表示は変わらない
+- `visibility` カラム自体も同 migration で drop

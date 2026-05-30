@@ -112,6 +112,7 @@ Level 5: 詳細ページ内セクション (オプション、必要に応じて
 | 自分が assigned された | action | 音源提出 |
 | 自分のチケットに新メッセージ | action | チケットを開く |
 | 候補だった発注が他 creator にアサインされた | info | チケットを開く OR 1週間 |
+| **admin からの新着 DM** | action | DM ToAdmin を開く ([DM_SPEC](DM_SPEC.md)) |
 | ※ 自分が user として発注している場合は user の通知源も合算 |  |  |
 
 ### 4.3 admin
@@ -121,6 +122,7 @@ Level 5: 詳細ページ内セクション (オプション、必要に応じて
 | **Commission**: 全 user/creator の action 全般 (nominate / assign / done 決裁待ち) | action | 当該操作完了 |
 | **Commission**: 全 user/creator のチャットメッセージ (監督枠) | action | チケットを開く |
 | **Payout**: 承認待ち creator 支払い | action | paid 化 |
+| **Creator DM**: creator からの新着 DM | action | DM スレッドを開く ([DM_SPEC](DM_SPEC.md)) |
 | **Token grant 申請** (将来) | action | 付与 / 却下 |
 | **lic 発行依頼** (将来) | action | lic 発行 / 却下 |
 | ※ 自分が user/creator として参加していれば各通知源も合算 |  |  |
@@ -176,6 +178,11 @@ Authorization: Bearer <token>
       "action_count": 0,
       "has_info": false,
       "breakdown": {}
+    },
+    "creator_dm": {
+      "action_count": 2,
+      "has_info": false,
+      "breakdown": { "unread_threads": 2 }
     }
   },
   "totals": {
@@ -225,6 +232,7 @@ Body: { "target_id": "<uuid>" }
 |---|---|
 | Commission | `order_view` |
 | Payout | `payout_view` |
+| Creator DM | `dm_view` ([DM_SPEC §3.2](DM_SPEC.md)) |
 | Token grant 申請 (将来) | `token_grant_view` |
 | lic 発行依頼 (将来) | `lic_request_view` |
 

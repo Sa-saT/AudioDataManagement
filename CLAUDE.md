@@ -161,6 +161,7 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 - **Commission発注**: [docs/ORDER_SPEC.md](docs/ORDER_SPEC.md)
 - **Admin ログ**: [docs/LOG_SPEC.md](docs/LOG_SPEC.md)
 - **通知システム (横断)**: [docs/NOTIFICATION_SPEC.md](docs/NOTIFICATION_SPEC.md)
+- **DM (admin↔creator)**: [docs/DM_SPEC.md](docs/DM_SPEC.md)
 - **波形描画 Shader**: [docs/WAVEFORM_SHADER_SPEC.md](docs/WAVEFORM_SHADER_SPEC.md)
 - UIデザイン: [DESIGN.md](DESIGN.md)
 
