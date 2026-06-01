@@ -18,7 +18,7 @@ from app.models.creator import CreatorProfile, CreatorRank
 from app.models.payment import CreatorPayout, PayoutStatus, TokenGrant
 from app.models.user import License, User, UserRole
 from app.security.deps import require_role
-from app.security.license import compute_signature
+from app.security.license import compute_signature, issue_jwe_license
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 require_admin = require_role("admin")
@@ -384,11 +384,18 @@ def issue_license(
     if body.expires_at is not None:
         lic["expiresAt"] = body.expires_at.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    lic["signature"] = compute_signature(lic)
+    from app.config import get_settings
 
-    lic_bytes = json.dumps(lic, ensure_ascii=False, indent=2).encode("utf-8")
     safe_name = "".join(c if c.isalnum() or c in "-_." else "_" for c in body.username)
     filename = f"{safe_name}.lic"
+
+    if get_settings().ADM_LIC_EC_PRIVATE_KEY:
+        # Phase B: JWE (ECDH-ES + A256GCM) — content-encrypted, no plaintext HMAC
+        lic_bytes = issue_jwe_license(lic).encode("ascii")
+    else:
+        # Phase A: JSON + HMAC (fallback when EC key not configured)
+        lic["signature"] = compute_signature(lic)
+        lic_bytes = json.dumps(lic, ensure_ascii=False, indent=2).encode("utf-8")
 
     return Response(
         content=lic_bytes,

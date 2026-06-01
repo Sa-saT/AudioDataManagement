@@ -33,6 +33,8 @@ class Settings(BaseSettings):
 
     # License
     LICENSE_SECRET: str = ""
+    # Phase B: EC private key PEM for JWE issuance/verification (ECDH-ES + A256GCM)
+    ADM_LIC_EC_PRIVATE_KEY: str = ""
 
     # Storage
     STORAGE_BACKEND: str = "local"
