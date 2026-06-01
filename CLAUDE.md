@@ -193,16 +193,23 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 | 50 | **改訂2.4** — Order 内私信廃止 + Order 共有メモ (admin/creator 各1枠、左右分割、user 不可視) + admin↔creator Direct Message (DM_SPEC Phase A-D) + admin Commission メニュー統合 | 14a5fc5 〜 3889d85 |
 | 51 | **9-A3 改訂2.5** — Creator 複数提出のバージョン管理 (submissions/{id}_v{n}.wav + peaks v2 per version + GET /submissions + 履歴 UI) + リテラルルート順序バグ修正 | 3d2566b |
 | 52 | **9-A4** — クリエイター視点 brief UI (役割優先順序 + tx_* スライダー視覚化 + 視点切替トグル / localStorage) | 24e31d8 |
+| - | **9-A7** — R2-Q1〜Q3 (期限超過アラート色 / draft 30日自動削除 / sound_type=both UI 確認) | 3f32429 |
+| - | **9-A6** — R2.1-Q1〜Q3 (設計決定のみ: reviewing 中編集不可維持 / 上限なし / 自動取消なし) | 3f32429 |
+| - | **9-A5** — SE 複数スロット納品 (se_slots / _vN_sM.wav / multi-file / スロットタブ / migration 0020) | 3f32429 |
+| - | **9-A12** — NOTIFICATION Phase E (prev_view_at / 「ここから未読」ディバイダー / 自動スクロール) | a566998 |
 
 ### Phase 3 残スコープ → Phase 4 前に整備
 
 詳細は **[docs/ORDER_SPEC.md §9.1](docs/ORDER_SPEC.md)** (棚卸し済) を一次ソースとする。
 
-**低 / 要検討:**
-- SE 複数納品 (9-A5) / 改訂2.1 残課題 (9-A6) / 改訂2 残課題 (9-A7) / NOTIFICATION Phase E 詳細セクション dot (9-A12)
+**低 / 要検討 (残):**
+- メモ既読マーカー (9-A13)
+
+**完了済 (2026-06-01):**
+- 9-A5 SE 複数スロット納品 / 9-A6 R2.1 残課題 (設計決定) / 9-A7 R2 残課題 / 9-A12 NOTIFICATION Phase E
 
 **本番準備 (Phase 4):**
-- S3 互換ストレージ切替 (9-A8) / CDN / 監視 / バックアップ
+- S3 互換ストレージ切替 (9-A8) / CDN / 監視 / バックアップ / lic 暗号化 (Phase B/C)
 
 ## 9. 用語 (要点)
 
