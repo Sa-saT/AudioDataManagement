@@ -156,8 +156,12 @@ class OrderMessage(Base):
     )
     # 改訂2.5 (9-A3): kind=submission のみセット。Order ごとに created_at 順で 1..N
     submission_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    # 提出音源の peaks v2。WaveformPlayer で各 version を視聴するため
+    # 提出音源の peaks v2。WaveformPlayer で各 version を視聴するため (単一ファイル)
     attachment_peaks: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # 9-A5: SE 複数スロット納品。["/path/s1.wav", "/path/s2.wav", ...] 形式
+    attachment_paths: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    # 9-A5: 各スロットの peaks v2 リスト [peaks1, peaks2, ...]
+    attachment_peaks_list: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

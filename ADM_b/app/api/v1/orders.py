@@ -646,17 +646,18 @@ def submission_stream(
     exp: int = Query(...),
     sig: str = Query(...),
     version: int = Query(0, ge=0),
+    slot: int = Query(1, ge=1, description="9-A5: SE スロット番号 (1始まり)"),
     db: Session = Depends(get_db),
 ) -> Any:
     """signed URL の検証 → submission ファイルから 10秒チャンクを切り出して返す。
     JWT 不要 (短命 signed URL で代替)。version=0 で最新。"""
     try:
-        verify_submission_stream(order_id, start, exp, sig, version)
+        verify_submission_stream(order_id, start, exp, sig, version, slot)
     except SignedURLError as exc:
         raise HTTPException(status_code=403, detail={"code": exc.code, "message": exc.message})
 
     parsed = _parse_uuid(order_id)
-    path = _resolve_submission_path(db, parsed, version)
+    path = _resolve_submission_path(db, parsed, version, slot)
     if path is None or not path.exists():
         raise HTTPException(status_code=404, detail={"code": "FILE_NOT_FOUND", "message": "no submission file"})
 
@@ -707,6 +708,38 @@ def download_order_file(
     if not fp.exists():
         raise HTTPException(status_code=404, detail={"code": "FILE_NOT_FOUND", "message": "file missing"})
     return FileResponse(path=str(fp), media_type="audio/wav", filename=f"{order.title}.wav")
+
+
+# ─── Draft cleanup ────────────────────────────────────────────────────────────
+
+def _cleanup_stale_drafts_internal(days: int = 30) -> int:
+    """Standalone cleanup (called from lifespan). Returns count deleted."""
+    from app.db import SessionLocal  # noqa: PLC0415
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    db = SessionLocal()
+    try:
+        rows = db.execute(select(Order).where(Order.status == OrderStatus.draft, Order.updated_at < cutoff)).scalars().all()
+        for o in rows:
+            db.delete(o)
+        db.commit()
+        return len(rows)
+    finally:
+        db.close()
+
+
+@router.post("/orders/cleanup-drafts")
+def cleanup_drafts(
+    days: int = Query(default=30, ge=1, le=365),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+    _: None = Depends(_require_commission),
+) -> dict:
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    rows = db.execute(select(Order).where(Order.status == OrderStatus.draft, Order.updated_at < cutoff)).scalars().all()
+    for o in rows:
+        db.delete(o)
+    db.commit()
+    return {"deleted": len(rows), "days": days}
 
 
 # ─── Order detail ─────────────────────────────────────────────────────────────
@@ -1178,6 +1211,9 @@ class SubmissionVersionOut(BaseModel):
     note: str | None
     file_available: bool
     peaks: dict | None
+    # 9-A5: SE 複数スロット。単一ファイルは slot_count=1, peaks_list=[peaks]
+    slot_count: int
+    peaks_list: list[dict | None]
     rejected: bool
     rejection_reason: str | None
     created_at: Any
@@ -1216,14 +1252,23 @@ def list_submissions(
         if pending_submission is None:
             return
         m = pending_submission
+        # 9-A5: 複数スロットか単一スロットかを判別
+        if m.attachment_paths:
+            slot_count = len(m.attachment_paths)
+            peaks_list: list[dict | None] = m.attachment_peaks_list or [None] * slot_count
+        else:
+            slot_count = 1
+            peaks_list = [m.attachment_peaks]
         out.append(SubmissionVersionOut(
             version=m.submission_version or 0,
             message_id=str(m.id),
             sender_id=str(m.sender_id) if m.sender_id else None,
             sender_name=m.sender.username if m.sender else None,
             note=m.content,
-            file_available=m.attachment_path is not None,
+            file_available=m.attachment_path is not None or bool(m.attachment_paths),
             peaks=m.attachment_peaks,
+            slot_count=slot_count,
+            peaks_list=peaks_list,
             rejected=rejected,
             rejection_reason=reason,
             created_at=m.created_at,
@@ -1247,13 +1292,13 @@ def list_submissions(
 
 # ─── Submission stream (改訂2.2: 受け取る前のプレビュー) ─────────────────────
 
-def _resolve_submission_path(db: Session, order_id: uuid.UUID, version: int) -> Path | None:
-    """改訂2.5: 指定 version (0=latest) の submission ファイルパスを解決。
-    新形式 (_vN.wav) → 旧形式 (.wav) → done 後の確定ファイル (orders/{id}.wav) の順でフォールバック。
+def _resolve_submission_path(db: Session, order_id: uuid.UUID, version: int, slot: int = 1) -> Path | None:
+    """改訂2.5: 指定 version (0=latest) + slot の submission ファイルパスを解決。
+    9-A5: slot > 1 の場合は _vN_s{slot}.wav、それ以外は _vN.wav。
+    新形式 → 旧形式 → done 後の確定ファイル の順でフォールバック。
     """
     sub_dir = Path(settings.ORDERS_DIR) / "submissions"
     if version == 0:
-        # 最新 version をクエリ
         latest_v = db.execute(
             select(func.max(OrderMessage.submission_version))
             .where(
@@ -1262,16 +1307,22 @@ def _resolve_submission_path(db: Session, order_id: uuid.UUID, version: int) -> 
             )
         ).scalar_one()
         if latest_v:
+            # slot 対応: スロット付きファイルを優先、なければ単一ファイル
+            slot_p = sub_dir / f"{order_id}_v{latest_v}_s{slot}.wav"
+            if slot_p.exists():
+                return slot_p
             p = sub_dir / f"{order_id}_v{latest_v}.wav"
             if p.exists():
                 return p
-        # 旧形式フォールバック (migration 前のデータや done 後の確定ファイル)
         old = sub_dir / f"{order_id}.wav"
         if old.exists():
             return old
         final = Path(settings.ORDERS_DIR) / f"{order_id}.wav"
         return final if final.exists() else None
     else:
+        slot_p = sub_dir / f"{order_id}_v{version}_s{slot}.wav"
+        if slot_p.exists():
+            return slot_p
         p = sub_dir / f"{order_id}_v{version}.wav"
         return p if p.exists() else None
 
@@ -1281,6 +1332,7 @@ def get_submission_stream_url(
     order_id: str,
     start: int = Query(0, ge=0),
     version: int = Query(0, ge=0, description="0 = latest (改訂2.5 / 9-A3)"),
+    slot: int = Query(1, ge=1, description="9-A5: SE スロット番号 (1始まり)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     _: None = Depends(_require_commission),
@@ -1297,7 +1349,7 @@ def get_submission_stream_url(
             status_code=409,
             detail={"code": "NO_SUBMISSION_FILE", "message": "submission file not available"},
         )
-    params = issue_submission_stream(str(parsed), start, version)
+    params = issue_submission_stream(str(parsed), start, version, slot)
     return {"url": _build_url("/api/v1/orders/submission-stream", params)}
 
 
@@ -1405,12 +1457,19 @@ def respond_to_nomination(
 @router.post("/orders/{order_id}/submit-file", response_model=OrderOut)
 def submit_file(
     order_id: str,
-    file: UploadFile = File(...),
+    files: list[UploadFile] = File(...),
     note: str = Form(""),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("creator", "admin")),
     _: None = Depends(_require_commission),
 ) -> OrderOut:
+    """改訂2.5 (9-A3) + 9-A5: SE 複数スロット対応。
+    files に 1 ファイル → 単一ファイル (_vN.wav)。
+    files に N ファイル → 複数スロット (_vN_s1.wav, _vN_s2.wav, ...)。
+    """
+    if not files:
+        raise HTTPException(status_code=422, detail={"code": "NO_FILE", "message": "ファイルが必要です"})
+
     parsed = _parse_uuid(order_id)
     order = db.execute(select(Order).where(Order.id == parsed).with_for_update()).scalar_one_or_none()
     _check_order_exists(order)
@@ -1419,8 +1478,7 @@ def submit_file(
     if order.status != OrderStatus.assigned:
         raise HTTPException(status_code=409, detail={"code": "INVALID_STATE", "message": f"expected assigned, got {order.status.value}"})
 
-    # 改訂2.5 (9-A3): バージョン管理。次の version 番号を採番し
-    # `submissions/{order_id}_v{n}.wav` に保存。過去の version は残す
+    # 改訂2.5 (9-A3): バージョン管理
     next_version = int(db.execute(
         select(func.coalesce(func.max(OrderMessage.submission_version), 0) + 1)
         .where(
@@ -1431,37 +1489,72 @@ def submit_file(
 
     sub_dir = Path(settings.ORDERS_DIR) / "submissions"
     sub_dir.mkdir(parents=True, exist_ok=True)
-    dest = sub_dir / f"{parsed}_v{next_version}.wav"
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-        tmp_path = Path(tmp.name)
-    try:
-        import shutil as _shutil
-        with open(tmp_path, "wb") as f:
-            _shutil.copyfileobj(file.file, f)
-        _shutil.copy2(tmp_path, dest)
-    finally:
-        tmp_path.unlink(missing_ok=True)
 
-    # WaveformPlayer プレビュー用 peaks v2。失敗してもアップロード自体は成功扱い
-    try:
-        peaks = compute_peaks_v2(dest)
-    except Exception:
-        peaks = None
+    import shutil as _shutil
 
-    # Order 側 submission_peaks は最新版のミラー (UI の既存導線で参照)
-    order.submission_peaks = peaks
-    order.status = OrderStatus.reviewing
-    order.updated_at = func.now()
+    if len(files) == 1:
+        # 単一ファイル: 既存の命名規則 (_vN.wav)
+        dest = sub_dir / f"{parsed}_v{next_version}.wav"
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+        try:
+            with open(tmp_path, "wb") as fh:
+                _shutil.copyfileobj(files[0].file, fh)
+            _shutil.copy2(tmp_path, dest)
+        finally:
+            tmp_path.unlink(missing_ok=True)
+        try:
+            first_peaks = compute_peaks_v2(dest)
+        except Exception:
+            first_peaks = None
+        order.submission_peaks = first_peaks
+        order.status = OrderStatus.reviewing
+        order.updated_at = func.now()
+        db.add(OrderMessage(
+            order_id=parsed,
+            sender_id=current_user.id,
+            content=note or "音源を提出しました。",
+            attachment_path=str(dest),
+            kind=OrderMessageKind.submission,
+            submission_version=next_version,
+            attachment_peaks=first_peaks,
+        ))
+    else:
+        # 9-A5: 複数スロット (_vN_s1.wav, _vN_s2.wav, ...)
+        saved_paths: list[str] = []
+        saved_peaks: list[dict | None] = []
+        for i, up_file in enumerate(files, start=1):
+            dest = sub_dir / f"{parsed}_v{next_version}_s{i}.wav"
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                tmp_path = Path(tmp.name)
+            try:
+                with open(tmp_path, "wb") as fh:
+                    _shutil.copyfileobj(up_file.file, fh)
+                _shutil.copy2(tmp_path, dest)
+            finally:
+                tmp_path.unlink(missing_ok=True)
+            saved_paths.append(str(dest))
+            try:
+                saved_peaks.append(compute_peaks_v2(dest))
+            except Exception:
+                saved_peaks.append(None)
+        first_peaks = saved_peaks[0] if saved_peaks else None
+        order.submission_peaks = first_peaks
+        order.status = OrderStatus.reviewing
+        order.updated_at = func.now()
+        db.add(OrderMessage(
+            order_id=parsed,
+            sender_id=current_user.id,
+            content=note or f"音源を提出しました。({len(files)} ファイル)",
+            kind=OrderMessageKind.submission,
+            submission_version=next_version,
+            attachment_paths=saved_paths,
+            attachment_peaks_list=saved_peaks,
+            # 先頭スロットを単一参照フィールドにもセット (後方互換)
+            attachment_path=saved_paths[0] if saved_paths else None,
+            attachment_peaks=first_peaks,
+        ))
 
-    db.add(OrderMessage(
-        order_id=parsed,
-        sender_id=current_user.id,
-        content=note or "音源を提出しました。",
-        attachment_path=str(dest),
-        kind=OrderMessageKind.submission,
-        submission_version=next_version,
-        attachment_peaks=peaks,
-    ))
     _add_status_message(db, parsed, current_user.id, "reviewing", f"v{next_version}")
     db.commit()
     return _to_order_out(_load_order(db, parsed), viewer=current_user)

@@ -89,14 +89,15 @@ def verify_copy_download(audio_id: str, user_id: str, exp: int, sig: str) -> Non
 
 # 改訂2.2: チケット内の音源プレビュー (提出済 submission ファイル) — 10秒チャンク
 # 改訂2.5 (9-A3): version も署名対象に追加 (0 = latest / 後方互換)
-def issue_submission_stream(order_id: str, start: int, version: int = 0) -> dict:
+# 9-A5: slot も署名対象に追加 (1 = 単一ファイルまたは先頭スロット)
+def issue_submission_stream(order_id: str, start: int, version: int = 0, slot: int = 1) -> dict:
     exp = int(time.time()) + settings.SIGNED_URL_TTL_SECONDS
-    sig = _sign("submission_stream", order_id, str(start), str(version), str(exp))
-    return {"order_id": order_id, "start": start, "version": version, "exp": exp, "sig": sig}
+    sig = _sign("submission_stream", order_id, str(start), str(version), str(slot), str(exp))
+    return {"order_id": order_id, "start": start, "version": version, "slot": slot, "exp": exp, "sig": sig}
 
 
-def verify_submission_stream(order_id: str, start: int, exp: int, sig: str, version: int = 0) -> None:
-    expected = _sign("submission_stream", order_id, str(start), str(version), str(exp))
+def verify_submission_stream(order_id: str, start: int, exp: int, sig: str, version: int = 0, slot: int = 1) -> None:
+    expected = _sign("submission_stream", order_id, str(start), str(version), str(slot), str(exp))
     if not hmac.compare_digest(expected, sig):
         raise SignedURLError("INVALID_SIGNATURE", "invalid or tampered signature")
     if int(time.time()) > exp:

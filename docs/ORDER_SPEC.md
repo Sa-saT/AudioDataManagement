@@ -470,9 +470,6 @@ Step 2 は `sound_type` (BGM/SE/both) によって表示項目が変わる。
 
 | # | 項目 | 優先度 | 備考 |
 |---|---|---|---|
-| 9-A5 | **SE 納品の複数ファイル対応** | 要検討 | SE は複数バリエーション納品が多い。`submissions/{id}_{slot}.wav` + 必要数フィールド |
-| 9-A6 | **改訂2.1 R2.1-Q1〜Q3** (§13.7) | 要検討 | reviewing 中の編集許可 / 編集回数上限 / length_sec 大幅変更時の自動 assign 取消 |
-| 9-A7 | **改訂2 R2-Q1〜Q3** (§11.6) | 低 | sound_type=both データ migration / 期限切れ order 扱い / draft 自動削除ポリシー |
 | 9-A8 | **本番ストレージ移行** | Phase 4 | ローカル `/storage/*` → S3 互換切替 |
 | 9-A12 | **NOTIFICATION Phase E** | 任意 | 詳細ページ内セクション dot (チャット内未読位置等)。NOTIFICATION_SPEC §9 参照 |
 | 9-A13 | **メモ更新時の dm_view 相当の閲覧マーカー** | 低 | 現状メモは通知を立てない設計。後から「相手が読んだか」を見たい要望が出たら検討 |
@@ -501,6 +498,9 @@ Step 2 は `sound_type` (BGM/SE/both) によって表示項目が変わる。
 | ✅ | **改訂2.4** admin↔creator Direct Message (DM_SPEC Phase A-D) | 3889d85 |
 | ✅ | **9-A3** Creator 複数提出のバージョン管理 (`submissions/{id}_v{n}.wav` + peaks v2 per version + GET /submissions + 履歴 UI) + リテラルルート順序バグ修正 | (改訂2.5 / migration 0019) |
 | ✅ | **9-A4** クリエイター視点 UI 最適化 (役割優先順序の brief 再構成 + tx_* スライダー視覚化 + 視点切替トグル + localStorage 保存) | (改訂2.5) |
+| ✅ | **9-A7** R2-Q1〜Q3 (sound_type=both UI 対応済み / 期限超過アラート色 / draft 30日自動削除) | — |
+| ✅ | **9-A6** R2.1-Q1〜Q3 (reviewing 中編集不可維持 / 編集回数上限なし / 自動 assign 取消なし: 設計決定のみ) | — |
+| ✅ | **9-A5** SE 複数バリエーション納品 (`se_slots` フィールド / `_vN_sM.wav` 命名 / multi-file submit / スロットタブ preview / migration 0020) | — |
 
 ---
 
@@ -573,13 +573,13 @@ CREATE UNIQUE INDEX uq_orders_serial ON orders (serial);
 -- cancel/削除しても番号は再利用されない (sequence の単調増加)
 ```
 
-### 11.6 残課題 (改訂2 で未確定)
+### 11.6 残課題 → 解決済み (9-A7)
 
-| # | 内容 |
-|---|---|
-| R2-Q1 | `sound_type=both` で既に作成済みの order の扱い (data migration するか UI 表示のみ対応か) |
-| R2-Q2 | `desired_deadline` を過ぎた order の扱い (アラート色 / 自動キャンセル / 何もしない) |
-| R2-Q3 | 「一時保存」中の draft をユーザが放置した場合の自動削除ポリシー (例: 30日未操作で消す) |
+| # | 内容 | 決定事項 |
+|---|---|---|
+| R2-Q1 | `sound_type=both` で既に作成済みの order の扱い | **UI 表示のみ対応**。詳細/一覧で `both` → "BGM + SE" 表示済み。data migration 不要 |
+| R2-Q2 | `desired_deadline` を過ぎた order の扱い | **アラート色**。active status かつ過去日なら締切テキストを `text-accent` (赤) 表示。自動キャンセルなし |
+| R2-Q3 | draft 放置時の自動削除ポリシー | **30 日未操作で自動削除**。FastAPI lifespan 起動時に実行。admin は `POST /api/v1/orders/cleanup-drafts?days=30` で手動実行可 |
 
 ---
 
@@ -750,13 +750,13 @@ Body:
 | R2.1-05 | チャット内 `brief_edit` メッセージ専用スタイル (`System (Brief Bot)` + accent 左ボーダー) | ✅ |
 | R2.1-06 | `length_sec` 変更で `token_cost` 再計算 + 残量再チェック (差分 token 不足で 402) | ✅ |
 
-### 13.7 未確定事項
+### 13.7 未確定事項 → 解決済み (9-A6)
 
-| # | 内容 |
-|---|---|
-| R2.1-Q1 | reviewing 状態で creator が音源提出後の編集を許可するか (現状は不可案) |
-| R2.1-Q2 | 編集回数の上限 (例: 1チケット 5回まで等) を設けるか |
-| R2.1-Q3 | `length_sec` が大幅変更された場合、すでに進行中の assign を自動で取り消すか |
+| # | 内容 | 決定事項 |
+|---|---|---|
+| R2.1-Q1 | reviewing 状態で creator が音源提出後の編集を許可するか | **不可を維持**。提出後のブリーフ変更は creator に不公平。admin による差し戻し (`reject`) で対応 |
+| R2.1-Q2 | 編集回数の上限 | **上限なし**。admin が brief_edit 通知を受け取り仲介できるため不要。問題が発生したら追加 |
+| R2.1-Q3 | `length_sec` 大幅変更時の自動 assign 取消 | **実装しない**。admin が bot 通知 (`brief_edit`) で変更を把握し、必要なら手動で差し戻し/再 assign |
 
 ---
 

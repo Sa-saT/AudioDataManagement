@@ -20,6 +20,8 @@ export interface OrderBrief {
   // Step 2 — SE
   se_trigger: string
   se_functions: string[]
+  // 9-A5: SE バリエーション数 (1〜5、デフォルト 1)
+  se_slots: number
   // Step 3 — Emotional
   emotions_target: string[]
   emotions_avoid: string[]
@@ -76,6 +78,7 @@ const brief = ref<OrderBrief>({
   bgm_note: '',
   se_trigger: '',
   se_functions: [],
+  se_slots: 1,
   emotions_target: [],
   emotions_avoid: [],
   memory_impression: '',
@@ -466,6 +469,24 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
               >{{ f.l }}</button>
             </div>
           </div>
+
+          <!-- 9-A5: バリエーション数 -->
+          <div class="mt-4">
+            <label class="block text-[12px] text-ink/60 mb-1.5">納品バリエーション数 (何パターン必要か)</label>
+            <div class="flex items-center gap-2">
+              <button
+                v-for="n in [1,2,3,4,5]"
+                :key="n"
+                type="button"
+                class="w-9 h-9 rounded-lg text-[13px] font-medium border transition-colors"
+                :class="brief.se_slots === n
+                  ? 'bg-accent text-white border-accent'
+                  : 'bg-surface-2 text-ink/60 border-white/10 hover:border-accent/50'"
+                @click="brief.se_slots = n"
+              >{{ n }}</button>
+              <span class="text-[11px] text-ink/40 ml-1">パターン</span>
+            </div>
+          </div>
         </div>
       </template>
     </div>
@@ -681,6 +702,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
         <p><span class="text-ink/40 w-20 inline-block">締切</span><span class="text-ink">{{ desired_deadline }}</span></p>
         <p v-if="brief.bgm_scenes.length"><span class="text-ink/40 w-20 inline-block">シーン</span><span class="text-ink">{{ brief.bgm_scenes.map(bgmSceneLabel).join(', ') }}</span></p>
         <p v-if="brief.se_trigger"><span class="text-ink/40 w-20 inline-block">SEトリガー</span><span class="text-ink">{{ brief.se_trigger }}</span></p>
+        <p v-if="brief.sound_type === 'se' && brief.se_slots > 1"><span class="text-ink/40 w-20 inline-block">バリエーション</span><span class="text-ink">{{ brief.se_slots }} パターン</span></p>
         <p v-if="brief.emotions_target.length"><span class="text-ink/40 w-20 inline-block">狙う感情</span><span class="text-ink">{{ brief.emotions_target.map(emotionLabel).join(', ') }}</span></p>
         <p v-if="brief.memory_impression"><span class="text-ink/40 w-20 inline-block">イメージ</span><span class="text-ink">{{ brief.memory_impression }}</span></p>
         <p v-if="brief.reference_elements.length"><span class="text-ink/40 w-20 inline-block">参考要素</span><span class="text-ink">{{ brief.reference_elements.map(refElemLabel).join(', ') }}</span></p>

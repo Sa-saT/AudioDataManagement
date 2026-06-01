@@ -169,6 +169,13 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' })
 }
 
+function isOverdue(deadline: string, orderStatus: string, closedAt: string | null): boolean {
+  if (orderStatus === 'done' || orderStatus === 'cancelled' || closedAt) return false
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return new Date(deadline) < today
+}
+
 // 改訂2.2: 旧 order 互換 — title 末尾の `#N` を除去して件名のみ返す
 function stripSerialFromTitle(title: string): string {
   return title.replace(/\s*#\d+\s*$/, '')
@@ -347,7 +354,7 @@ const BGM_SCENE_L: Record<string, string> = {
                 <div class="mt-0.5 flex items-center gap-2 text-[11px] text-muted">
                   <span class="font-mono">{{ draft.token_cost }} tk</span>
                   <span class="h-1 w-1 rounded-full bg-muted" />
-                  <span>締切 {{ formatDate(draft.desired_deadline) }}</span>
+                  <span :class="isOverdue(draft.desired_deadline, draft.status, draft.closed_at) ? 'text-accent' : ''">締切 {{ formatDate(draft.desired_deadline) }}</span>
                   <span class="h-1 w-1 rounded-full bg-muted" />
                   <span>{{ formatDate(draft.updated_at) }} 更新</span>
                 </div>
@@ -423,7 +430,7 @@ const BGM_SCENE_L: Record<string, string> = {
                   <span class="h-1 w-1 rounded-full bg-muted" />
                   <span class="font-mono">{{ order.token_cost }} tk</span>
                   <span class="h-1 w-1 rounded-full bg-muted" />
-                  <span>締切 {{ formatDate(order.desired_deadline) }}</span>
+                  <span :class="isOverdue(order.desired_deadline, order.status, order.closed_at) ? 'text-accent' : ''">締切 {{ formatDate(order.desired_deadline) }}</span>
                 </div>
               </div>
 

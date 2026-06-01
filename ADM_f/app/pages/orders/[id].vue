@@ -192,6 +192,9 @@ interface SubmissionVersion {
   note: string | null
   file_available: boolean
   peaks: { n: number; max: number[]; min: number[]; rms: number[] } | null
+  // 9-A5: SE 複数スロット
+  slot_count: number
+  peaks_list: ({ n: number; max: number[]; min: number[]; rms: number[] } | null)[]
   rejected: boolean
   rejection_reason: string | null
   created_at: string
@@ -199,6 +202,12 @@ interface SubmissionVersion {
 
 const submissions = ref<SubmissionVersion[]>([])
 const selectedVersion = ref<number>(0)  // 0 = latest
+const selectedSlot = ref<number>(1)     // 9-A5: 選択中のスロット番号 (1始まり)
+
+const selectedSubmission = computed(() =>
+  submissions.value.find(s => s.version === selectedVersion.value)
+  ?? (submissions.value.length > 0 ? submissions.value[submissions.value.length - 1] : null),
+)
 
 async function fetchSubmissions() {
   if (!order.value) return
@@ -206,21 +215,20 @@ async function fetchSubmissions() {
     submissions.value = await api.get<SubmissionVersion[]>(
       `/api/v1/orders/${orderId.value}/submissions`,
     )
-    // 初期選択: 最新 version (リストの末尾)
     if (submissions.value.length > 0) {
       selectedVersion.value = submissions.value[submissions.value.length - 1].version
     }
   } catch { /* silent: バージョン履歴は補助情報 */ }
 }
 
-async function loadPreview(version = 0) {
+async function loadPreview(version = 0, slot = 1) {
   if (!hasSubmission.value) return
   audioPreviewLoading.value = true
   audioPreviewError.value = null
   try {
     const { url } = await api.get<{ url: string }>(
       `/api/v1/orders/${orderId.value}/submission-stream-url`,
-      { query: { start: 0, version } },
+      { query: { start: 0, version, slot } },
     )
     const config = useRuntimeConfig()
     const base = config.public.apiBaseUrl as string
@@ -234,10 +242,18 @@ async function loadPreview(version = 0) {
 
 function selectVersion(v: number) {
   selectedVersion.value = v
-  // version=0 で最新が確実に取れるよう、末尾なら 0、それ以外は具体的な v を渡す
+  selectedSlot.value = 1
   const isLatest = submissions.value.length > 0 &&
     v === submissions.value[submissions.value.length - 1].version
-  loadPreview(isLatest ? 0 : v)
+  loadPreview(isLatest ? 0 : v, 1)
+}
+
+// 9-A5: スロット切替
+function selectSlot(slot: number) {
+  selectedSlot.value = slot
+  const isLatest = submissions.value.length > 0 &&
+    selectedVersion.value === submissions.value[submissions.value.length - 1].version
+  loadPreview(isLatest ? 0 : selectedVersion.value, slot)
 }
 
 function formatVersionTime(iso: string): string {
@@ -297,7 +313,7 @@ async function sendChat() {
     attachLoading.value = true
     try {
       const fd = new FormData()
-      fd.append('file', attachedFile.value)
+      fd.append('files', attachedFile.value)
       fd.append('note', msgContent.value.trim() || '音源を提出しました。')
       order.value = await api.post<OrderDetail>(
         `/api/v1/orders/${orderId.value}/submit-file`, { body: fd },
@@ -429,6 +445,12 @@ const daysToDeadline = computed(() => {
   const dl = new Date(order.value.desired_deadline)
   const diff = Math.ceil((dl.getTime() - Date.now()) / 86400000)
   return diff
+})
+const isOrderOverdue = computed(() => {
+  if (!order.value) return false
+  const { status, closed_at } = order.value
+  if (status === 'done' || status === 'cancelled' || closed_at) return false
+  return (daysToDeadline.value ?? 1) < 0
 })
 // tx_* スライダー位置 (0〜100%)
 function txPosition(value: string | undefined, left: string, mid: string, right: string): number {
@@ -591,18 +613,44 @@ async function respond(response: 'accepted' | 'declined') {
 
 // ─── Creator: submit file ─────────────────────────
 const showSubmitFile = ref(false)
-const submitFile = ref<File | null>(null)
+const submitFiles = ref<(File | null)[]>([null])  // 9-A5: スロット分の配列
 const submitNote = ref('')
 const submitFileLoading = ref(false)
 const submitFileError = ref<string | null>(null)
 
+// 9-A5: SE 複数スロット判定
+const seSlotCount = computed(() => {
+  const b = order.value?.brief as { sound_type?: string; se_slots?: number } | null
+  if (b?.sound_type === 'se' && (b.se_slots ?? 1) > 1) return b.se_slots!
+  return 1
+})
+const isSeMultiSlot = computed(() => seSlotCount.value > 1)
+
+function onShowSubmitFile() {
+  submitFiles.value = Array(seSlotCount.value).fill(null)
+  submitFileError.value = null
+  submitNote.value = ''
+  showSubmitFile.value = true
+}
+
+function setSlotFile(idx: number, e: Event) {
+  const f = (e.target as HTMLInputElement).files?.[0] ?? null
+  const arr = [...submitFiles.value]
+  arr[idx] = f
+  submitFiles.value = arr
+}
+
 async function executeSubmitFile() {
-  if (!submitFile.value) { submitFileError.value = 'ファイルを選択してください。'; return }
+  const files = submitFiles.value.filter((f): f is File => f !== null)
+  if (files.length === 0) { submitFileError.value = 'ファイルを選択してください。'; return }
+  if (isSeMultiSlot.value && files.length < seSlotCount.value) {
+    submitFileError.value = `全 ${seSlotCount.value} スロット分のファイルを選択してください。`; return
+  }
   submitFileLoading.value = true
   submitFileError.value = null
   try {
     const fd = new FormData()
-    fd.append('file', submitFile.value)
+    for (const f of files) fd.append('files', f)
     fd.append('note', submitNote.value.trim() || '')
     const config = useRuntimeConfig()
     const data = await $fetch<OrderDetail>(`/api/v1/orders/${orderId.value}/submit-file`, {
@@ -613,7 +661,7 @@ async function executeSubmitFile() {
     })
     order.value = data
     showSubmitFile.value = false
-    submitFile.value = null
+    submitFiles.value = [null]
     submitNote.value = ''
   } catch (err) {
     submitFileError.value = errorMessageJa(err)
@@ -889,7 +937,7 @@ const myCandidate = computed(() =>
             >×</button>
           </template>
           <template v-else>
-            <span>締切 <span class="font-mono">{{ formatDeadline(order.desired_deadline) }}</span></span>
+            <span :class="isOrderOverdue ? 'text-accent' : ''">締切 <span class="font-mono">{{ formatDeadline(order.desired_deadline) }}</span></span>
             <button
               v-if="canEditDeadline"
               class="text-[10px] text-primary-active hover:underline"
@@ -1064,6 +1112,7 @@ const myCandidate = computed(() =>
             <div v-if="order.brief.delivery_format || order.brief.bgm_loop !== undefined || order.brief.budget_range || order.brief.note" class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted">
               <span v-if="order.brief.delivery_format">📀 {{ { wav48k24b: '48kHz / 24bit', wav44k16b: '44.1kHz / 16bit', any: '形式: どちらでも' }[order.brief.delivery_format] }}</span>
               <span v-if="order.brief.bgm_loop !== undefined">🔁 {{ order.brief.bgm_loop ? 'ループ必要' : 'ループ不要' }}</span>
+              <span v-if="order.brief.sound_type === 'se' && (order.brief.se_slots ?? 1) > 1">🎞 {{ order.brief.se_slots }} バリエーション</span>
               <span v-if="order.brief.budget_range">💰 {{ { '5000': '〜¥5,000', '10000': '〜¥10,000', negotiable: '予算: 要相談' }[order.brief.budget_range] }}</span>
               <p v-if="order.brief.note" class="mt-1 w-full whitespace-pre-wrap text-body">{{ order.brief.note }}</p>
             </div>
@@ -1294,6 +1343,17 @@ const myCandidate = computed(() =>
             </p>
           </div>
 
+          <!-- 9-A5: SE 複数スロットのタブ切替 -->
+          <div v-if="(selectedSubmission?.slot_count ?? 1) > 1" class="mt-2 flex gap-1">
+            <button
+              v-for="n in (selectedSubmission?.slot_count ?? 1)"
+              :key="n"
+              type="button"
+              class="rounded px-2.5 py-0.5 text-[11px] font-medium transition-colors"
+              :class="selectedSlot === n ? 'bg-primary text-white' : 'bg-hairline-soft text-muted hover:text-ink'"
+              @click="selectSlot(n)"
+            >S{{ n }}</button>
+          </div>
           <div v-if="audioPreviewLoading" class="mt-2 text-[12px] text-muted">読み込み中…</div>
           <div v-else-if="audioPreviewError" class="mt-2 text-[12px] text-accent">{{ audioPreviewError }}</div>
           <audio
@@ -1481,7 +1541,7 @@ const myCandidate = computed(() =>
           <p class="text-[11px] font-semibold uppercase tracking-widest text-muted">音源提出</p>
           <button
             class="w-full rounded-md bg-primary px-3 py-1.5 text-[12px] font-medium text-white hover:opacity-90"
-            @click="showSubmitFile = true"
+            @click="onShowSubmitFile"
           >ファイルを提出</button>
         </div>
 
@@ -1546,14 +1606,31 @@ const myCandidate = computed(() =>
       <Transition name="modal">
         <div v-if="showSubmitFile" class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-24 backdrop-blur-sm" @click.self="showSubmitFile = false">
           <div class="card mx-4 w-full max-w-[480px] p-6">
-            <h2 class="mb-4 text-[15px] font-semibold text-ink">音源を提出</h2>
-            <label class="flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-hairline-strong bg-white/40 px-6 py-6 text-center transition-colors hover:border-primary">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="text-muted">
-                <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>
-              </svg>
-              <span class="text-[13px] text-ink">{{ submitFile?.name ?? '.wav ファイルを選択' }}</span>
-              <input type="file" accept=".wav,audio/wav" class="hidden" @change="(e) => { submitFile = (e.target as HTMLInputElement).files?.[0] ?? null }" />
-            </label>
+            <h2 class="mb-1 text-[15px] font-semibold text-ink">音源を提出</h2>
+            <p v-if="isSeMultiSlot" class="mb-3 text-[11px] text-muted">SE {{ seSlotCount }} バリエーション — 各スロットに .wav を選択してください</p>
+
+            <!-- 9-A5: 複数スロット -->
+            <template v-if="isSeMultiSlot">
+              <div v-for="(_, idx) in seSlotCount" :key="idx" class="mb-2">
+                <label class="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-hairline-strong bg-white/40 px-4 py-3 transition-colors hover:border-primary">
+                  <span class="shrink-0 rounded bg-ink/5 px-1.5 py-0.5 font-mono text-[10px] text-muted">S{{ idx + 1 }}</span>
+                  <span class="truncate text-[13px] text-ink">{{ submitFiles[idx]?.name ?? '.wav を選択' }}</span>
+                  <input type="file" accept=".wav,audio/wav" class="hidden" @change="(e) => setSlotFile(idx, e)" />
+                </label>
+              </div>
+            </template>
+
+            <!-- 単一ファイル (既存) -->
+            <template v-else>
+              <label class="flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-hairline-strong bg-white/40 px-6 py-6 text-center transition-colors hover:border-primary">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="text-muted">
+                  <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>
+                </svg>
+                <span class="text-[13px] text-ink">{{ submitFiles[0]?.name ?? '.wav ファイルを選択' }}</span>
+                <input type="file" accept=".wav,audio/wav" class="hidden" @change="(e) => setSlotFile(0, e)" />
+              </label>
+            </template>
+
             <textarea v-model="submitNote" rows="2" placeholder="コメント（任意）" class="mt-3 w-full resize-none rounded-md border border-hairline-strong bg-white/60 px-3 py-2 text-[13px] text-ink outline-none placeholder:text-muted focus:border-primary" />
             <p v-if="submitFileError" class="mt-2 text-[12px] text-accent">{{ submitFileError }}</p>
             <div class="mt-4 flex justify-end gap-2">

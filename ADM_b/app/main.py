@@ -1,12 +1,29 @@
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import api_router
 from app.config import get_settings
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
-app = FastAPI(title="Audio Data Management API", version="0.2.0")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    from app.api.v1.orders import _cleanup_stale_drafts_internal  # noqa: PLC0415
+    try:
+        deleted = _cleanup_stale_drafts_internal()
+        if deleted:
+            logger.info("Startup: deleted %d stale draft order(s)", deleted)
+    except Exception as exc:
+        logger.warning("Draft cleanup on startup failed: %s", exc)
+    yield
+
+
+app = FastAPI(title="Audio Data Management API", version="0.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
