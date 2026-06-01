@@ -1826,6 +1826,9 @@ class MemosResponse(BaseModel):
     creator: MemoOut | None
     can_edit_admin: bool
     can_edit_creator: bool
+    # 9-A13: 各ロールが最後に order_view した時刻 (既読マーカー用)
+    admin_last_view_at: Any  # datetime | None
+    creator_last_view_at: Any  # datetime | None
 
 
 class UpdateMemoRequest(BaseModel):
@@ -1880,11 +1883,34 @@ def get_order_memos(
     by_kind = {m.author_kind: m for m in memos}
     editable = _memo_editable(order)
     role = current_user.role.value
+
+    # 9-A13: admin / creator それぞれの最終 order_view 時刻を取得 (既読マーカー)
+    from app.models.user import UserRole  # noqa: PLC0415
+    admin_last_view_at: datetime | None = db.execute(
+        select(func.max(ActivityLog.created_at))
+        .join(User, ActivityLog.user_id == User.id)
+        .where(
+            ActivityLog.target_id == parsed,
+            ActivityLog.kind == ActivityKind.order_view,
+            User.role == UserRole.admin,
+        )
+    ).scalar_one()
+    creator_last_view_at: datetime | None = db.execute(
+        select(func.max(ActivityLog.created_at))
+        .where(
+            ActivityLog.target_id == parsed,
+            ActivityLog.kind == ActivityKind.order_view,
+            ActivityLog.user_id == order.assigned_creator_id,
+        )
+    ).scalar_one() if order.assigned_creator_id else None
+
     return MemosResponse(
         admin=_to_memo_out(by_kind[MemoAuthorKind.admin]) if MemoAuthorKind.admin in by_kind else None,
         creator=_to_memo_out(by_kind[MemoAuthorKind.creator]) if MemoAuthorKind.creator in by_kind else None,
         can_edit_admin=editable and role == "admin",
         can_edit_creator=editable and role == "creator" and order.assigned_creator_id == current_user.id,
+        admin_last_view_at=admin_last_view_at,
+        creator_last_view_at=creator_last_view_at,
     )
 
 

@@ -493,9 +493,13 @@ interface MemosResponse {
   creator: MemoOut | null
   can_edit_admin: boolean
   can_edit_creator: boolean
+  // 9-A13: 既読マーカー用の最終閲覧時刻
+  admin_last_view_at: string | null
+  creator_last_view_at: string | null
 }
 const memosState = ref<MemosResponse>({
   admin: null, creator: null, can_edit_admin: false, can_edit_creator: false,
+  admin_last_view_at: null, creator_last_view_at: null,
 })
 const canViewMemos = computed(() => isAdmin.value || isAssignedCreator.value)
 
@@ -1296,6 +1300,12 @@ const myCandidate = computed(() =>
               <p v-if="memosState.admin?.author_name" class="mt-1 font-mono text-[9px] text-muted">
                 — {{ memosState.admin.author_name }} / {{ formatDate(memosState.admin.updated_at) }}
               </p>
+              <!-- 9-A13: creator が admin メモを既読かどうか -->
+              <p
+                v-if="memosState.admin?.updated_at && memosState.creator_last_view_at && new Date(memosState.creator_last_view_at) >= new Date(memosState.admin.updated_at)"
+                class="mt-0.5 text-[9px] text-[#0e7a74]"
+              >✓ creator 確認済</p>
+              <p v-else-if="memosState.admin?.content" class="mt-0.5 text-[9px] text-muted">— 未確認</p>
             </div>
             <!-- Creator 枠 -->
             <div class="rounded-md border border-hairline-soft bg-white/40 p-2">
@@ -1312,6 +1322,12 @@ const myCandidate = computed(() =>
               <p v-if="memosState.creator?.author_name" class="mt-1 font-mono text-[9px] text-muted">
                 — {{ memosState.creator.author_name }} / {{ formatDate(memosState.creator.updated_at) }}
               </p>
+              <!-- 9-A13: admin が creator メモを既読かどうか -->
+              <p
+                v-if="memosState.creator?.updated_at && memosState.admin_last_view_at && new Date(memosState.admin_last_view_at) >= new Date(memosState.creator.updated_at)"
+                class="mt-0.5 text-[9px] text-accent"
+              >✓ admin 確認済</p>
+              <p v-else-if="memosState.creator?.content" class="mt-0.5 text-[9px] text-muted">— 未確認</p>
             </div>
           </div>
         </div>
