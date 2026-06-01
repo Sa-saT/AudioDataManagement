@@ -771,17 +771,31 @@ def record_order_view(
 ) -> dict:
     """発注詳細を開いた時に呼び出し、`activity_logs` に order_view を記録する。
     既読時刻として通知バッジ計算に使用される。
+    NOTIFICATION Phase E: 前回の閲覧時刻 (prev_view_at) を返す。
+    フロントエンドがこれをもとにチャット内の未読位置を特定する。
     """
     parsed = _parse_uuid(order_id)
     order = _load_order(db, parsed)
     _check_access(order, current_user)
+    # 新しい view を記録する前に前回の閲覧時刻を取得
+    prev_view_at: datetime | None = db.execute(
+        select(func.max(ActivityLog.created_at))
+        .where(
+            ActivityLog.user_id == current_user.id,
+            ActivityLog.kind == ActivityKind.order_view,
+            ActivityLog.target_id == parsed,
+        )
+    ).scalar_one()
     db.add(ActivityLog(
         user_id=current_user.id,
         kind=ActivityKind.order_view,
         target_id=parsed,
     ))
     db.commit()
-    return {"recorded": True}
+    return {
+        "recorded": True,
+        "prev_view_at": prev_view_at.isoformat() if prev_view_at else None,
+    }
 
 
 def _check_access(order: Order, user: User) -> None:

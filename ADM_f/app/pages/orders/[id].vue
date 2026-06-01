@@ -108,8 +108,12 @@ onMounted(async () => {
   // 改訂2: チケット閲覧を記録 (通知バッジの既読判定に使う)
   if (order.value) {
     try {
-      await api.post(`/api/v1/orders/${orderId.value}/view`, { body: {} })
-    } catch { /* silent: 通知精度を落とすだけ */ }
+      // NOTIFICATION Phase E: prev_view_at を取得して未読位置を特定
+      const viewRes = await api.post<{ recorded: boolean; prev_view_at: string | null }>(
+        `/api/v1/orders/${orderId.value}/view`, { body: {} },
+      )
+      prevViewAt.value = viewRes.prev_view_at
+    } catch { /* silent */ }
     // 改訂2.1: 編集履歴を取得 (highlight + 履歴モーダル用)
     await fetchBriefEdits()
     // 改訂2.2: 音源プレビュー URL を取得 (reviewing / done のみ)
@@ -117,8 +121,13 @@ onMounted(async () => {
       await fetchSubmissions()
       await loadPreview()
     }
-    // チャット最下部までスクロール (LINE 風)
-    await scrollToBottom()
+    // 未読メッセージがあればそこへ、なければ最下部へスクロール (NOTIFICATION Phase E)
+    await nextTick()
+    if (firstUnreadIndex.value >= 0 && unreadDividerRef.value) {
+      unreadDividerRef.value.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    } else {
+      await scrollToBottom()
+    }
   }
 })
 
@@ -174,6 +183,18 @@ async function fetchBriefEdits() {
 const subjectDisplay = computed(() => {
   const t = order.value?.title ?? '…'
   return t.replace(/\s*#\d+\s*$/, '')
+})
+
+// ─── NOTIFICATION Phase E: 前回閲覧時刻 + チャット内未読位置 ─────────────────
+const prevViewAt = ref<string | null>(null)
+const unreadDividerRef = ref<HTMLElement | null>(null)
+
+// 自分以外が送った最初の未読メッセージのインデックス
+const firstUnreadIndex = computed(() => {
+  if (!prevViewAt.value || !order.value) return -1
+  const cutoff = new Date(prevViewAt.value)
+  const msgs = order.value.messages
+  return msgs.findIndex(m => m.sender_id !== auth.user?.id && new Date(m.created_at) > cutoff)
 })
 
 // ─── 音源プレビュー (改訂2.2) + バージョン管理 (改訂2.5 / 9-A3) ───────────────
@@ -1370,9 +1391,18 @@ const myCandidate = computed(() =>
           <div v-if="order.messages.length === 0" class="py-12 text-center text-[12px] text-muted">
             メッセージはまだありません。
           </div>
+          <template v-for="(msg, i) in order.messages" :key="msg.id">
+            <!-- NOTIFICATION Phase E: 未読位置ディバイダー -->
+            <div
+              v-if="i === firstUnreadIndex"
+              ref="unreadDividerRef"
+              class="my-2 flex items-center gap-2 px-1"
+            >
+              <div class="h-px flex-1 bg-accent/30" />
+              <span class="shrink-0 rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent">ここから未読</span>
+              <div class="h-px flex-1 bg-accent/30" />
+            </div>
           <div
-            v-for="(msg, i) in order.messages"
-            :key="msg.id"
             class="mb-1.5 flex gap-2"
             :class="isMyMessage(msg) ? 'flex-row-reverse' : 'flex-row'"
           >
@@ -1423,6 +1453,7 @@ const myCandidate = computed(() =>
               </div>
             </div>
           </div>
+          </template>
         </div>
 
         </div><!-- /contentScrollRef: チャット入力は下に固定するためスクロール領域から外す -->

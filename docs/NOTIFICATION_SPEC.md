@@ -1,7 +1,7 @@
 # 通知システム仕様書 (NOTIFICATION_SPEC)
 
 > 最終更新: 2026-05-31
-> ステータス: **Phase A-D 実装済** (Phase E 任意 / Phase F は Phase 4 検討)
+> ステータス: **Phase A-E 実装済** (Phase F は Phase 4 検討)
 > 適用範囲: **アプリ全体** (Commission に限らず admin 業務全般を含む)
 
 ---
@@ -315,7 +315,7 @@ Body: { "target_id": "<uuid>" }
 | **B** | 統合 API `/api/v1/me/notifications` + admin タブ Level 3 (Payout/Commission/将来領域) | ✅ 実装済 (3d2f4c1) |
 | **C** | 一覧 Level 4 per-row dot (orders / payouts / lic / etc.) | ✅ 実装済 (2d327f1) |
 | **D** | Commission クローズ後の **dim 化** (creator 候補だった発注) | ✅ 実装済 (1352576、= ORDER_SPEC 9-A2) |
-| **E** | 詳細セクション Level 5 (任意、メッセージスレッド内未読位置等) | 未着手 (任意) |
+| **E** | 詳細セクション Level 5 (任意、メッセージスレッド内未読位置等) | ✅ 実装済 (9-A12) |
 | **F** | WebSocket リアルタイム通知 | Phase 4 検討 |
 
 ---

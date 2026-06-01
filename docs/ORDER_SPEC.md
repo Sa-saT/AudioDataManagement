@@ -471,7 +471,6 @@ Step 2 は `sound_type` (BGM/SE/both) によって表示項目が変わる。
 | # | 項目 | 優先度 | 備考 |
 |---|---|---|---|
 | 9-A8 | **本番ストレージ移行** | Phase 4 | ローカル `/storage/*` → S3 互換切替 |
-| 9-A12 | **NOTIFICATION Phase E** | 任意 | 詳細ページ内セクション dot (チャット内未読位置等)。NOTIFICATION_SPEC §9 参照 |
 | 9-A13 | **メモ更新時の dm_view 相当の閲覧マーカー** | 低 | 現状メモは通知を立てない設計。後から「相手が読んだか」を見たい要望が出たら検討 |
 
 ### 9.2 実装済
@@ -501,6 +500,7 @@ Step 2 は `sound_type` (BGM/SE/both) によって表示項目が変わる。
 | ✅ | **9-A7** R2-Q1〜Q3 (sound_type=both UI 対応済み / 期限超過アラート色 / draft 30日自動削除) | — |
 | ✅ | **9-A6** R2.1-Q1〜Q3 (reviewing 中編集不可維持 / 編集回数上限なし / 自動 assign 取消なし: 設計決定のみ) | — |
 | ✅ | **9-A5** SE 複数バリエーション納品 (`se_slots` フィールド / `_vN_sM.wav` 命名 / multi-file submit / スロットタブ preview / migration 0020) | — |
+| ✅ | **9-A12** NOTIFICATION Phase E (POST /view から prev_view_at を返す / チャット「ここから未読」ディバイダー / 未読位置へ自動スクロール) | — |
 
 ---
 
