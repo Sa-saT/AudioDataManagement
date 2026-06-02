@@ -232,14 +232,14 @@ function formatDuration(sec: number): string {
               {{ dlLoading === item.id ? '…' : '再DL' }}
             </button>
 
-            <!-- Delete copy -->
+            <!-- Delete copy (警告色 + 大きめ) -->
             <button
               v-if="item.copy_exists"
-              class="flex items-center justify-center rounded-md border border-hairline p-1.5 text-muted transition-colors hover:border-accent hover:text-accent"
+              class="flex items-center justify-center rounded-md border border-accent/50 bg-accent/10 p-2.5 text-accent transition-colors hover:border-accent hover:bg-accent hover:text-white active:scale-95"
               aria-label="コピーを削除"
               @click="openDelete(item)"
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                 <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
                 <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
               </svg>

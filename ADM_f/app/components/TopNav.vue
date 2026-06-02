@@ -399,16 +399,16 @@ const isHighlighted = computed(() => hasAction.value || system.totals.has_info)
                 </div>
               </div>
 
-              <!-- Deactivate (アクティベート済み) -->
+              <!-- Deactivate (アクティベート済み・警告色) -->
               <div v-else>
                 <div
-                  class="flex cursor-pointer items-center gap-2 px-4 py-2.5 transition-colors hover:bg-white/80"
+                  class="flex cursor-pointer items-center gap-2 bg-[#fff5f2] px-4 py-2.5 transition-colors hover:bg-[#ffece8]"
                   @click="deactivate"
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="shrink-0 text-muted">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#cf2d56" stroke-width="1.8" class="shrink-0">
                     <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 5 12 10 7"/><line x1="5" y1="12" x2="15" y2="12"/>
                   </svg>
-                  <span class="flex-1 text-[13px] text-muted">Deactivate</span>
+                  <span class="flex-1 text-[13px] font-semibold text-[#cf2d56]">Deactivate</span>
                   <button
                     class="group rounded-full p-0.5 transition-opacity"
                     @click.stop="toggleInfo('deactivate')"
@@ -417,7 +417,7 @@ const isHighlighted = computed(() => hasAction.value || system.totals.has_info)
                     <img src="/information.png" alt="info" class="h-[18px] w-[18px] opacity-50 transition-opacity group-hover:opacity-80" />
                   </button>
                 </div>
-                <div v-if="infoOpen === 'deactivate'" class="border-t border-hairline-soft bg-white/40 px-4 pb-2.5 pt-2 text-[11px] leading-relaxed text-muted">
+                <div v-if="infoOpen === 'deactivate'" class="border-t border-[#f0bcc8] bg-[#fff5f2] px-4 pb-2.5 pt-2 text-[11px] leading-relaxed text-[#cf2d56]/80">
                   {{ INFO.deactivate }}
                 </div>
               </div>
