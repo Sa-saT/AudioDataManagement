@@ -31,6 +31,10 @@ interface StreamUrlResponse {
   url: string
 }
 
+// アプリ全体で同時に再生中のプレイヤーは 1 つだけに制約する。
+// 新しいインスタンスが再生開始するたびに、前の active インスタンスを pause する。
+let pauseActivePlayer: (() => void) | null = null
+
 export function useStreamPlayer(audioId: string): StreamPlayer {
   const isPlaying = ref(false)
   const isLoading = ref(false)
@@ -87,6 +91,9 @@ export function useStreamPlayer(audioId: string): StreamPlayer {
 
   function playBufferFromOffset(offset: number) {
     if (!buffer || !ctx) return
+    // 他のインスタンスが再生中なら停止 (同時再生禁止)
+    if (pauseActivePlayer && pauseActivePlayer !== pause) pauseActivePlayer()
+    pauseActivePlayer = pause
     cleanupSource()
     source = ctx.createBufferSource()
     source.buffer = buffer
@@ -98,6 +105,7 @@ export function useStreamPlayer(audioId: string): StreamPlayer {
         isPlaying.value = false
         pausedOffsetSec = 0
         currentTime.value = chunkStartSec.value + chunkDuration.value
+        if (pauseActivePlayer === pause) pauseActivePlayer = null
       }
     }
     source.start(0, offset)
@@ -131,6 +139,7 @@ export function useStreamPlayer(audioId: string): StreamPlayer {
     pausedOffsetSec = Math.min(elapsed, chunkDuration.value)
     cleanupSource()
     isPlaying.value = false
+    if (pauseActivePlayer === pause) pauseActivePlayer = null
   }
 
   async function resume(): Promise<void> {
@@ -155,6 +164,7 @@ export function useStreamPlayer(audioId: string): StreamPlayer {
     isPlaying.value = false
     pausedOffsetSec = 0
     currentTime.value = chunkStartSec.value
+    if (pauseActivePlayer === pause) pauseActivePlayer = null
   }
 
   return {
