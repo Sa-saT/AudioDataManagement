@@ -235,7 +235,8 @@ const selectedSlot = ref<number>(1)     // 9-A5: 選択中のスロット番号 
 
 const selectedSubmission = computed(() =>
   submissions.value.find(s => s.version === selectedVersion.value)
-  ?? (submissions.value.length > 0 ? submissions.value[submissions.value.length - 1] : null),
+  ?? submissions.value.at(-1)
+  ?? null,
 )
 
 async function fetchSubmissions() {
@@ -244,9 +245,8 @@ async function fetchSubmissions() {
     submissions.value = await api.get<SubmissionVersion[]>(
       `/api/v1/orders/${orderId.value}/submissions`,
     )
-    if (submissions.value.length > 0) {
-      selectedVersion.value = submissions.value[submissions.value.length - 1].version
-    }
+    const last = submissions.value.at(-1)
+    if (last) selectedVersion.value = last.version
   } catch { /* silent: バージョン履歴は補助情報 */ }
 }
 
@@ -272,16 +272,14 @@ async function loadPreview(version = 0, slot = 1) {
 function selectVersion(v: number) {
   selectedVersion.value = v
   selectedSlot.value = 1
-  const isLatest = submissions.value.length > 0 &&
-    v === submissions.value[submissions.value.length - 1].version
+  const isLatest = submissions.value.at(-1)?.version === v
   loadPreview(isLatest ? 0 : v, 1)
 }
 
 // 9-A5: スロット切替
 function selectSlot(slot: number) {
   selectedSlot.value = slot
-  const isLatest = submissions.value.length > 0 &&
-    selectedVersion.value === submissions.value[submissions.value.length - 1].version
+  const isLatest = submissions.value.at(-1)?.version === selectedVersion.value
   loadPreview(isLatest ? 0 : selectedVersion.value, slot)
 }
 
