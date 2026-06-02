@@ -177,16 +177,21 @@ async function executeDownload() {
         </button>
 
         <!-- DL ボタン: user=常時 / creator=自分の音源のみ / admin=常時 -->
+        <!-- 3D フリップ: 通常 [↓] (1文字) / hover で [Download] (8文字) に 90deg 回転で切替 -->
         <button
           v-if="showDlButton"
-          class="flex items-center justify-center rounded-md border border-hairline bg-white/60 p-1 text-muted transition-colors hover:border-primary hover:text-primary-active disabled:opacity-40"
+          class="dl-flip-btn"
+          :class="{ 'is-disabled': !auth.canDownload }"
           :disabled="!auth.canDownload"
           :aria-label="auth.canDownload ? 'ダウンロード' : 'ダウンロード (Activate 必須)'"
           @click.stop="openConfirm"
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>
-          </svg>
+          <span class="dl-flip-face dl-flip-back">Download</span>
+          <span class="dl-flip-face dl-flip-front">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+              <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>
+            </svg>
+          </span>
         </button>
       </template>
     </WaveformPlayer>
@@ -261,22 +266,18 @@ async function executeDownload() {
     <!-- DL 確認モーダル -->
     <ConfirmModal
       v-model:open="confirmOpen"
-      title="ダウンロードの確認"
-      :confirm-label="`${track.tokenCost} tk を消費して購入`"
+      :title="`${track.title} をダウンロードします。`"
+      :confirm-label="`${track.tokenCost} Token を消費して ダウンロードする`"
       cancel-label="やめる"
       :confirm-loading="dlLoading"
       :error-message="dlError"
       @confirm="executeDownload"
     >
-      <p class="mb-2">
-        <span class="font-medium text-ink">{{ track.title }}</span>
-        をダウンロードします。
-      </p>
+
       <!-- user: token消費・sold説明 -->
       <template v-if="!isFreeDownload">
         <p class="text-[12px] text-muted">
-          この音源は <span class="text-accent font-medium">単発販売</span> のため、
-          ダウンロード後は他ユーザの Dashboard から消えます。再ダウンロードは Download List から無料です。
+          DownloadList から無料で再ダウンロードできます。
         </p>
         <p class="mt-3 font-mono text-[12px]">
           消費: <span class="text-accent font-semibold">{{ track.tokenCost }} tk</span>
@@ -286,7 +287,7 @@ async function executeDownload() {
       <!-- creator/admin: 無料・Dashboard残留 -->
       <template v-else>
         <p class="text-[12px] text-muted">
-          token消費なし。ダウンロード後も音源は Dashboard に残ります。
+          ダウンロード後も音源は Dashboard に残ります。
         </p>
       </template>
     </ConfirmModal>
@@ -298,4 +299,77 @@ async function executeDownload() {
 .btn-edit:hover  { background:#20b2aa22; }
 .btn-delete { border-color:#ff69b455; background:#ff69b410; color:#ff69b4; transition:background 150ms; }
 .btn-delete:hover { background:#ff69b422; }
+
+/* ── Download ボタン (2D アイコン → 3D Download への変形) ──
+   通常: 32×32 のグレー [↓] フラットアイコン
+   hover: 100×32 の primary グラデ [Download] (3D + shadow + flip) */
+.dl-flip-btn {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  perspective: 230px;
+  cursor: pointer;
+  padding: 0;
+  transition: width .3s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.dl-flip-btn:not(.is-disabled):hover {
+  width: 100px;
+}
+.dl-flip-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transform-origin: 50% 50% -16px;
+  transition: transform .3s, box-shadow .3s, color .3s, background-color .3s;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+/* 前面: グレーのフラットアイコン (2D) */
+.dl-flip-front {
+  background: transparent;
+  color: #807d72;        /* muted */
+  border: 1px solid #cfcdc4;  /* hairline-strong */
+  transform: rotateX(0deg);
+  box-shadow: none;
+}
+/* 背面: primary 3D Download (出現時) */
+.dl-flip-back {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: linear-gradient(0deg, #66cdaa 0%, #006400 100%);
+  border: none;
+  transform: rotateX(90deg);
+  box-shadow:
+    -7px -7px 20px 0 #fff9,
+    -4px -4px 5px 0 #fff9,
+    7px 7px 20px 0 #0002,
+    4px 4px 5px 0 #0001;
+}
+.dl-flip-btn:not(.is-disabled):hover .dl-flip-front {
+  transform: rotateX(-90deg);
+  color: transparent;
+  border-color: transparent;
+}
+.dl-flip-btn:not(.is-disabled):hover .dl-flip-back {
+  transform: rotateX(0deg);
+  box-shadow:
+    inset 2px 2px 2px 0 rgba(255,255,255,.5),
+    7px 7px 20px 0 rgba(0,0,0,.15),
+    4px 4px 8px 0 rgba(0,0,0,.1);
+}
+.dl-flip-btn:not(.is-disabled):active {
+  transform: scale(0.95);
+  transition: transform .1s;
+}
+.dl-flip-btn.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
 </style>
