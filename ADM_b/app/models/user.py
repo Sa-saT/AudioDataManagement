@@ -54,5 +54,7 @@ class License(Base):
     issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # B案: 単一セッション制 — /activate 毎に新 UUID を発行し JWT sid と照合
+    current_session_id: Mapped[uuid.UUID | None] = mapped_column(PgUUID(as_uuid=True))
 
     user: Mapped["User"] = relationship(back_populates="license")

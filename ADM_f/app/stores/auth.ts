@@ -7,6 +7,8 @@ interface AuthState {
   user: AuthUser | null
   /** Tokens used this period (synced from /download response) */
   tokensUsed: number
+  /** B案: 他端末で activate された結果ログアウトされた時の通知。/activate 画面で表示 */
+  sessionInvalidatedMessage: string | null
 }
 
 const STORAGE_KEY = 'pathfinder.auth'
@@ -17,6 +19,7 @@ export const useAuthStore = defineStore('auth', {
     expiresAt: null,
     user: null,
     tokensUsed: 0,
+    sessionInvalidatedMessage: null,
   }),
   getters: {
     isActivated: (s) => s.token !== null && s.user !== null,
@@ -76,6 +79,16 @@ export const useAuthStore = defineStore('auth', {
       this.user = null
       this.tokensUsed = 0
       if (import.meta.client) localStorage.removeItem(STORAGE_KEY)
+    },
+
+    /** B案: 他端末 activate により強制ログアウトされた場合の専用クリア */
+    invalidateSession(message: string) {
+      this.deactivate()
+      this.sessionInvalidatedMessage = message
+    },
+
+    clearSessionInvalidatedMessage() {
+      this.sessionInvalidatedMessage = null
     },
 
     /** /download レスポンスの remaining_tokens を反映 */

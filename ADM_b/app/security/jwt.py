@@ -12,13 +12,14 @@ class TokenError(Exception):
     pass
 
 
-def create_access_token(*, user_id: UUID, role: str, license_id: UUID) -> tuple[str, datetime]:
+def create_access_token(*, user_id: UUID, role: str, license_id: UUID, session_id: UUID) -> tuple[str, datetime]:
     now = datetime.now(timezone.utc)
     expires = now + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
     payload = {
         "sub": str(user_id),
         "role": role,
         "license_id": str(license_id),
+        "sid": str(session_id),  # B案: 単一セッション照合用
         "iat": int(now.timestamp()),
         "exp": int(expires.timestamp()),
     }

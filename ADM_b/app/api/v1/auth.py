@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -151,12 +153,19 @@ async def activate(
         raise _error(exc.code, exc.message, status_code)
 
     user, license_row = _upsert_user_and_license(db, payload)
+    # B案: activate 毎に新セッション UUID を発行し DB に保存。
+    # 以降のリクエストでは JWT.sid と DB.current_session_id を照合 → 不一致なら旧セッションは無効。
+    new_session_id = uuid.uuid4()
+    license_row.current_session_id = new_session_id
     db.commit()
     db.refresh(user)
     db.refresh(license_row)
 
     token, expires = create_access_token(
-        user_id=user.id, role=user.role.value, license_id=license_row.id
+        user_id=user.id,
+        role=user.role.value,
+        license_id=license_row.id,
+        session_id=new_session_id,
     )
 
     return ActivateResponse(

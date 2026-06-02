@@ -96,6 +96,40 @@ Admin (発行画面)
 - localStorage 保存は Phase 1 限定。Phase 2 以降は JWT に置き換える (lic は再アクティベート時のみ送信)。
 - admin 用 lic は短期失効 (90日) を必須化することを推奨。
 
+### 6.1 単一セッション制 (B案 / Spotify モデル / 2026-06-02 実装)
+
+`.lic` ファイルが第三者にコピーされた場合の対策。
+
+**仕組み:**
+
+- `licenses.current_session_id` (UUID) を持つ
+- `/auth/activate` 毎にサーバが新 UUID を発行し、DB に上書き保存
+- JWT の `sid` claim にも同 UUID を埋め込み
+- 認証必須リクエストで `JWT.sid == licenses.current_session_id` を毎回照合
+- 不一致なら `401 SESSION_INVALIDATED` で拒否
+
+**挙動:**
+
+```
+Alice  /activate ─→ DB.sid = S1, JWT1.sid = S1   ✅ 利用可能
+Alice  use JWT1   ─→ sid 一致 → 200 OK
+Bob    /activate ─→ DB.sid = S2 に上書き, JWT2.sid = S2
+                    ├ Alice の JWT1 は次のリクエストで 401 SESSION_INVALIDATED
+                    └ Bob の JWT2 は利用可能
+```
+
+= **後から activate された端末が勝つ**。`.lic` を友達に渡したら自分が締め出される。
+
+**Frontend 挙動:**
+
+- 認証付きリクエストが 401 `SESSION_INVALIDATED` を受けたら、自動で `/activate` に遷移し、
+  「別の端末でアクティベートされたため、ログアウトしました」と通知を表示。
+
+**例外:**
+
+- `/auth/activate` 自体は sid 検証なし (ログインせずに呼べる)
+- 視聴ストリーミング (`/audios/{id}/stream`) も sid 検証なし (FR-STREAM-01: guest 可)
+
 ## 7. 暗号化方針
 
 > 詳細リテラシーは [PRODUCTION_OPERATIONS_GUIDE.md §11](PRODUCTION_OPERATIONS_GUIDE.md) を参照。

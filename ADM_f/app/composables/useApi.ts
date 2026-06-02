@@ -69,8 +69,15 @@ export function useApi() {
       })
     } catch (err) {
       const e = err as { status?: number }
-      if (e.status === 401) auth.deactivate()
       const { code, message, body } = extractError(err)
+      if (e.status === 401) {
+        if (code === 'SESSION_INVALIDATED') {
+          auth.invalidateSession('別の端末でアクティベートされたため、ログアウトしました。再アクティベートしてください。')
+          if (import.meta.client) navigateTo('/activate')
+        } else {
+          auth.deactivate()
+        }
+      }
       throw new ApiError(message, e.status ?? 0, code, body)
     }
   }
