@@ -1595,7 +1595,7 @@ const myCandidate = computed(() =>
         <div v-if="(isCreator && !isAdmin && isAssignedCreator && order.status === 'assigned') || (isAdmin && order.status === 'assigned')" class="card px-4 py-3 space-y-2">
           <p class="text-[11px] font-semibold uppercase tracking-widest text-muted">音源提出</p>
           <button
-            class="w-full rounded-md bg-primary px-3 py-1.5 text-[12px] font-medium text-white hover:opacity-90"
+            class="w-full rounded-md bg-primary px-3 py-1.5 text-[12px] font-medium text-black hover:opacity-90"
             @click="onShowSubmitFile"
           >ファイルを提出</button>
         </div>

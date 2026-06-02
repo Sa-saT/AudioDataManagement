@@ -12,7 +12,7 @@ export default <Partial<Config>>{
       colors: {
         // Brand
         primary: {
-          DEFAULT: '#40e0d0',
+          DEFAULT: '#66cdaa',
           active: '#006400',
         },
         // Scarce accent: NEW badge / token warning / error only

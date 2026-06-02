@@ -232,7 +232,7 @@ const isHighlighted = computed(() => hasAction.value || system.totals.has_info)
                 />
                 <span v-else class="mr-1 rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[9px] text-accent">admin</span>
                 <button
-                  class="group rounded-full p-0.5 transition-opacity"
+                  class="no-press group rounded-full p-0.5 transition-opacity"
                   :class="infoOpen === 'admin' ? 'text-ink' : ''"
                   @click.stop="toggleInfo('admin')"
                   aria-label="説明"
@@ -278,7 +278,7 @@ const isHighlighted = computed(() => hasAction.value || system.totals.has_info)
                   class="mr-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
                 />
                 <button
-                  class="group rounded-full p-0.5 transition-opacity"
+                  class="no-press group rounded-full p-0.5 transition-opacity"
                   :class="infoOpen === 'commission' ? 'text-ink' : ''"
                   @click.stop="toggleInfo('commission')"
                   aria-label="説明"
@@ -312,7 +312,7 @@ const isHighlighted = computed(() => hasAction.value || system.totals.has_info)
                   style="background:#ffa500;"
                 >{{ dmArea.action_count }}</span>
                 <button
-                  class="group rounded-full p-0.5 transition-opacity"
+                  class="no-press group rounded-full p-0.5 transition-opacity"
                   :class="infoOpen === 'dm' ? 'text-ink' : ''"
                   @click.stop="toggleInfo('dm')"
                   aria-label="説明"
@@ -337,7 +337,7 @@ const isHighlighted = computed(() => hasAction.value || system.totals.has_info)
                 <span class="flex-1 text-[13px] text-ink">Uploads</span>
                 <span class="mr-1 rounded bg-primary/15 px-1.5 py-0.5 font-mono text-[9px] text-primary-active">creator</span>
                 <button
-                  class="group rounded-full p-0.5 transition-opacity"
+                  class="no-press group rounded-full p-0.5 transition-opacity"
                   :class="infoOpen === 'uploads' ? 'text-ink' : ''"
                   @click.stop="toggleInfo('uploads')"
                   aria-label="説明"
@@ -361,7 +361,7 @@ const isHighlighted = computed(() => hasAction.value || system.totals.has_info)
                 </svg>
                 <span class="flex-1 text-[13px] text-ink">Download List</span>
                 <button
-                  class="group rounded-full p-0.5 transition-opacity"
+                  class="no-press group rounded-full p-0.5 transition-opacity"
                   :class="infoOpen === 'downloads' ? 'text-ink' : ''"
                   @click.stop="toggleInfo('downloads')"
                   aria-label="説明"
@@ -387,7 +387,7 @@ const isHighlighted = computed(() => hasAction.value || system.totals.has_info)
                   </svg>
                   <span class="flex-1 text-[13px] font-semibold text-[#c0600a]">Activate</span>
                   <button
-                    class="group rounded-full p-0.5 transition-opacity"
+                    class="no-press group rounded-full p-0.5 transition-opacity"
                     @click.stop="toggleInfo('activate')"
                     aria-label="説明"
                   >
@@ -410,7 +410,7 @@ const isHighlighted = computed(() => hasAction.value || system.totals.has_info)
                   </svg>
                   <span class="flex-1 text-[13px] font-semibold text-[#cf2d56]">Deactivate</span>
                   <button
-                    class="group rounded-full p-0.5 transition-opacity"
+                    class="no-press group rounded-full p-0.5 transition-opacity"
                     @click.stop="toggleInfo('deactivate')"
                     aria-label="説明"
                   >
