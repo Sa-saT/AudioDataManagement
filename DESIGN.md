@@ -300,6 +300,60 @@ Cursor リファレンスから以下の点のみ差し替え。他のトーク�
 
 ---
 
+## Admin Settings UI — Card Grouping & Accordion
+
+`/admin > 設定` タブのレイアウト規約 (2026-06-02 確定)。
+
+### Card のグループ単位
+
+設定項目は **機能ドメイン単位で 1 枚の Card にまとめる**。違う機能の設定が追加される場合は **新しい Card に分ける**。
+
+| Card | 含める設定 |
+|---|---|
+| **Commission 設定** | `commission_enabled` / `image_tag_presets` / `commission_item_visibility` ほか Commission に関わるもの全て |
+| **将来追加例: アップロード設定** | (例) `max_file_size_mb` / `allowed_sample_rates` など → 新しい Card に |
+| **将来追加例: 通知設定** | (例) `notification_email_enabled` など → 新しい Card に |
+
+> なぜ: 1 枚の Card にすべて詰め込むと、`/admin > 設定` を開いた人が「どの機能の設定か」を識別しにくくなる。Card 単位で domain を区切ることで「Commission 周りの設定はこの Card にまとまっている」という mental model が成立する。
+
+### Card 内の行レイアウト
+
+各設定行は `commission_enabled` を基準形とする:
+
+```
+┌──────────────────────────────────────────────────┐
+│ <key (font-mono)>                  <状態> <UI>   │
+│ <description (text-muted)>                       │
+└──────────────────────────────────────────────────┘
+```
+
+- key は `font-mono text-[12px] font-semibold`
+- description は `text-[11px] text-muted`
+- 右側: 状態ラベル ("有効/無効", "12 件", "3 項目 非表示") + 操作 UI (Boolean トグル or シェブロン)
+
+### アコーディオン (折りたたみ)
+
+行内コンテンツが**3 行以上 or chip 5 個以上**になる項目は **accordion 化** する:
+
+- header 行は Boolean 行と同じ高さ・同じ右側構成 (状態サマリ + 回転シェブロン)
+- click で展開、展開中は header 直下に `border-t border-hairline-soft bg-canvas-soft/60` の panel
+- **1 つだけ展開する単選アコーディオン** がデフォルト (state は `expandedSettingKey: ref<string | null>`)
+- 複数同時展開が必要な場合のみ Set 管理に切り替える
+
+実装例: `image_tag_presets` (chip list + 追加入力)、`commission_item_visibility` (23 項目のトグル一覧)。
+
+### 削除確認
+
+「タグ削除」「設定リセット」など**取り消せない操作**は `ConfirmModal variant="danger"` を経由させる。クリック即削除は禁止。
+
+### 押下フィードバック
+
+「追加」「保存」などの能動操作ボタンは:
+- 常時: `active:scale-95` で押下感
+- 成功直後の 400ms: `bg-primary scale-95 shadow-inner` + ラベルに `✓` を一時表示
+
+---
+
 ## Known Gaps
 
 - CursorGothic is a licensed typeface; Inter is the substitute.
