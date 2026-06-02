@@ -607,7 +607,7 @@ function avatarClass(m: Message): string {
   if (!m.sender_id) return 'bg-hairline-soft text-muted'  // system
   if (isMyMessage(m)) return 'bg-primary text-white'
   // 発注者(user) / creator / admin を識別
-  if (m.sender_id === order.value?.user_id) return 'bg-[#807d72] text-white'  // user
+  if (m.sender_id === order.value?.user_id) return 'bg-[#2f4f4f] text-white'  // licensee
   if (m.sender_id === order.value?.assigned_creator_id) return 'bg-[#20b2aa] text-white'  // creator
   return 'bg-accent text-white'  // admin など
 }

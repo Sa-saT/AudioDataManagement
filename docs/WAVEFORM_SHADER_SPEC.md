@@ -185,7 +185,7 @@ uniform float uPlayPos;         // 0..1
 uniform float uHoverPos;        // 0..1 or -1
 uniform float uTime;            // sec, for animation
 uniform float uGamma;           // ガンマ補正係数 (default 0.4)
-uniform vec3 uWaveColor;        // 未再生側 (#807d72 washi)
+uniform vec3 uWaveColor;        // 未再生側 (#2f4f4f DarkSlateGray)
 uniform vec3 uProgressColor;    // 再生済側 (#40e0d0 turquoise)
 uniform vec3 uRmsColor;         // RMS 帯 (#20b2aa darker turquoise)
 uniform vec3 uHoverGlow;        // ホバー時の発光色
@@ -350,7 +350,7 @@ WebGL2 未対応 (旧 Safari 等) のとき:
 |---|---|---|
 | `uWaveColor` | `var(--color-muted)` | 未再生側のグレージュ |
 | `uProgressColor` | `var(--color-primary)` (turquoise) | 再生済側 |
-| `uRmsColor` | `var(--color-primary-active)` (darker turquoise) | RMS 中央帯 |
+| `uRmsColor` | `var(--color-primary-active)` (DarkGreen `#006400`) | RMS 中央帯 |
 | `uHoverGlow` | `var(--color-accent)` (tomato) | ホバー時の発光 |
 
 → CSS 変数を `getComputedStyle` で取り、初期化時に uniform 送出。

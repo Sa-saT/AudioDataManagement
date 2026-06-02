@@ -281,7 +281,7 @@ const BGM_SCENE_L: Record<string, string> = {
         </button>
         <div>
           <h1 class="text-[20px] font-normal tracking-[-0.0125em] text-ink">Commission (発注)</h1>
-          <p class="mt-0.5 text-[12px] text-muted">オリジナル音源の制作依頼</p>
+          <p class="mt-0.5 text-[12px] text-[#2f4f4f]">オリジナル音源の制作依頼</p>
         </div>
       </div>
       <button

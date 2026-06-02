@@ -36,7 +36,7 @@ The brand's strongest visual signature is the **AI-timeline pill palette**: five
 - **Ink** (`{colors.ink}` — #26251e): Display, body emphasis. Warm near-black.
 - **Body** (`{colors.body}` — #5a5852): Default running-text.
 - **Body Strong** (`{colors.body-strong}` — #26251e): Same as ink.
-- **Muted** (`{colors.muted}` — #807d72): Sub-titles.
+- **Muted** (`{colors.muted}` — #2f4f4f): Sub-titles.
 - **Muted Soft** (`{colors.muted-soft}` — #a09c92): Disabled text.
 - **On Primary** (`{colors.on-primary}` — #ffffff): White text on Cursor Orange.
 
@@ -255,7 +255,7 @@ Cursor リファレンスから以下の点のみ差し替え。他のトーク�
 | Token | Cursor 値 | Pathfinder 値 |
 |---|---|---|
 | `{colors.primary}` | Cursor Orange `#f54e00` | Turquoise `#40e0d0` |
-| `{colors.primary-active}` | `#d04200` | `#2bb8aa` |
+| `{colors.primary-active}` | `#d04200` | `#006400` |
 | `{colors.accent}` | (なし) | Tomato `#ff6347` — NEW バッジ / token 残量 ≤10% / error 限定 |
 
 ### Canvas (背景)
@@ -283,7 +283,7 @@ Cursor リファレンスから以下の点のみ差し替え。他のトーク�
 - `transform: translateY(-1px)` + border-color → turquoise (200ms)
 
 ### Waveform
-- Idle: `{colors.muted}` (#807d72)
+- Idle: `{colors.muted}` (#2f4f4f)
 - Playing progress: turquoise #40e0d0
 - Cursor: turquoise
 

@@ -13,7 +13,7 @@ export default <Partial<Config>>{
         // Brand
         primary: {
           DEFAULT: '#40e0d0',
-          active: '#2bb8aa',
+          active: '#006400',
         },
         // Scarce accent: NEW badge / token warning / error only
         accent: '#ff6347',
@@ -39,7 +39,7 @@ export default <Partial<Config>>{
           strong: '#26251e',
         },
         muted: {
-          DEFAULT: '#807d72',
+          DEFAULT: '#2f4f4f',
           soft: '#a09c92',
         },
         // Semantic
