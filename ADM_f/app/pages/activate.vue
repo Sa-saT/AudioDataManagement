@@ -52,23 +52,7 @@ const sampleLic = `{
       アクティベート後、ユーザ名が反映され、音源のダウンロードが可能になります。
     </p>
 
-    <!-- B案: 単一セッション制 — 別端末で activate されたら通知 -->
-    <div
-      v-if="auth.sessionInvalidatedMessage"
-      class="mt-4 flex items-start gap-2 rounded-md border border-accent/40 bg-accent/5 px-4 py-3 text-[13px] text-ink"
-    >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="mt-0.5 shrink-0 text-accent">
-        <circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>
-      </svg>
-      <div class="flex-1">
-        <p>{{ auth.sessionInvalidatedMessage }}</p>
-      </div>
-      <button
-        class="shrink-0 text-muted hover:text-ink"
-        title="閉じる"
-        @click="auth.clearSessionInvalidatedMessage()"
-      >×</button>
-    </div>
+    <!-- B案: 強制ログアウト通知は layouts/default.vue の ConfirmModal でポップアップ表示 -->
 
     <div class="card mt-6 p-6">
       <label
