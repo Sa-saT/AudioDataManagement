@@ -12,6 +12,12 @@ const system = useSystemStore()
 const api = useApi()
 const router = useRouter()
 
+// [<] = router.back() (app 全体ルール)、履歴が無い場合は /admin (admin) / /dashboard (他)
+function goBack() {
+  if (window.history.length > 1) router.back()
+  else router.push(auth.role === 'admin' ? '/admin' : '/dashboard')
+}
+
 interface OrderListItem {
   id: string
   title: string
@@ -261,12 +267,12 @@ const BGM_SCENE_L: Record<string, string> = {
     <!-- Header -->
     <div class="flex shrink-0 items-end justify-between gap-4 pb-3 pt-5">
       <div class="flex items-end gap-3">
-        <!-- Admin 限定: Admin ページへ戻る -->
+        <!-- Admin 限定: 前画面に戻る ([<] = router.back() アプリ共通ルール) -->
         <button
           v-if="isAdmin"
           class="flex shrink-0 items-center justify-center text-ink/70 transition-colors hover:text-ink"
-          title="Admin に戻る"
-          @click="router.push('/admin')"
+          title="戻る"
+          @click="goBack"
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="15 18 9 12 15 6"/>

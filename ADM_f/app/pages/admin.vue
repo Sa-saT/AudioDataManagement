@@ -40,7 +40,17 @@ function tabArea(tabKey: Tab): { action: number; info: boolean } {
 
 // ─── Tab ─────────────────────────────────────────────────────────────────────
 type Tab = 'users' | 'payouts' | 'tokens' | 'licenses' | 'orders' | 'archive' | 'logs' | 'settings'
-const tab = ref<Tab>('users')
+const TAB_STORAGE_KEY = 'pathfinder.adminTab'
+const VALID_TABS: readonly Tab[] = ['users', 'payouts', 'tokens', 'licenses', 'orders', 'archive', 'logs', 'settings']
+function loadInitialTab(): Tab {
+  if (typeof window === 'undefined') return 'users'
+  const saved = window.localStorage.getItem(TAB_STORAGE_KEY) as Tab | null
+  return saved && VALID_TABS.includes(saved) ? saved : 'users'
+}
+const tab = ref<Tab>(loadInitialTab())
+watch(tab, (t) => {
+  if (typeof window !== 'undefined') window.localStorage.setItem(TAB_STORAGE_KEY, t)
+})
 
 // ─── DM modal (改訂2.4) ──────────────────────────────────────────────────────
 interface DMItem {

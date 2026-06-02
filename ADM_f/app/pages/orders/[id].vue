@@ -12,6 +12,12 @@ const router = useRouter()
 
 const orderId = computed(() => route.params.id as string)
 
+// [<] = router.back() (app 全体ルール)、履歴が無い場合は Commission 一覧へ
+function goBack() {
+  if (window.history.length > 1) router.back()
+  else router.push('/orders')
+}
+
 // ─── Types ────────────────────────────────────────
 interface Candidate {
   id: string
@@ -904,8 +910,8 @@ const myCandidate = computed(() =>
     <div class="flex shrink-0 items-center gap-3 pb-3 pt-5">
       <button
         class="flex shrink-0 items-center justify-center text-ink/70 transition-colors hover:text-ink"
-        title="Commission 一覧に戻る"
-        @click="router.push('/orders')"
+        title="戻る"
+        @click="goBack"
       >
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="15 18 9 12 15 6"/>
