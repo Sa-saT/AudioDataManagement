@@ -1,5 +1,13 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useSystemStore } from '~/stores/system'
+
+const system = useSystemStore()
+// admin が hide した項目はバリデーション & UI 双方で省略 (default: 表示)
+function vis(key: string): boolean {
+  const v = system.commissionItemVisibility[key]
+  return v === undefined ? true : v
+}
 
 // 改訂2:
 //   - title 入力は廃止 (サーバが自動生成)
@@ -105,26 +113,26 @@ function clearErrors() { errors.value = {} }
 
 function validateStep1(): boolean {
   clearErrors()
-  if (!brief.value.sound_type) errors.value.sound_type = 'サウンドタイプを選択してください'
-  if (!brief.value.purpose) errors.value.purpose = '用途を選択してください'
-  if (
+  if (vis('sound_type') && !brief.value.sound_type) errors.value.sound_type = 'サウンドタイプを選択してください'
+  if (vis('purpose') && !brief.value.purpose) errors.value.purpose = '用途を選択してください'
+  if (vis('length_sec') && (
     !brief.value.length_sec ||
     brief.value.length_sec < LENGTH_MIN ||
     brief.value.length_sec > LENGTH_MAX
-  ) {
+  )) {
     errors.value.length = `長さは ${LENGTH_MIN}〜${LENGTH_MAX} 秒で入力してください`
   }
-  if (!desired_deadline.value) errors.value.deadline = '希望締切日を入力してください'
+  if (vis('desired_deadline') && !desired_deadline.value) errors.value.deadline = '希望締切日を入力してください'
   return Object.keys(errors.value).length === 0
 }
 
 function validateStep2(): boolean {
   clearErrors()
   const t = brief.value.sound_type
-  if (t === 'bgm' && brief.value.bgm_scenes.length === 0) {
+  if (t === 'bgm' && vis('bgm_scenes') && brief.value.bgm_scenes.length === 0) {
     errors.value.bgm_scenes = 'シーンを1つ以上選択してください'
   }
-  if (t === 'se' && !brief.value.se_trigger.trim()) {
+  if (t === 'se' && vis('se_trigger') && !brief.value.se_trigger.trim()) {
     errors.value.se_trigger = 'SEのトリガーとなるアクションを入力してください'
   }
   return Object.keys(errors.value).length === 0
@@ -132,7 +140,7 @@ function validateStep2(): boolean {
 
 function validateStep3(): boolean {
   clearErrors()
-  if (brief.value.emotions_target.length === 0) {
+  if (vis('emotions_target') && brief.value.emotions_target.length === 0) {
     errors.value.emotions_target = '狙う感情を1つ以上選択してください'
   }
   return Object.keys(errors.value).length === 0
@@ -291,7 +299,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
       </div>
 
       <!-- サウンドタイプ (改訂2: BGM/SE 二択) -->
-      <div>
+      <div v-if="vis('sound_type')">
         <label class="block text-[12px] text-ink/60 mb-1.5">サウンドタイプ <span class="text-accent">*</span></label>
         <div class="flex gap-2">
           <button
@@ -309,7 +317,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
       </div>
 
       <!-- 用途 -->
-      <div>
+      <div v-if="vis('purpose')">
         <label class="block text-[12px] text-ink/60 mb-1.5">用途 <span class="text-accent">*</span></label>
         <div class="flex flex-wrap gap-2">
           <button
@@ -334,7 +342,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
       </div>
 
       <!-- 長さ (改訂2: スライダー + 直接入力、token表示) -->
-      <div>
+      <div v-if="vis('length_sec')">
         <div class="flex items-baseline justify-between mb-1.5">
           <label class="text-[12px] text-ink/60">曲の長さ <span class="text-accent">*</span></label>
           <span class="font-mono text-[11px] text-ink/40">
@@ -366,7 +374,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
       </div>
 
       <!-- 希望締切日 (改訂2: 追加。default = 7日後) -->
-      <div>
+      <div v-if="vis('desired_deadline')">
         <label class="block text-[12px] text-ink/60 mb-1.5">希望締切日 <span class="text-accent">*</span></label>
         <input
           v-model="desired_deadline"
@@ -391,7 +399,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
       <template v-if="brief.sound_type === 'bgm'">
         <div>
           <!-- シーン選択 -->
-          <div class="mb-4">
+          <div v-if="vis('bgm_scenes')" class="mb-4">
             <label class="block text-[12px] text-ink/60 mb-1.5">使用シーン <span class="text-accent">*</span></label>
             <div class="flex flex-wrap gap-1.5">
               <button
@@ -409,7 +417,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
           </div>
 
           <!-- ループ -->
-          <div class="flex items-center gap-3 mb-4">
+          <div v-if="vis('bgm_loop')" class="flex items-center gap-3 mb-4">
             <button
               type="button"
               class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors"
@@ -426,7 +434,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
           </div>
 
           <!-- 補足 -->
-          <div>
+          <div v-if="vis('bgm_note')">
             <label class="block text-[12px] text-ink/60 mb-1">シーン補足 (任意)</label>
             <textarea
               v-model="brief.bgm_note"
@@ -442,7 +450,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
       <template v-if="brief.sound_type === 'se'">
         <div>
           <!-- トリガー -->
-          <div class="mb-4">
+          <div v-if="vis('se_trigger')" class="mb-4">
             <label class="block text-[12px] text-ink/60 mb-1">何をしたときに鳴る音ですか？ <span class="text-accent">*</span></label>
             <input
               v-model="brief.se_trigger"
@@ -454,7 +462,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
           </div>
 
           <!-- 機能 -->
-          <div>
+          <div v-if="vis('se_functions')">
             <label class="block text-[12px] text-ink/60 mb-1.5">この音の役割 (複数可)</label>
             <div class="flex flex-wrap gap-1.5">
               <button
@@ -471,7 +479,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
           </div>
 
           <!-- 9-A5: バリエーション数 -->
-          <div class="mt-4">
+          <div v-if="vis('se_slots')" class="mt-4">
             <label class="block text-[12px] text-ink/60 mb-1.5">納品バリエーション数 (何パターン必要か)</label>
             <div class="flex items-center gap-2">
               <button
@@ -501,7 +509,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
       </div>
 
       <!-- 狙う感情 -->
-      <div>
+      <div v-if="vis('emotions_target')">
         <label class="block text-[12px] text-ink/60 mb-1.5">
           狙う感情 <span class="text-accent">*</span>
           <span class="ml-2 font-normal text-ink/30">(複数可)</span>
@@ -525,7 +533,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
       </div>
 
       <!-- 避けたい感情 -->
-      <div>
+      <div v-if="vis('emotions_avoid')">
         <label class="block text-[12px] text-ink/60 mb-1.5">
           避けたい感情
           <span class="ml-2 font-normal text-ink/30">(任意・複数可)</span>
@@ -548,7 +556,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
       </div>
 
       <!-- 記憶に残したいイメージ -->
-      <div>
+      <div v-if="vis('memory_impression')">
         <label class="block text-[12px] text-ink/60 mb-1">
           聴いた後の記憶に残したいイメージ
           <span class="ml-2 font-normal text-ink/30">(任意)</span>
@@ -573,7 +581,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
       </div>
 
       <div class="flex flex-col gap-4">
-        <div v-for="axis in TEXTURE_AXES" :key="axis.key">
+        <div v-for="axis in TEXTURE_AXES.filter(a => vis(a.key))" :key="axis.key">
           <div class="flex items-center justify-between mb-1.5">
             <span class="text-[12px] text-ink/50">{{ axis.a }}</span>
             <span class="text-[12px] text-ink/50">{{ axis.b }}</span>
@@ -618,7 +626,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
       </div>
 
       <!-- 参考URL -->
-      <div>
+      <div v-if="vis('reference_urls')">
         <label class="block text-[12px] text-ink/60 mb-1">参考音源 URL (1行に1URL)</label>
         <textarea
           v-model="brief.reference_urls"
@@ -629,7 +637,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
       </div>
 
       <!-- 参考にしたい要素 -->
-      <div>
+      <div v-if="vis('reference_elements')">
         <label class="block text-[12px] text-ink/60 mb-1.5">参考にしたい要素 (複数可)</label>
         <div class="flex flex-wrap gap-1.5">
           <button
@@ -646,7 +654,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
       </div>
 
       <!-- 避けたい要素 -->
-      <div>
+      <div v-if="vis('reference_avoid')">
         <label class="block text-[12px] text-ink/60 mb-1">逆に避けたい要素・表現</label>
         <textarea
           v-model="brief.reference_avoid"
@@ -667,7 +675,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
       </div>
 
       <!-- 納品形式 -->
-      <div>
+      <div v-if="vis('delivery_format')">
         <label class="block text-[12px] text-ink/60 mb-1.5">納品形式</label>
         <div class="flex flex-wrap gap-2">
           <button
@@ -684,7 +692,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
       </div>
 
       <!-- 補足 -->
-      <div>
+      <div v-if="vis('note')">
         <label class="block text-[12px] text-ink/60 mb-1">その他補足・要望</label>
         <textarea
           v-model="brief.note"

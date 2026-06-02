@@ -29,6 +29,10 @@ interface SystemState {
   areas: Record<string, AreaNotification>
   totals: { action_count: number; has_info: boolean }
   loaded: boolean
+  // admin が設定する公開設定
+  imageTagPresets: string[]
+  commissionItemVisibility: Record<string, boolean>
+  adminConfigLoaded: boolean
 }
 
 const EMPTY_AREA: AreaNotification = {
@@ -46,6 +50,9 @@ export const useSystemStore = defineStore('system', {
     areas: {},
     totals: { action_count: 0, has_info: false },
     loaded: false,
+    imageTagPresets: [],
+    commissionItemVisibility: {},
+    adminConfigLoaded: false,
   }),
   getters: {
     // 後方互換: 旧フィールド名を要対応カウントへエイリアス
@@ -134,6 +141,30 @@ export const useSystemStore = defineStore('system', {
 
     clearCommissionUnread() {
       this._resetNotifications()
+    },
+
+    // admin 設定の公開項目を取得 (一度だけ)
+    async fetchAdminConfig() {
+      if (this.adminConfigLoaded) return
+      try {
+        const config = useRuntimeConfig()
+        const baseURL = config.public.apiBaseUrl as string
+        const [tags, comm] = await Promise.all([
+          $fetch<{ tags: string[] }>('/api/v1/system/image-tags', { baseURL }),
+          $fetch<{ item_visibility: Record<string, boolean> }>('/api/v1/system/commission-config', { baseURL }),
+        ])
+        this.imageTagPresets = tags.tags ?? []
+        this.commissionItemVisibility = comm.item_visibility ?? {}
+      } catch {
+        // 取得失敗時はフォールバック値で空のまま
+      } finally {
+        this.adminConfigLoaded = true
+      }
+    },
+
+    // admin が更新後にキャッシュを破棄して再取得させる
+    invalidateAdminConfig() {
+      this.adminConfigLoaded = false
     },
   },
 })

@@ -7,6 +7,7 @@ Roles:
 """
 from __future__ import annotations
 
+import json
 import shutil
 import tempfile
 import uuid
@@ -352,6 +353,30 @@ def _add_status_message(db: Session, order_id: uuid.UUID, sender_id: uuid.UUID, 
 @router.get("/system/commission")
 def commission_status(db: Session = Depends(get_db)) -> dict:
     return {"enabled": _commission_enabled(db)}
+
+
+def _load_json_setting(db: Session, key: str, default: object) -> object:
+    row = db.execute(
+        select(SystemSetting.value).where(SystemSetting.key == key)
+    ).scalar_one_or_none()
+    if row is None:
+        return default
+    try:
+        return json.loads(row)
+    except (ValueError, TypeError):
+        return default
+
+
+@router.get("/system/image-tags")
+def system_image_tags(db: Session = Depends(get_db)) -> dict:
+    tags = _load_json_setting(db, "image_tag_presets", [])
+    return {"tags": tags if isinstance(tags, list) else []}
+
+
+@router.get("/system/commission-config")
+def system_commission_config(db: Session = Depends(get_db)) -> dict:
+    visibility = _load_json_setting(db, "commission_item_visibility", {})
+    return {"item_visibility": visibility if isinstance(visibility, dict) else {}}
 
 
 # ─── Unread notification (改訂2 = 二系統) ──────────────────────────────────────

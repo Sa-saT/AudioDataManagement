@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { OrderBrief as WizardBrief } from '~/components/OrderBriefWizard.vue'
 import { useAuthStore } from '~/stores/auth'
+import { useSystemStore } from '~/stores/system'
 import { errorMessageJa } from '~/utils/errorMessageJa'
 
 definePageMeta({ layout: 'default' })
@@ -109,6 +110,7 @@ onMounted(async () => {
   auth.hydrate()
   // 9-A4: auth.role 確定後に briefView の既定を適用
   applyBriefViewDefault()
+  void useSystemStore().fetchAdminConfig()
   await fetchOrder()
   await fetchMemos()
   // 改訂2: チケット閲覧を記録 (通知バッジの既読判定に使う)

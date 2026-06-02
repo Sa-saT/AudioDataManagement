@@ -560,6 +560,72 @@ async function toggleSetting(key: string, current: string) {
   }
 }
 
+// ── image_tag_presets / commission_item_visibility (JSON 値) ──
+function parsedJsonSetting<T>(key: string, fallback: T): T {
+  const s = settings.value.find(s => s.key === key)
+  if (!s) return fallback
+  try { return JSON.parse(s.value) as T } catch { return fallback }
+}
+const imageTagDraft = ref('')
+function addImageTag() {
+  const tag = imageTagDraft.value.trim().toLowerCase()
+  if (!tag) return
+  const current = parsedJsonSetting<string[]>('image_tag_presets', [])
+  if (current.includes(tag)) { imageTagDraft.value = ''; return }
+  void saveJsonSetting('image_tag_presets', [...current, tag])
+  imageTagDraft.value = ''
+}
+function removeImageTag(tag: string) {
+  const current = parsedJsonSetting<string[]>('image_tag_presets', [])
+  void saveJsonSetting('image_tag_presets', current.filter(t => t !== tag))
+}
+async function saveJsonSetting(key: string, value: unknown) {
+  settingSaving.value[key] = true
+  try {
+    const str = JSON.stringify(value)
+    await api.patch(`/api/v1/admin/settings/${key}`, { body: { value: str } })
+    const s = settings.value.find(s => s.key === key)
+    if (s) s.value = str
+    // ストアキャッシュを破棄して次回 fetch 時に更新を取り込む
+    system.invalidateAdminConfig()
+  } catch (e) {
+    settingsError.value = errorMessageJa(e)
+  } finally {
+    settingSaving.value[key] = false
+  }
+}
+async function toggleCommissionItem(item: string) {
+  const current = parsedJsonSetting<Record<string, boolean>>('commission_item_visibility', {})
+  const next = { ...current, [item]: !(current[item] ?? true) }
+  await saveJsonSetting('commission_item_visibility', next)
+}
+
+const COMMISSION_ITEM_LABELS: Array<{ key: string; label: string; step: string }> = [
+  { key: 'sound_type',            label: 'サウンドタイプ',         step: 'Step 1' },
+  { key: 'purpose',               label: '用途',                   step: 'Step 1' },
+  { key: 'length_sec',            label: '曲の長さ',               step: 'Step 1' },
+  { key: 'desired_deadline',      label: '希望締切日',             step: 'Step 1' },
+  { key: 'bgm_scenes',            label: 'BGM: 使用シーン',        step: 'Step 2' },
+  { key: 'bgm_loop',              label: 'BGM: ループ',            step: 'Step 2' },
+  { key: 'bgm_note',              label: 'BGM: シーン補足',        step: 'Step 2' },
+  { key: 'se_trigger',            label: 'SE: トリガー',           step: 'Step 2' },
+  { key: 'se_functions',          label: 'SE: 役割',               step: 'Step 2' },
+  { key: 'se_slots',              label: 'SE: バリエーション数',   step: 'Step 2' },
+  { key: 'emotions_target',       label: '狙う感情',               step: 'Step 3' },
+  { key: 'emotions_avoid',        label: '避けたい感情',           step: 'Step 3' },
+  { key: 'memory_impression',     label: '記憶に残したいイメージ', step: 'Step 3' },
+  { key: 'tx_organic_electronic', label: 'テクスチャ: 有機/電子',  step: 'Step 4' },
+  { key: 'tx_melody_rhythm',      label: 'テクスチャ: メロ/リズム',step: 'Step 4' },
+  { key: 'tx_warm_cold',          label: 'テクスチャ: 温/冷',      step: 'Step 4' },
+  { key: 'tx_sparse_dense',       label: 'テクスチャ: シンプル/重',step: 'Step 4' },
+  { key: 'tx_static_dynamic',     label: 'テクスチャ: 静/動',      step: 'Step 4' },
+  { key: 'reference_urls',        label: '参考音源 URL',           step: 'Step 5' },
+  { key: 'reference_elements',    label: '参考にしたい要素',       step: 'Step 5' },
+  { key: 'reference_avoid',       label: '避けたい要素',           step: 'Step 5' },
+  { key: 'delivery_format',       label: '納品形式',               step: 'Step 6' },
+  { key: 'note',                  label: 'その他補足',             step: 'Step 6' },
+]
+
 // ─── Logs tab (Admin activity log) ────────────────────────────────────────────
 
 type LogSub = 'creators' | 'users'
@@ -1559,48 +1625,131 @@ watch(tab, (t) => {
       </div>
 
       <!-- ⑦ 設定 -->
-      <div v-if="tab === 'settings'" class="max-w-[480px]">
-        <p class="mb-4 text-[11px] font-semibold uppercase tracking-widest text-body-strong">システム設定</p>
+      <div v-if="tab === 'settings'" class="max-w-[640px] space-y-8">
 
-        <div v-if="settingsLoading" class="py-4 text-[12px] text-muted">読み込み中…</div>
-        <div v-else-if="settingsError" class="text-[12px] text-accent">{{ settingsError }}</div>
+        <!-- ⑦-1 基本設定 (Boolean フラグ) -->
+        <div>
+          <p class="mb-4 text-[11px] font-semibold uppercase tracking-widest text-body-strong">システム設定</p>
 
-        <div v-else class="card space-y-0 overflow-hidden p-0">
-          <div
-            v-for="(s, idx) in settings"
-            :key="s.key"
-            class="flex items-center gap-4 px-4 py-3"
-            :class="idx > 0 ? 'border-t border-hairline-soft' : ''"
-          >
-            <div class="min-w-0 flex-1">
-              <p class="font-mono text-[12px] font-semibold text-ink">{{ s.key }}</p>
-              <p v-if="s.description" class="mt-0.5 text-[11px] text-muted">{{ s.description }}</p>
+          <div v-if="settingsLoading" class="py-4 text-[12px] text-muted">読み込み中…</div>
+          <div v-else-if="settingsError" class="text-[12px] text-accent">{{ settingsError }}</div>
+
+          <div v-else class="card space-y-0 overflow-hidden p-0">
+            <template v-for="(s, idx) in settings.filter(s => s.key !== 'image_tag_presets' && s.key !== 'commission_item_visibility')" :key="s.key">
+              <div
+                class="flex items-center gap-4 px-4 py-3"
+                :class="idx > 0 ? 'border-t border-hairline-soft' : ''"
+              >
+                <div class="min-w-0 flex-1">
+                  <p class="font-mono text-[12px] font-semibold text-ink">{{ s.key }}</p>
+                  <p v-if="s.description" class="mt-0.5 text-[11px] text-muted">{{ s.description }}</p>
+                </div>
+
+                <!-- Boolean toggle -->
+                <template v-if="s.value === 'true' || s.value === 'false'">
+                  <span class="shrink-0 font-mono text-[11px]" :class="s.value === 'true' ? 'text-[#1a9950]' : 'text-muted'">
+                    {{ s.value === 'true' ? '有効' : '無効' }}
+                  </span>
+                  <button
+                    class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center overflow-hidden rounded-full transition-colors"
+                    :class="[s.value === 'true' ? 'bg-[#2ecc71]' : 'bg-hairline-strong', settingSaving[s.key] ? 'opacity-50' : '']"
+                    :disabled="settingSaving[s.key]"
+                    @click="toggleSetting(s.key, s.value)"
+                  >
+                    <span
+                      class="absolute left-0 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform"
+                      :class="s.value === 'true' ? 'translate-x-[18px]' : 'translate-x-0.5'"
+                    />
+                  </button>
+                </template>
+
+                <!-- Raw value fallback -->
+                <span v-else class="font-mono text-[11px] text-body">{{ s.value }}</span>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- ⑦-2 イメージタグ管理 -->
+        <div v-if="!settingsLoading && !settingsError">
+          <p class="mb-1 text-[11px] font-semibold uppercase tracking-widest text-body-strong">イメージタグ</p>
+          <p class="mb-3 text-[11px] text-muted">アップロード画面で creator が選択できるタグ。追加/削除できる。</p>
+          <div class="card p-4">
+            <div class="flex flex-wrap gap-1.5 mb-3 min-h-[28px]">
+              <span
+                v-for="tag in parsedJsonSetting<string[]>('image_tag_presets', [])"
+                :key="tag"
+                class="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-[11px] font-medium text-primary"
+              >
+                {{ tag }}
+                <button
+                  class="ml-1 text-primary/70 hover:text-accent transition-colors"
+                  title="削除"
+                  :disabled="settingSaving['image_tag_presets']"
+                  @click="removeImageTag(tag)"
+                >×</button>
+              </span>
+              <p v-if="parsedJsonSetting<string[]>('image_tag_presets', []).length === 0" class="text-[11px] text-muted">
+                タグがありません
+              </p>
             </div>
+            <div class="flex gap-2">
+              <input
+                v-model="imageTagDraft"
+                type="text"
+                placeholder="新しいタグ (英数字推奨)"
+                class="flex-1 rounded-md border border-hairline-strong bg-white/85 px-3 py-1.5 text-[12px] text-ink outline-none transition-colors focus:border-primary"
+                @keyup.enter="addImageTag"
+              />
+              <button
+                class="rounded-md bg-ink px-4 py-1.5 text-[12px] font-medium text-canvas transition-colors hover:bg-primary disabled:opacity-50"
+                :disabled="!imageTagDraft.trim() || settingSaving['image_tag_presets']"
+                @click="addImageTag"
+              >追加</button>
+            </div>
+          </div>
+        </div>
 
-            <!-- Boolean toggle -->
-            <template v-if="s.value === 'true' || s.value === 'false'">
-              <span class="shrink-0 font-mono text-[11px]" :class="s.value === 'true' ? 'text-[#1a9950]' : 'text-muted'">
-                {{ s.value === 'true' ? '有効' : '無効' }}
+        <!-- ⑦-3 Commission ブリーフ項目 表示/非表示 -->
+        <div v-if="!settingsLoading && !settingsError">
+          <p class="mb-1 text-[11px] font-semibold uppercase tracking-widest text-body-strong">Commission 項目</p>
+          <p class="mb-3 text-[11px] text-muted">licensee の発注フォームで表示する項目。OFF にすると入力欄も検証も省略。</p>
+          <div class="card overflow-hidden p-0">
+            <div
+              v-for="(item, idx) in COMMISSION_ITEM_LABELS"
+              :key="item.key"
+              class="flex items-center gap-4 px-4 py-2.5"
+              :class="idx > 0 ? 'border-t border-hairline-soft' : ''"
+            >
+              <span class="shrink-0 font-mono text-[10px] text-muted w-12">{{ item.step }}</span>
+              <div class="min-w-0 flex-1">
+                <p class="text-[12px] text-ink">{{ item.label }}</p>
+                <p class="mt-0.5 font-mono text-[10px] text-muted">{{ item.key }}</p>
+              </div>
+              <span
+                class="shrink-0 font-mono text-[11px]"
+                :class="(parsedJsonSetting<Record<string, boolean>>('commission_item_visibility', {})[item.key] ?? true) ? 'text-[#1a9950]' : 'text-muted'"
+              >
+                {{ (parsedJsonSetting<Record<string, boolean>>('commission_item_visibility', {})[item.key] ?? true) ? '表示' : '非表示' }}
               </span>
               <button
                 class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center overflow-hidden rounded-full transition-colors"
-                :class="[s.value === 'true' ? 'bg-[#2ecc71]' : 'bg-hairline-strong', settingSaving[s.key] ? 'opacity-50' : '']"
-                :disabled="settingSaving[s.key]"
-                @click="toggleSetting(s.key, s.value)"
+                :class="[
+                  (parsedJsonSetting<Record<string, boolean>>('commission_item_visibility', {})[item.key] ?? true) ? 'bg-[#2ecc71]' : 'bg-hairline-strong',
+                  settingSaving['commission_item_visibility'] ? 'opacity-50' : '',
+                ]"
+                :disabled="settingSaving['commission_item_visibility']"
+                @click="toggleCommissionItem(item.key)"
               >
                 <span
                   class="absolute left-0 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform"
-                  :class="s.value === 'true' ? 'translate-x-[18px]' : 'translate-x-0.5'"
+                  :class="(parsedJsonSetting<Record<string, boolean>>('commission_item_visibility', {})[item.key] ?? true) ? 'translate-x-[18px]' : 'translate-x-0.5'"
                 />
               </button>
-            </template>
-
-            <!-- Raw value fallback -->
-            <span v-else class="font-mono text-[11px] text-body">{{ s.value }}</span>
+            </div>
           </div>
-
-          <p v-if="settings.length === 0" class="px-4 py-3 text-[12px] text-muted">設定がありません。</p>
         </div>
+
       </div>
 
     </div>

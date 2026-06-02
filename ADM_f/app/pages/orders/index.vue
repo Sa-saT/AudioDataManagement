@@ -48,6 +48,7 @@ const fetchError = ref<string | null>(null)
 onMounted(async () => {
   auth.hydrate()
   await system.fetchCommissionStatus()
+  void system.fetchAdminConfig()
   if (auth.isActivated && system.commissionEnabled) {
     await fetchOrders()
     // Refresh unread count (visiting this page serves as "seen")

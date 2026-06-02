@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useAuthStore } from '~/stores/auth'
+import { useSystemStore } from '~/stores/system'
 import { useApi } from '~/composables/useApi'
 import { errorMessageJa } from '~/utils/errorMessageJa'
 
@@ -7,6 +8,7 @@ definePageMeta({ layout: 'default' })
 useHead({ title: 'Upload — Pathfinder' })
 
 const auth = useAuthStore()
+const system = useSystemStore()
 const api = useApi()
 const router = useRouter()
 
@@ -15,6 +17,7 @@ onMounted(() => {
   if (auth.role !== 'creator' && auth.role !== 'admin') {
     router.replace('/dashboard')
   }
+  void system.fetchAdminConfig()
 })
 
 const canAccess = computed(() => auth.role === 'creator' || auth.role === 'admin')
@@ -57,11 +60,8 @@ function clearFile() {
 }
 
 // ─── Form ─────────────────────────────────────────────
-const PRESET_TAGS = [
-  'warm', 'ambient', 'nature', 'cinematic',
-  'dark', 'bright', 'acoustic', 'electronic',
-  'energetic', 'peaceful', 'dramatic', 'mysterious',
-]
+// 旧 PRESET_TAGS は admin が管理する system_settings.image_tag_presets に移行
+const PRESET_TAGS = computed<string[]>(() => system.imageTagPresets)
 
 const title = ref('')
 const description = ref('')
