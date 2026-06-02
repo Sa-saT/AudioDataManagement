@@ -153,6 +153,15 @@ const isHighlighted = computed(() => hasAction.value || system.totals.has_info)
             Dashboard
             <span v-if="isActive('/dashboard')" class="absolute inset-x-0 -bottom-px h-0.5 rounded-sm bg-primary" />
           </NuxtLink>
+          <NuxtLink
+            v-if="isAdmin"
+            to="/admin"
+            class="relative flex h-12 items-center text-[13px] font-medium text-ink transition-opacity"
+            :class="isActive('/admin') ? 'opacity-100' : 'opacity-[0.55] hover:opacity-100'"
+          >
+            AdminPanel
+            <span v-if="isActive('/admin')" class="absolute inset-x-0 -bottom-px h-0.5 rounded-sm bg-primary" />
+          </NuxtLink>
         </nav>
       </div>
 

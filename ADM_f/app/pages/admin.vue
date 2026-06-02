@@ -784,7 +784,7 @@ watch(tab, (t) => {
               class="text-[12px] font-semibold text-ink transition-all"
               :class="roleFilter === r ? 'filter-active' : 'opacity-40 hover:opacity-70'"
               @click="roleFilter = r"
-            >{{ r === 'creator' ? 'Creator' : 'User' }}</button>
+            >{{ r === 'creator' ? 'Creator' : 'Licensee' }}</button>
           </div>
           <button class="ml-auto text-[11px] text-muted hover:text-ink" @click="fetchUsers">↻ 更新</button>
         </div>
@@ -956,7 +956,7 @@ watch(tab, (t) => {
           >
             <!-- role badge -->
             <span class="shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase"
-              style="background:#26251e18;color:#26251e;border-color:#26251e30">user</span>
+              style="background:#26251e18;color:#26251e;border-color:#26251e30">licensee</span>
 
             <!-- name / license / token -->
             <div class="min-w-0 flex-1">
@@ -1327,7 +1327,7 @@ watch(tab, (t) => {
         <div class="mb-4 flex flex-wrap items-center gap-3">
           <div class="flex gap-2">
             <button
-              v-for="opt in ([['creators','Creator'],['users','User']] as [LogSub, string][])"
+              v-for="opt in ([['creators','Creator'],['users','Licensee']] as [LogSub, string][])"
               :key="opt[0]"
               class="rounded-full px-3 py-1 text-[11px] font-semibold transition-colors"
               :class="logSub === opt[0]
