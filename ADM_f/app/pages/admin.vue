@@ -567,6 +567,7 @@ function parsedJsonSetting<T>(key: string, fallback: T): T {
   try { return JSON.parse(s.value) as T } catch { return fallback }
 }
 const imageTagDraft = ref('')
+const addedFlash = ref(false)
 function addImageTag() {
   const tag = imageTagDraft.value.trim().toLowerCase()
   if (!tag) return
@@ -574,11 +575,31 @@ function addImageTag() {
   if (current.includes(tag)) { imageTagDraft.value = ''; return }
   void saveJsonSetting('image_tag_presets', [...current, tag])
   imageTagDraft.value = ''
+  addedFlash.value = true
+  window.setTimeout(() => { addedFlash.value = false }, 400)
 }
-function removeImageTag(tag: string) {
+const tagPendingDelete = ref<string | null>(null)
+function askRemoveImageTag(tag: string) {
+  tagPendingDelete.value = tag
+}
+async function confirmRemoveImageTag() {
+  const tag = tagPendingDelete.value
+  if (!tag) return
   const current = parsedJsonSetting<string[]>('image_tag_presets', [])
-  void saveJsonSetting('image_tag_presets', current.filter(t => t !== tag))
+  await saveJsonSetting('image_tag_presets', current.filter(t => t !== tag))
+  tagPendingDelete.value = null
 }
+
+// 設定タブのアコーディオン状態 (1 つだけ展開)
+const expandedSettingKey = ref<string | null>(null)
+function toggleSettingPanel(key: string) {
+  expandedSettingKey.value = expandedSettingKey.value === key ? null : key
+}
+// Commission 項目で OFF (非表示) になっている数
+const commissionHiddenCount = computed(() => {
+  const m = parsedJsonSetting<Record<string, boolean>>('commission_item_visibility', {})
+  return COMMISSION_ITEM_LABELS.filter(it => m[it.key] === false).length
+})
 async function saveJsonSetting(key: string, value: unknown) {
   settingSaving.value[key] = true
   try {
@@ -1625,131 +1646,177 @@ watch(tab, (t) => {
       </div>
 
       <!-- ⑦ 設定 -->
-      <div v-if="tab === 'settings'" class="max-w-[640px] space-y-8">
+      <div v-if="tab === 'settings'" class="max-w-[640px]">
+        <p class="mb-4 text-[11px] font-semibold uppercase tracking-widest text-body-strong">システム設定</p>
 
-        <!-- ⑦-1 基本設定 (Boolean フラグ) -->
-        <div>
-          <p class="mb-4 text-[11px] font-semibold uppercase tracking-widest text-body-strong">システム設定</p>
+        <div v-if="settingsLoading" class="py-4 text-[12px] text-muted">読み込み中…</div>
+        <div v-else-if="settingsError" class="text-[12px] text-accent">{{ settingsError }}</div>
 
-          <div v-if="settingsLoading" class="py-4 text-[12px] text-muted">読み込み中…</div>
-          <div v-else-if="settingsError" class="text-[12px] text-accent">{{ settingsError }}</div>
+        <div v-else class="card space-y-0 overflow-hidden p-0">
 
-          <div v-else class="card space-y-0 overflow-hidden p-0">
-            <template v-for="(s, idx) in settings.filter(s => s.key !== 'image_tag_presets' && s.key !== 'commission_item_visibility')" :key="s.key">
-              <div
-                class="flex items-center gap-4 px-4 py-3"
-                :class="idx > 0 ? 'border-t border-hairline-soft' : ''"
-              >
-                <div class="min-w-0 flex-1">
-                  <p class="font-mono text-[12px] font-semibold text-ink">{{ s.key }}</p>
-                  <p v-if="s.description" class="mt-0.5 text-[11px] text-muted">{{ s.description }}</p>
-                </div>
-
-                <!-- Boolean toggle -->
-                <template v-if="s.value === 'true' || s.value === 'false'">
-                  <span class="shrink-0 font-mono text-[11px]" :class="s.value === 'true' ? 'text-[#1a9950]' : 'text-muted'">
-                    {{ s.value === 'true' ? '有効' : '無効' }}
-                  </span>
-                  <button
-                    class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center overflow-hidden rounded-full transition-colors"
-                    :class="[s.value === 'true' ? 'bg-[#2ecc71]' : 'bg-hairline-strong', settingSaving[s.key] ? 'opacity-50' : '']"
-                    :disabled="settingSaving[s.key]"
-                    @click="toggleSetting(s.key, s.value)"
-                  >
-                    <span
-                      class="absolute left-0 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform"
-                      :class="s.value === 'true' ? 'translate-x-[18px]' : 'translate-x-0.5'"
-                    />
-                  </button>
-                </template>
-
-                <!-- Raw value fallback -->
-                <span v-else class="font-mono text-[11px] text-body">{{ s.value }}</span>
-              </div>
-            </template>
-          </div>
-        </div>
-
-        <!-- ⑦-2 イメージタグ管理 -->
-        <div v-if="!settingsLoading && !settingsError">
-          <p class="mb-1 text-[11px] font-semibold uppercase tracking-widest text-body-strong">イメージタグ</p>
-          <p class="mb-3 text-[11px] text-muted">アップロード画面で creator が選択できるタグ。追加/削除できる。</p>
-          <div class="card p-4">
-            <div class="flex flex-wrap gap-1.5 mb-3 min-h-[28px]">
-              <span
-                v-for="tag in parsedJsonSetting<string[]>('image_tag_presets', [])"
-                :key="tag"
-                class="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-[11px] font-medium text-primary"
-              >
-                {{ tag }}
-                <button
-                  class="ml-1 text-primary/70 hover:text-accent transition-colors"
-                  title="削除"
-                  :disabled="settingSaving['image_tag_presets']"
-                  @click="removeImageTag(tag)"
-                >×</button>
-              </span>
-              <p v-if="parsedJsonSetting<string[]>('image_tag_presets', []).length === 0" class="text-[11px] text-muted">
-                タグがありません
-              </p>
-            </div>
-            <div class="flex gap-2">
-              <input
-                v-model="imageTagDraft"
-                type="text"
-                placeholder="新しいタグ (英数字推奨)"
-                class="flex-1 rounded-md border border-hairline-strong bg-white/85 px-3 py-1.5 text-[12px] text-ink outline-none transition-colors focus:border-primary"
-                @keyup.enter="addImageTag"
-              />
-              <button
-                class="rounded-md bg-ink px-4 py-1.5 text-[12px] font-medium text-canvas transition-colors hover:bg-primary disabled:opacity-50"
-                :disabled="!imageTagDraft.trim() || settingSaving['image_tag_presets']"
-                @click="addImageTag"
-              >追加</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- ⑦-3 Commission ブリーフ項目 表示/非表示 -->
-        <div v-if="!settingsLoading && !settingsError">
-          <p class="mb-1 text-[11px] font-semibold uppercase tracking-widest text-body-strong">Commission 項目</p>
-          <p class="mb-3 text-[11px] text-muted">licensee の発注フォームで表示する項目。OFF にすると入力欄も検証も省略。</p>
-          <div class="card overflow-hidden p-0">
+          <!-- 既存 Boolean 設定 (commission_enabled 等) -->
+          <template v-for="(s, idx) in settings.filter(s => s.key !== 'image_tag_presets' && s.key !== 'commission_item_visibility')" :key="s.key">
             <div
-              v-for="(item, idx) in COMMISSION_ITEM_LABELS"
-              :key="item.key"
-              class="flex items-center gap-4 px-4 py-2.5"
+              class="flex items-center gap-4 px-4 py-3"
               :class="idx > 0 ? 'border-t border-hairline-soft' : ''"
             >
-              <span class="shrink-0 font-mono text-[10px] text-muted w-12">{{ item.step }}</span>
               <div class="min-w-0 flex-1">
-                <p class="text-[12px] text-ink">{{ item.label }}</p>
-                <p class="mt-0.5 font-mono text-[10px] text-muted">{{ item.key }}</p>
+                <p class="font-mono text-[12px] font-semibold text-ink">{{ s.key }}</p>
+                <p v-if="s.description" class="mt-0.5 text-[11px] text-muted">{{ s.description }}</p>
               </div>
-              <span
-                class="shrink-0 font-mono text-[11px]"
-                :class="(parsedJsonSetting<Record<string, boolean>>('commission_item_visibility', {})[item.key] ?? true) ? 'text-[#1a9950]' : 'text-muted'"
-              >
-                {{ (parsedJsonSetting<Record<string, boolean>>('commission_item_visibility', {})[item.key] ?? true) ? '表示' : '非表示' }}
+
+              <template v-if="s.value === 'true' || s.value === 'false'">
+                <span class="shrink-0 font-mono text-[11px]" :class="s.value === 'true' ? 'text-[#1a9950]' : 'text-muted'">
+                  {{ s.value === 'true' ? '有効' : '無効' }}
+                </span>
+                <button
+                  class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center overflow-hidden rounded-full transition-colors"
+                  :class="[s.value === 'true' ? 'bg-[#2ecc71]' : 'bg-hairline-strong', settingSaving[s.key] ? 'opacity-50' : '']"
+                  :disabled="settingSaving[s.key]"
+                  @click="toggleSetting(s.key, s.value)"
+                >
+                  <span
+                    class="absolute left-0 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform"
+                    :class="s.value === 'true' ? 'translate-x-[18px]' : 'translate-x-0.5'"
+                  />
+                </button>
+              </template>
+
+              <span v-else class="font-mono text-[11px] text-body">{{ s.value }}</span>
+            </div>
+          </template>
+
+          <!-- イメージタグ (アコーディオン) -->
+          <div class="border-t border-hairline-soft">
+            <button
+              class="w-full flex items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-canvas-soft"
+              @click="toggleSettingPanel('image_tag_presets')"
+            >
+              <div class="min-w-0 flex-1">
+                <p class="font-mono text-[12px] font-semibold text-ink">image_tag_presets</p>
+                <p class="mt-0.5 text-[11px] text-muted">アップロード画面で creator が選択できるタグ</p>
+              </div>
+              <span class="shrink-0 font-mono text-[11px] text-body">
+                {{ parsedJsonSetting<string[]>('image_tag_presets', []).length }} 件
               </span>
-              <button
-                class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center overflow-hidden rounded-full transition-colors"
-                :class="[
-                  (parsedJsonSetting<Record<string, boolean>>('commission_item_visibility', {})[item.key] ?? true) ? 'bg-[#2ecc71]' : 'bg-hairline-strong',
-                  settingSaving['commission_item_visibility'] ? 'opacity-50' : '',
-                ]"
-                :disabled="settingSaving['commission_item_visibility']"
-                @click="toggleCommissionItem(item.key)"
-              >
+              <svg
+                width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                class="shrink-0 text-muted transition-transform"
+                :class="expandedSettingKey === 'image_tag_presets' ? 'rotate-90' : ''"
+              ><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+
+            <div v-if="expandedSettingKey === 'image_tag_presets'" class="border-t border-hairline-soft bg-canvas-soft/60 p-4">
+              <div class="flex flex-wrap gap-1.5 mb-3 min-h-[28px]">
                 <span
-                  class="absolute left-0 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform"
-                  :class="(parsedJsonSetting<Record<string, boolean>>('commission_item_visibility', {})[item.key] ?? true) ? 'translate-x-[18px]' : 'translate-x-0.5'"
+                  v-for="tag in parsedJsonSetting<string[]>('image_tag_presets', [])"
+                  :key="tag"
+                  class="inline-flex items-center gap-1 rounded-full border border-[#1e3a8a] bg-[#1e40af] px-3 py-1 text-[11px] font-semibold text-white shadow-sm"
+                >
+                  {{ tag }}
+                  <button
+                    class="ml-0.5 -mr-0.5 flex h-4 w-4 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/15 hover:text-white"
+                    title="削除"
+                    :disabled="settingSaving['image_tag_presets']"
+                    @click="askRemoveImageTag(tag)"
+                  >×</button>
+                </span>
+                <p v-if="parsedJsonSetting<string[]>('image_tag_presets', []).length === 0" class="text-[11px] text-muted">
+                  タグがありません
+                </p>
+              </div>
+              <div class="flex gap-2">
+                <input
+                  v-model="imageTagDraft"
+                  type="text"
+                  placeholder="新しいタグ (英数字推奨)"
+                  class="flex-1 rounded-md border border-hairline-strong bg-white/85 px-3 py-1.5 text-[12px] text-ink outline-none transition-colors focus:border-primary"
+                  @keyup.enter="addImageTag"
                 />
-              </button>
+                <button
+                  class="rounded-md px-4 py-1.5 text-[12px] font-medium text-canvas transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
+                  :class="addedFlash ? 'bg-primary scale-95 shadow-inner' : 'bg-ink hover:bg-primary'"
+                  :disabled="!imageTagDraft.trim() || settingSaving['image_tag_presets']"
+                  @click="addImageTag"
+                >{{ addedFlash ? '追加 ✓' : '追加' }}</button>
+              </div>
             </div>
           </div>
+
+          <!-- Commission 項目 (アコーディオン) -->
+          <div class="border-t border-hairline-soft">
+            <button
+              class="w-full flex items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-canvas-soft"
+              @click="toggleSettingPanel('commission_item_visibility')"
+            >
+              <div class="min-w-0 flex-1">
+                <p class="font-mono text-[12px] font-semibold text-ink">commission_item_visibility</p>
+                <p class="mt-0.5 text-[11px] text-muted">licensee の発注フォームで表示する項目 (OFF は入力欄/検証ともに省略)</p>
+              </div>
+              <span class="shrink-0 font-mono text-[11px]" :class="commissionHiddenCount > 0 ? 'text-muted' : 'text-[#1a9950]'">
+                {{ commissionHiddenCount === 0 ? '全 23 項目 表示' : `${commissionHiddenCount} 項目 非表示` }}
+              </span>
+              <svg
+                width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                class="shrink-0 text-muted transition-transform"
+                :class="expandedSettingKey === 'commission_item_visibility' ? 'rotate-90' : ''"
+              ><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+
+            <div v-if="expandedSettingKey === 'commission_item_visibility'" class="border-t border-hairline-soft bg-canvas-soft/60">
+              <div
+                v-for="(item, idx) in COMMISSION_ITEM_LABELS"
+                :key="item.key"
+                class="flex items-center gap-4 px-4 py-2.5"
+                :class="idx > 0 ? 'border-t border-hairline-soft/60' : ''"
+              >
+                <span class="shrink-0 font-mono text-[10px] text-muted w-12">{{ item.step }}</span>
+                <div class="min-w-0 flex-1">
+                  <p class="text-[12px] text-ink">{{ item.label }}</p>
+                  <p class="mt-0.5 font-mono text-[10px] text-muted">{{ item.key }}</p>
+                </div>
+                <span
+                  class="shrink-0 font-mono text-[11px]"
+                  :class="(parsedJsonSetting<Record<string, boolean>>('commission_item_visibility', {})[item.key] ?? true) ? 'text-[#1a9950]' : 'text-muted'"
+                >
+                  {{ (parsedJsonSetting<Record<string, boolean>>('commission_item_visibility', {})[item.key] ?? true) ? '表示' : '非表示' }}
+                </span>
+                <button
+                  class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center overflow-hidden rounded-full transition-colors"
+                  :class="[
+                    (parsedJsonSetting<Record<string, boolean>>('commission_item_visibility', {})[item.key] ?? true) ? 'bg-[#2ecc71]' : 'bg-hairline-strong',
+                    settingSaving['commission_item_visibility'] ? 'opacity-50' : '',
+                  ]"
+                  :disabled="settingSaving['commission_item_visibility']"
+                  @click="toggleCommissionItem(item.key)"
+                >
+                  <span
+                    class="absolute left-0 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform"
+                    :class="(parsedJsonSetting<Record<string, boolean>>('commission_item_visibility', {})[item.key] ?? true) ? 'translate-x-[18px]' : 'translate-x-0.5'"
+                  />
+                </button>
+              </div>
+            </div>
+          </div>
+
         </div>
 
+        <!-- イメージタグ削除確認 -->
+        <ConfirmModal
+          :open="tagPendingDelete !== null"
+          title="タグを削除"
+          variant="danger"
+          confirm-label="削除する"
+          cancel-label="やめる"
+          @update:open="(v) => { if (!v) tagPendingDelete = null }"
+          @confirm="confirmRemoveImageTag"
+          @cancel="tagPendingDelete = null"
+        >
+          <p class="text-[13px] text-body">
+            タグ <span class="font-mono font-semibold text-ink">{{ tagPendingDelete }}</span> を削除しますか?
+          </p>
+          <p class="mt-2 text-[11px] text-muted">削除後、creator のアップロード画面の選択肢からも消えます。既存音源に付与済みのタグ自体は残ります。</p>
+        </ConfirmModal>
       </div>
 
     </div>
