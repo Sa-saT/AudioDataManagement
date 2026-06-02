@@ -1,662 +1,391 @@
-# ADM 本番運用ガイド (副業運用の現実性評価)
+# ADM 本番運用ガイド
 
-> 作成: 2026-05-30 / 想定読者: ADM オーナー (=本人)
-> 目的: 「副業で運用監視できるか」を判定するための実務情報を1ページに集約
+> **目的**: 副業で運用監視できるかを判定し、本番化までの道筋を 1 ページにまとめる
+> **対象**: ADM オーナー (= 本人)
+> **lic 暗号化の詳細は別ファイル**: [LIC_ENCRYPTION_DEEP_DIVE.md](LIC_ENCRYPTION_DEEP_DIVE.md)
 
 ---
 
-## 0. 結論 (TL;DR)
+## 0. TL;DR
 
-| 規模 | 副業として可能? | 月額コスト | 週あたり作業時間 |
+| 規模 | 副業可能性 | 月額コスト | 週あたり工数 |
 |---|---|---|---|
-| ~100 ユーザ (β/PoC) | **◎ 余裕** | 1〜3万円 | **2〜4時間** |
-| ~1,000 ユーザ (小規模商用) | **○ 可能** (自動化前提) | 3〜8万円 | **5〜10時間** |
-| ~10,000 ユーザ (中規模) | **△ 専任化推奨** | 15〜40万円 | 20〜30時間 (週末では足りない) |
-| 10,000+ ユーザ | **✗ 本業化必須** | 50万円+ | フルタイム |
+| ~100 ユーザ (β/PoC) | **◎ 余裕** | ¥1,500〜¥4,500 | 2〜4 時間 |
+| ~1,000 ユーザ (小規模商用) | **○ 可能** (自動化前提) | ¥14,000 | 5〜10 時間 |
+| ~10,000 ユーザ (中規模) | **△ 専任化推奨** | ¥150,000〜¥400,000 | 20〜30 時間 |
+| 10,000+ | **✗ 本業化必須** | ¥500,000+ | フルタイム |
 
-**推奨方針:** Cloudflare + Fly.io + Neon + R2 + Sentry の SaaS 寄せで**運用負荷を最小化**し、副業時間を「監視」と「機能改善」に集中させる。
+**推奨スタック**: Cloudflare Pages + Fly.io + Neon + Cloudflare R2 + Sentry
+**設計思想**: 運用負荷を SaaS に寄せて、副業時間を「監視」と「機能改善」に集中させる
 
 ---
 
-## 1. 現状アーキテクチャの確認
+## 1. 前提となるアーキテクチャ
 
-| レイヤ | 技術 | 本番化で要注意 |
+### 1.1 技術スタック
+
+| レイヤ | 技術 | 本番化での注意 |
 |---|---|---|
-| Frontend | Nuxt 4 (Vue 3 + TypeScript) | SSR/SSG, 静的ホスティング向き |
-| Backend | FastAPI (Python 3.10) + uvicorn | CPU/メモリ要件は ffmpeg ストリーミングに依存 |
-| DB | PostgreSQL (JSONB 多用 / sequence / FK 多数) | 14+ 推奨。マネージドサービス向き |
-| 音源処理 | ffmpeg `-c:a copy` (10秒チャンク切り出し) | ストリーミング毎にプロセス起動 → 同時接続数で CPU 食う |
-| 波形描画 | WebGL2 Shader (自前) | クライアント側 |
-| 認証 | JWT + HMAC signed URL (TTL 30秒) | secret rotation 体制要 |
-| ストレージ | ローカル `/storage/{sounds,downloads,orders}/` | **本番では S3 互換必須** (WAV は大きい) |
+| Frontend | Nuxt 4 (Vue 3 + TypeScript) | 静的ホスティング向き |
+| Backend | FastAPI (Python 3.10) + uvicorn | ffmpeg ストリーミング常駐 → CPU 食う |
+| DB | PostgreSQL 14+ | JSONB / sequence / FK 多用、マネージド推奨 |
+| 音源処理 | ffmpeg `-c:a copy` (10 秒チャンク) | 同時接続が増えるとプロセス数で詰まる |
+| 認証 | JWT + HMAC signed URL (TTL 30 秒) | secret rotation の体制要 |
+| ストレージ | ローカル `/storage/{sounds,downloads,orders}/` | **本番では S3 互換必須** |
 | キュー | なし (同期処理) | スケール時に Celery / RQ 検討 |
 
-### ファイルサイズの概算
-- 48k/24bit/stereo PCM: 約 16.5 MB/分
-- 90秒 1曲: ~25 MB
-- ユーザ 1人あたり DL ストレージ容量上限 (lic 設定): 例 1 GB = ~40曲
-- **storage コストが運用コストの主因**
+### 1.2 ADM 固有の制約 — ファイルサイズ
+
+- 48k/24bit/stereo PCM: **約 16.5 MB/分**
+- 90 秒 1 曲: **約 25 MB**
+- ユーザ 1 人あたり DL 上限 (lic 設定): 例 1 GB = ~40 曲
+
+**結果として storage コストが運用コストの主因**になる。これが選定の前提。
 
 ---
 
-## 2. デプロイ先候補 (規模別)
+## 2. デプロイ構成
 
-### 2.0 サービスの用途と役割 (初めての人向け)
+### 2.1 サービスの用途 — 各 SaaS は「何の代わりか」
 
-> 複雑なデプロイが初めての場合、各サービスが「何の代わり / 何をしてくれるか」を理解しておくと、構成図を読むのが楽になる。
-> 一言で言えば: **自前で運用すると週末が消えるものを、SaaS が肩代わりしてくれる。**
+> 複雑なデプロイが初めての場合、各サービスを「自前運用したら何時間消えるか」の視点で理解すると判断が早い。
 
-#### A. アプリ本体のホスティング
+#### A. アプリ本体
 
-| サービス | 役割 (一言で) | ADM での用途 | 自前でやる場合の代替 |
+| サービス | 一言で | ADM での用途 | 自前運用なら |
 |---|---|---|---|
-| **Cloudflare Pages** | 静的サイトを CDN で配る Vercel ライクの無料ホスト | Nuxt をビルドした `index.html` + JS をユーザに高速配信 | nginx + Let's Encrypt + CDN 自前構築 |
-| **Fly.io** | Docker コンテナを世界各地に立てる軽量 PaaS | FastAPI + uvicorn + ffmpeg を「マシン」として動かす (= サーバ実体) | EC2 / VPS に Docker を自前デプロイ |
-| **Neon** | PostgreSQL を「サーバレス」で提供。使ってない時は停止 (= 安い) | DB 本体。ローカルの PostgreSQL をそのまま移す | RDS Aurora や VPS 上の Postgres 自前運用 |
-| **Cloudflare R2** | S3 互換のオブジェクトストレージ。**egress (転送量) が無料** | `/storage/sounds/` `/storage/downloads/` の wav ファイル保管 | EC2 にディスクをアタッチして自前管理 (重い) |
+| **Cloudflare Pages** | 静的サイトを CDN で配る無料ホスト | Nuxt ビルド成果物の配信 | nginx + Let's Encrypt + CDN |
+| **Fly.io** | Docker を世界各地に立てる軽量 PaaS | FastAPI + ffmpeg を動かす本体 | EC2 / VPS + Docker 自前管理 |
+| **Neon** | PostgreSQL のサーバレス版 | DB 本体 (ローカルからそのまま移す) | RDS / VPS の Postgres 自前 |
+| **Cloudflare R2** | S3 互換、**egress 無料** | wav ファイルの保管 + 配信 | EC2 にディスクをアタッチ |
 
-**ADM 特有の注意:** wav ファイル (1曲 20-30MB) を多数配信するため、egress 無料の R2 が **AWS S3 より圧倒的に安い** (S3 は 1GB あたり ¥10〜15、R2 は ¥0)。R2 が無ければこの規模で副業運用は厳しい。
+> **ADM 特有のポイント**: wav (1 曲 25 MB) を多数配信するため、egress 無料の R2 が AWS S3 (¥10〜15/GB) より圧倒的に安い。R2 が無ければこの規模で副業運用は厳しい。
 
-#### B. 監視・通知 (障害に気づくため)
+#### B. 監視・通知
 
-| サービス | 役割 | ADM での用途 | これが無いと困る瞬間 |
-|---|---|---|---|
-| **Sentry** | アプリ内のエラーを自動収集して通知 | FastAPI の例外、Nuxt の JS エラー、stack trace を Slack に飛ばす | ユーザが「壊れてる」と DM するまで気づけない |
-| **Better Stack** | URL を一定間隔で叩いて死活監視 | `https://api.example.com/healthz` を 30 秒おきにチェック、落ちたら通知 | Fly.io 自体が落ちた時、Sentry すら通知できない |
-| **Grafana Cloud (Loki)** | ログを集約して検索可能に | Fly.io が出力する application log を一元保存、grep | 障害調査で「あのとき何が起きた?」が追えない |
-
-#### C. CI/CD・コード管理
-
-| サービス | 役割 | ADM での用途 |
+| サービス | 一言で | 無いと困る瞬間 |
 |---|---|---|
-| **GitHub** | コードのリモートリポジトリ | source of truth、Issue/PR ベースで運用 |
-| **GitHub Actions** | push をトリガに自動でビルド・テスト・デプロイ | `main` に push → 自動で Fly.io デプロイ + alembic migration |
+| **Sentry** | アプリ内のエラー収集 + 通知 | ユーザが DM するまで気づけない |
+| **Better Stack** | URL 死活監視 | Fly.io 自体が落ちたら Sentry も通知不能 |
+| **Grafana Cloud (Loki)** | ログ集約と検索 | 障害調査で「あの時何が起きた?」が追えない |
 
-#### D. 周辺 (必要になったら)
+#### C. CI/CD・開発周辺
 
-| サービス | 役割 | 必要になる時期 |
-|---|---|---|
-| **Stripe / PAY.JP** | クレジットカード決済の代行 + Creator への自動振込 | Creator payout を自動化したくなった時 (現状は手動振込) |
-| **Cloudflare WAF** | 不正アクセス・ボット遮断 | 1,000 ユーザ超え or 攻撃を観測した時 |
+| サービス | 用途 |
+|---|---|
+| **GitHub** | source of truth、Issue/PR 運用 |
+| **GitHub Actions** | push → 自動デプロイ + alembic migration |
 
-#### なぜこの組み合わせか (副業前提の設計判断)
+#### D. 必要になったら追加
 
-1. **すべて managed service** = サーバの OS パッチ・ログローテーション・SSL 証明書更新を**自分でやらない**
-2. **ほぼ全部 Free tier から始まる** = β リリースは月 ¥0 で立ち上げ可能
-3. **段階的にスケール** = Free → 有料の移行が GUI で完結 (移行作業ほぼ不要)
-4. **連携が標準化** = Fly.io ↔ Sentry, GitHub Actions ↔ Fly.io はワンクリックで繋がる
+| サービス | 必要になる時期 |
+|---|---|
+| **Stripe / PAY.JP** | Creator payout を自動化したい時 (現状は手動振込) |
+| **Cloudflare WAF** | 1,000 ユーザ超え or 攻撃を観測した時 |
 
-逆に避けるべき選択肢:
-- **生 EC2 / VPS 1台運用**: OS 管理が必須、副業時間を吸う
-- **AWS フルセット (ECS + RDS + S3 + CloudFront)**: 月 5 万円〜、IAM 設定だけで週末が消える
-- **Vercel + AWS Lambda**: ffmpeg バイナリ同梱が手間 (Fly.io なら Dockerfile に書くだけ)
+#### 選定の原則
 
-#### 学習順序 (初めての人向け)
+1. **すべて managed service** — OS パッチ・ログローテ・SSL 更新を自分でやらない
+2. **Free tier から始められる** — β は月 ¥0 で立ち上げ可能
+3. **段階的スケール** — Free → 有料の移行が GUI で完結
+4. **標準連携** — Fly.io ↔ Sentry, GitHub Actions ↔ Fly.io はワンクリック
 
-1週間目: **GitHub Actions** (CI 自動化に慣れる) → 2週間目: **Fly.io** (`fly deploy` 1コマンドの体験) → 3週間目: **Cloudflare Pages + R2** → 4週間目: **Neon** (DB の本番化) → 最後: **Sentry / Better Stack** (監視は最後に整える)。
+**避けるべき構成**: 生 EC2 / VPS 1 台運用 (OS 管理が時間泥棒) / AWS フルセット (IAM だけで週末消える) / Vercel + Lambda (ffmpeg 同梱が手間)。
 
-**最初から全部やろうとしない**こと。staging 環境を 1 サービスずつ繋ぐのが結果的に早い。
+#### 学習順序 (4 週間プラン)
+
+```
+1週目: GitHub Actions  (CI 自動化に慣れる)
+2週目: Fly.io          (`fly deploy` を体験)
+3週目: Cloudflare Pages + R2
+4週目: Neon            (DB の本番化)
+最後 : Sentry + Better Stack  (監視は仕組みが固まってから)
+```
+
+最初から全部やろうとせず、staging に 1 サービスずつ繋ぐのが結果的に早い。
 
 ---
 
-### 2.1 最小構成 (β / 100 ユーザ)
+### 2.2 規模別の推奨構成
+
+#### β / 100 ユーザ — 最小構成 (約 ¥4,500/月)
 
 ```
-[Cloudflare Pages] ── 静的化された Nuxt
-       │
-[Fly.io] ── FastAPI (uvicorn + ffmpeg バイナリ同梱)
-       │
-[Neon (Postgres serverless)] ─ 0.5 vCPU 共有 / 3 GB
-       │
-[Cloudflare R2] ── /storage/* を S3 互換で
-       │
-[Sentry] (free) + [Better Stack] (uptime)
+Cloudflare Pages ── Fly.io ── Neon ── Cloudflare R2
+                            └─ Sentry + Better Stack
 ```
 
-| 項目 | 内訳 | 月額 (USD/JPY) |
+| 項目 | プラン | 月額 |
 |---|---|---|
-| Cloudflare Pages | 無料枠 | ¥0 |
-| Fly.io | shared-cpu-1x 256MB ($1.94/mo)× 2 + outbound 100GB | **¥1,500** |
-| Neon | Free tier (0.5 vCPU / 3GB) | ¥0 |
-| Cloudflare R2 | 100GB (audio含む) / egress 無料 | ¥250 |
-| Sentry | Developer plan | ¥0 |
-| Better Stack | Uptime 10サイト | ¥0 |
-| **合計** | | **¥1,750/月** |
+| Cloudflare Pages | Free | ¥0 |
+| Fly.io | shared-cpu-1x 256MB × 2 + outbound 100GB | ¥1,500 |
+| Neon | **Launch ($19/mo)** — Free tier は suspend するので本番は不可 | ¥3,000 |
+| Cloudflare R2 | 100GB | ¥250 |
+| Sentry / Better Stack | Free | ¥0 |
+| **合計** | | **約 ¥4,500/月** |
 
-**注意:** Neon free tier は inactivity で suspend されるので、本番では Launch plan ($19/mo) 推奨。
-合計 **約 4,500円/月** が現実線。
-
-### 2.2 小規模商用 (1,000 ユーザ / プロアマ層)
+#### 1,000 ユーザ — 小規模商用 (約 ¥14,000/月)
 
 ```
-[Cloudflare Pages]
-       │
-[Fly.io] ── primary: shared-cpu-2x 512MB × 3 リージョン (auto-scale)
-       │
-[Neon Launch plan] ($19/mo, 1GB compute, autoscaling)
-       │
-[Cloudflare R2] ── 500GB-1TB
-       │
-[Sentry Team] + [Grafana Cloud Free] + [Better Stack]
+Cloudflare Pages ── Fly.io (multi-region, auto-scale)
+                       │
+                    Neon Launch + R2 500GB-1TB
+                       │
+                    Sentry Team + Grafana Cloud Free
 ```
 
 | 項目 | 月額 |
 |---|---|
-| Fly.io | ¥4,500 (CPU 上げ + マルチリージョン) |
+| Fly.io (CPU 2x × 3 リージョン) | ¥4,500 |
 | Neon Launch | ¥3,000 |
 | R2 (500GB) | ¥1,200 |
 | Sentry Team | ¥3,500 |
 | Backup ストレージ (B2 cold) | ¥1,000 |
-| ドメイン / 証明書 / 雑費 | ¥1,000 |
+| ドメイン / 雑費 | ¥1,000 |
 | **合計** | **約 ¥14,000/月** |
 
-### 2.3 中規模 (10,000 ユーザ / プロ層)
+#### 10,000 ユーザ — 中規模 (¥150k〜¥400k/月)
 
-- 本格的に AWS / GCP を検討
+副業の範囲外。本格的に検討する場合:
+
 - ECS Fargate / GKE Autopilot
 - RDS Aurora Serverless / Cloud SQL
 - S3 + CloudFront (or R2 + Cloudflare CDN)
-- ElastiCache (Redis) でセッション/レート制限
-- Sentry + Datadog or Grafana Stack
-- 月額 **15〜40万円**、構築/保守の専門知識必須
+- ElastiCache (Redis) でセッション・レート制限
+- Datadog or Grafana Stack
 
-### 2.4 国内ホスティング (法的・心理的要件)
+### 2.3 国内ホスティング (法的・心理的要件)
 
 | サービス | 用途 | コメント |
 |---|---|---|
-| さくらのクラウド / ConoHa VPS | Backend + Storage | 一台運用で 5,000-15,000円/月、国内決済・サポート |
+| さくらのクラウド / ConoHa VPS | Backend + Storage | 1 台運用で ¥5,000〜¥15,000/月、国内サポート |
 | AWS Tokyo region | 全部 | プロ向け、海外サービス連携多い |
-| Cloudflare (東京 PoP) | CDN / Pages | 日本向けのレイテンシ良好 |
+| Cloudflare (東京 PoP) | CDN / Pages | 日本向けレイテンシ良好 |
 | Stripe Japan / PAY.JP | Creator payout (将来) | 国内振込・税務対応 |
 
-→ クリエイター/ユーザが日本中心なら **Cloudflare + 国内 PostgreSQL (Neon Asia region)** がレイテンシ・コスト両面で有利。
+ユーザが日本中心なら **Cloudflare + Neon Asia region** がレイテンシ・コスト両面で有利。
 
 ---
 
-## 3. デプロイ方法 (推奨フロー)
+## 3. デプロイ運用
 
-### 3.1 推奨スタック (副業前提)
+### 3.1 CI/CD パイプライン
 
 ```
-[GitHub] (main push)
-   │
-   ├─→ [GitHub Actions]
-   │      ├─ Frontend: pnpm build → Cloudflare Pages デプロイ
-   │      └─ Backend: Docker build → Fly.io deploy + alembic upgrade
-   │
-   └─→ [Sentry release tracking] (自動 sourcemap upload)
+GitHub (main push)
+   ├─ GitHub Actions
+   │     ├─ Frontend: pnpm build → Cloudflare Pages
+   │     └─ Backend:  Docker build → Fly.io deploy + alembic upgrade
+   └─ Sentry release tracking (sourcemap 自動 upload)
 ```
 
-### 3.2 自動化必須項目
+### 3.2 環境分離 (最低 3 つ)
 
-| 自動化 | 何を | なぜ副業に必須 |
+- **local** — 開発、`init_db.sh` で構築
+- **staging** — 本番と同構成、独立 DB、自分の音源テスト場
+- **production** — 顧客向け
+
+> staging で常時検証する体制が無いと、本番デプロイのたびに緊張する。これは副業時間を一番削る。
+
+### 3.3 自動化必須項目
+
+| 自動化 | 内容 | 副業に必須な理由 |
 |---|---|---|
-| **CI/CD** | push → 自動デプロイ | 手動デプロイは平日夜に時間取られる |
-| **DB マイグレーション** | `alembic upgrade head` を deploy 時に実行 | 手作業は事故の元 |
-| **DB バックアップ** | Neon は自動 / 自前なら pg_dump cron | 災害時に「何時に戻せるか」を明確化 |
-| **シークレット管理** | Fly.io secrets / GitHub Actions secrets | `.env` のミスコミット事故防止 |
-| **証明書更新** | Cloudflare 自動 (Let's Encrypt) | 期限切れで全停止する |
-| **ログ集約** | Fly logs → Grafana Loki / Sentry | 1日1回ダッシュボード見るだけで済む |
-
-### 3.3 環境分離
-
-最低でも 3 つ:
-- **local** (開発、`init_db.sh` で構築)
-- **staging** (本番と同構成、独立 DB、 staging.example.com)
-- **production** (顧客向け)
-
-staging を「**自分の音源テスト場**」として運用し、user 影響なく検証できる体制が必須。
+| CI/CD | push → 自動デプロイ | 手動デプロイは平日夜を吸う |
+| DB マイグレーション | deploy 時に `alembic upgrade head` | 手作業は事故の元 |
+| DB バックアップ | Neon は自動 / 自前なら pg_dump cron | 「何時に戻せるか」を明確化 |
+| シークレット管理 | Fly.io secrets / GitHub Actions secrets | `.env` ミスコミット防止 |
+| 証明書更新 | Cloudflare 自動 (Let's Encrypt) | 期限切れで全停止する |
+| ログ集約 | Fly logs → Grafana Loki / Sentry | 1 日 1 回ダッシュボード見るだけで済む |
 
 ---
 
-## 4. 運用監視タスク (頻度別)
+## 4. 運用監視
 
-> ADM は **音源 + 課金 + creator payout** が絡むので、純粋な web app より監視項目は多い。
+### 4.1 監視ツール構成
 
-### 4.1 日次 (5〜15分)
+```
+[Cloudflare Pages: Nuxt]
+    ├─ Sentry Browser SDK ─→ JS エラー / Vitals
+    └─ Cloudflare Web Analytics
 
-| 項目 | 確認場所 | 自動化レベル |
-|---|---|---|
-| エラー件数 | Sentry ダッシュボード (Slack 通知設定) | アラート受信のみ |
-| Uptime | Better Stack | アラート受信のみ |
-| 新規 ユーザ / 取引数 | Admin > ログタブ (自前) | 手動アクセス |
-| 失敗した DL / payout | Admin > Payout タブ + Sentry | 異常時のみ対応 |
-| ストリーミング失敗率 | Sentry → ffmpeg error | アラート受信のみ |
+[Fly.io: FastAPI]
+    ├─ Sentry Python SDK ─→ 例外 / Transactions
+    ├─ Better Stack ─→ /healthz チェック
+    └─ Fly logs ─→ Grafana Loki
 
-**所要時間:** **平日 5分 / 異常時 30分〜2時間**
+[Neon: Postgres]
+    ├─ Neon Console ─→ slow query / connections
+    └─ pg_dump (自動 + 7 日保持)
 
-### 4.2 週次 (30〜90分)
+[Cloudflare R2]
+    └─ R2 Analytics ─→ egress / 容量
 
-| 項目 | 作業内容 |
+通知: Sentry / Better Stack / Fly health ─→ Slack or LINE bot
+```
+
+**ツール料金 (1,000 ユーザ規模)**: ¥3,500〜¥7,000/月 (Sentry Team + Better Stack Lite + Grafana Free + Cloudflare Free/R2)
+
+### 4.2 頻度別タスク
+
+#### 日次 (平日 5 分 / 異常時 30 分〜2 時間)
+
+| 項目 | 確認場所 |
 |---|---|
-| ストレージ使用量推移 | R2 ダッシュボード、容量上限まで余裕の確認 |
-| トークン消費パターン | Admin > ログ > User タブで monthly_quota の枯渇傾向確認 |
-| クリエイター活動 | Admin > ログ > Creator タブで離脱兆候 (赤シグナル) 確認 |
-| 未対応の Commission | Admin > Commission > open / reviewing 長期滞留チェック |
-| Payout pending 残高 | Admin > Payout で未払い分を確認 (creator に振込) |
-| バックアップ復元テスト | 1ヶ月に1回、staging に DB スナップショット復元 |
+| エラー件数 | Sentry (Slack 通知) |
+| Uptime | Better Stack |
+| 新規ユーザ / 取引 | Admin > ログタブ |
+| 失敗 DL / payout | Admin > Payout + Sentry |
+| ストリーミング失敗率 | Sentry → ffmpeg error |
 
-**所要時間:** **週 1〜2時間**
+#### 週次 (1〜2 時間)
 
-### 4.3 月次 (3〜6時間)
-
-| 項目 | 作業内容 |
+| 項目 | 内容 |
 |---|---|
-| 依存パッケージ更新 | `pnpm update` / `pip-compile` 、staging で動作確認 |
-| OS / ランタイム patch | Fly.io image rebuild、Python マイナーバージョン |
-| パフォーマンスレビュー | Sentry traces で slow query / P99 latency 上位確認 |
-| コスト集計 | 各 SaaS 請求書、ストレージ増加率から半年後コスト試算 |
-| セキュリティ点検 | 認証ログ異常、未承認の admin 操作、不正 DL |
-| HMAC secret ローテーション | 半年〜1年に1回 (signed URL の鍵) |
-| Creator payout 振込 | 銀行振込 (将来 Stripe Connect 等で自動化) |
-| 法務 / 規約レビュー | 利用規約・プライバシーポリシーの整合 |
+| ストレージ使用量推移 | R2 ダッシュボード、上限の余裕確認 |
+| トークン消費パターン | Admin > ログ > User タブで枯渇傾向 |
+| クリエイター活動 | Admin > ログ > Creator タブで赤シグナル |
+| 未対応 Commission | open / reviewing 長期滞留 |
+| Payout pending 残高 | 未払い分を確認 (creator に振込) |
+| バックアップ復元テスト | 月 1 回、staging に DB スナップショット復元 |
 
-**所要時間:** **月 4〜6時間**
+#### 月次 (4〜6 時間)
 
-### 4.4 四半期 (4〜8時間)
-
-| 項目 | 作業内容 |
+| 項目 | 内容 |
 |---|---|
-| Disaster Recovery 演習 | 「本番 DB 全消失」想定で復旧時間計測 (RTO/RPO 確認) |
-| キャパシティプランニング | 6ヶ月後の ユーザ / storage / 帯域予測、上位プラン移行検討 |
-| 機能改善ロードマップ | ユーザフィードバック集約、優先度付け |
-| 監視ルール見直し | アラート閾値、通知先、ノイズ削減 |
-| Penetration test (簡易) | OWASP ZAP / `pip-audit` / `npm audit` |
+| 依存パッケージ更新 | `pnpm update` / `pip-compile`、staging 検証 |
+| OS / ランタイム patch | Fly.io image rebuild |
+| パフォーマンスレビュー | Sentry traces で slow query / P99 |
+| コスト集計 | SaaS 請求書、ストレージ増加率 |
+| セキュリティ点検 | 認証ログ異常、不正 DL |
+| HMAC secret ローテーション | 半年〜1 年に 1 回 |
+| Creator payout 振込 | 銀行振込 (将来 Stripe Connect 自動化) |
+| 法務 / 規約レビュー | 利用規約・プラポリ整合 |
 
-**所要時間:** **四半期 6〜8時間**
+#### 四半期 (6〜8 時間)
 
-### 4.5 年次 (1〜2日)
+| 項目 | 内容 |
+|---|---|
+| Disaster Recovery 演習 | 「DB 全消失」想定で RTO/RPO 計測 |
+| キャパシティプランニング | 6 ヶ月後の ユーザ / storage / 帯域予測 |
+| 機能改善ロードマップ | ユーザフィードバック集約 |
+| 監視ルール見直し | 閾値・通知先・ノイズ削減 |
+| 簡易 Penetration test | OWASP ZAP / `pip-audit` / `npm audit` |
 
-- 法定書類関連 (Creator 支払いの源泉徴収 / 確定申告関連の支払い証憑整理)
+#### 年次 (1〜2 日)
+
+- 法定書類 (Creator 支払いの源泉徴収 / 確定申告関連)
 - アーキテクチャ全面レビュー
 - 利用規約改定
-- 主要ライブラリの **メジャー** バージョン更新計画
+- 主要ライブラリのメジャーバージョン更新計画
+
+### 4.3 クリティカルパス (絶対やる項目)
+
+> これらを満たさない場合は本番運用すべきでない。
+
+1. **DB バックアップ** (自動 + 月 1 回復元テスト)
+2. **HMAC / JWT secret の漏洩防止** (環境変数 / シークレット管理)
+3. **Uptime 監視 + 即時通知**
+4. **Sentry によるエラー監視**
+5. **Payout / 課金処理の整合性チェック**
+6. **証明書自動更新の確認**
+7. **依存ライブラリの脆弱性通知購読** (Dependabot / Snyk)
 
 ---
 
-## 5. 監視ツール構成 (副業向け推奨)
+## 5. 副業として現実的か
 
-```
-┌─────────────── Cloudflare Pages ───────────────┐
-│ Frontend (Vue/Nuxt)                            │
-│  ├─ Sentry Browser SDK ─→ エラー / Vitals      │
-│  └─ Cloudflare Web Analytics (Free)            │
-└────────────────────────────────────────────────┘
-                  │
-                  ▼ API
-┌─────────────────── Fly.io ─────────────────────┐
-│ Backend (FastAPI)                              │
-│  ├─ Sentry Python SDK ─→ エラー / Transactions │
-│  ├─ Better Stack uptime ─→ /healthz チェック   │
-│  └─ Fly logs ──→ Grafana Loki (Free 50GB)     │
-└────────────────────────────────────────────────┘
-                  │
-                  ▼ SQL
-┌─────────────────── Neon ───────────────────────┐
-│ PostgreSQL                                     │
-│  ├─ Neon Console ──→ slow query / connections  │
-│  └─ pg_dump (自動 + 7日保持)                    │
-└────────────────────────────────────────────────┘
-                  │
-                  ▼ object
-┌──────────────── Cloudflare R2 ─────────────────┐
-│ /storage/{sounds,downloads,orders}/            │
-│  └─ R2 Analytics ──→ egress / 容量             │
-└────────────────────────────────────────────────┘
+### 5.1 副業を成立させる 3 原則
 
-┌─── 通知 ───┐
-│ Slack /    │ ← Sentry / Better Stack / Fly health
-│ LINE bot   │
-└────────────┘
-```
-
-### 月額コスト 目安 (1,000 ユーザ 規模)
-
-| ツール | プラン | 月額 |
-|---|---|---|
-| Sentry | Team (50k events) | ¥3,500 |
-| Better Stack | Free → 必要時 Lite | ¥0〜¥2,000 |
-| Grafana Cloud | Free | ¥0 |
-| Cloudflare | Free + R2 | ¥1,500 |
-| Slack | Free | ¥0 |
-
-→ 監視ツールは **3,500〜7,000円/月** で揃う。
-
----
-
-## 6. 副業として現実的か (workload 評価)
-
-### 6.1 副業ベース (本業あり、週末+夜)
-
-| 想定 ユーザ 数 | 必要工数/週 | 副業可能度 | コメント |
-|---|---|---|---|
-| 〜100 | 2〜4時間 | **◎** | β/趣味延長レベル、休日に趣味でも回る |
-| 100〜500 | 4〜6時間 | **◎** | 平日30分 × 5 + 週末2時間で完結 |
-| 500〜1,000 | 5〜10時間 | **○** | 自動化を徹底すれば可能、ノイズ削減が肝 |
-| 1,000〜5,000 | 10〜20時間 | **△** | 仕事帰り後に必ず1時間確保が必要、燃え尽きリスク |
-| 5,000+ | 20時間+ | **✗** | 本業化を視野に入れるべき、または共同運営者を |
-
-### 6.2 副業を成立させる「3つの設計原則」
-
-1. **アラート駆動運用にする**
-   - 「ダッシュボードを見に行く」のは週次のみ
-   - 異常時にだけ Slack/LINE 通知が来る状態を作る
+1. **アラート駆動運用**
+   - ダッシュボード巡回は週次のみ
+   - 異常時にのみ Slack/LINE 通知が来る状態を作る
    - 平日は通知が来なければ何もしない
 
-2. **すべてを SaaS に寄せる**
+2. **すべて SaaS に寄せる**
    - 自前運用は学習コスト + 時間泥棒
    - 数千円の課金で数時間/週 を買う発想
    - 特にメリット大: DB (Neon), Storage (R2), Errors (Sentry)
 
 3. **手作業を毎週レビューして即座に潰す**
-   - 「先週これに30分かかった」→ 翌週までにスクリプト化
+   - 「先週これに 30 分かかった」→ 翌週までにスクリプト化
    - 月次タスクは全部 cron / Actions に
-   - 自分が病気で寝込んでも 1週間は止まらない状態を目指す
+   - 自分が寝込んでも 1 週間止まらない状態を目指す
 
-### 6.3 副業者にとってのリスク
+### 5.2 想定スケジュール (1 週間)
+
+```
+月曜 朝    5 分  Slack 通知確認 (週末分)
+火-金 夜  5 分  Sentry サマリ (Slack ダイジェスト)
+土曜 朝   60 分 週次レビュー: ストレージ / payout / Commission 滞留
+土曜 午後 30 分 軽い改善 (issue 1 つ消化)
+日曜      休み
+
+→ 週 約 100 分。月次 (4 時間) を加えて月 約 11 時間。
+→ 売上が月 ¥60,000〜¥100,000 を超えるあたりで副業として割に合う。
+```
+
+### 5.3 主要リスクと緩和策
 
 | リスク | 緩和策 |
 |---|---|
-| **Creator payout の遅延** = 信用毀損 | Stripe Connect / PAY.JP で自動化、最低でも月1回固定日 |
-| **障害時の対応遅延** | Better Stack + Slack 通知 + 「24時間以内対応」をSLA明記 |
-| **音源データ消失** | DB / R2 両方の バックアップ + 月次復元テスト |
-| **不正利用 (大量DL/ボット)** | Cloudflare WAF + Rate limit + 異常検知 |
-| **本人の体調不良で停止** | Runbook (本ドキュメント) を共有できる形に整備、副管理者を1人確保 |
-| **法的問題 (著作権 / 個人情報)** | 利用規約整備、DMCA 対応窓口、顧問弁護士 (年契約 月1万円〜) |
-
-### 6.4 想定スケジュール例 (副業者の1週間)
-
-```
-月曜 朝   5分  Slack 通知確認 (週末分)
-火-金 夜  5分  Sentry サマリ確認 (Slack ダイジェスト)
-土曜 朝  60分  週次レビュー: ストレージ / payout / Commission 滞留
-土曜 午後 30分  軽い改善 (issue から1つ消化)
-日曜       (休み)
-
-→ 週 約 100分。月次 (4時間) と合わせて 月 約 11時間。
-   時給換算 ¥3,000 として ¥33,000/月 の労働価値。
-```
-
-→ **売上が月 6〜10万円**を超えるあたりで副業として割に合う。
+| Creator payout の遅延 = 信用毀損 | Stripe Connect / PAY.JP で自動化、最低でも月 1 回固定日 |
+| 障害時の対応遅延 | Better Stack + Slack 通知 + 「24 時間以内対応」を SLA 明記 |
+| 音源データ消失 | DB / R2 両方のバックアップ + 月次復元テスト |
+| 不正利用 (大量 DL / ボット) | Cloudflare WAF + Rate limit + 異常検知 |
+| 本人の体調不良で停止 | Runbook (本ドキュメント) 共有可能化、副管理者 1 人確保 |
+| 法的問題 (著作権 / 個人情報) | 利用規約整備、DMCA 対応窓口、顧問弁護士 (年契約 月 ¥10,000〜) |
 
 ---
 
-## 7. クリティカルパス: 「これだけは絶対やる」
-
-優先順:
-
-1. **DB バックアップ** (自動 + 復元テスト月1回)
-2. **HMAC / JWT secret の漏洩防止** (環境変数 / シークレット管理)
-3. **Uptime 監視 + 即時通知**
-4. **Sentry によるエラー監視**
-5. **Payout / 課金処理の整合性**
-6. **証明書 (SSL/TLS) 自動更新の確認**
-7. **依存ライブラリの **脆弱性** 通知購読** (Dependabot / Snyk)
-
-これらを満たさない場合は本番運用すべきでない。
-
----
-
-## 8. 副業運用 → 本業化の判断基準
+## 6. 副業 → 本業化の判断基準
 
 | 指標 | 副業継続 | 本業化検討 |
 |---|---|---|
-| MRR (月額売上) | 〜30万円 | 50万円〜 |
-| アクティブユーザ | 〜1,000人 | 5,000人〜 |
-| 障害頻度 | 月1回以下 | 週1回以上 |
-| 自分の稼働 | 週10時間以下 | 週15時間以上が常態化 |
-| Creator 数 | 〜100人 | 300人〜 (信頼確保が重い) |
-| サポート問い合わせ | 月10件以下 | 月50件以上 |
+| MRR (月額売上) | 〜30 万円 | 50 万円〜 |
+| アクティブユーザ | 〜1,000 人 | 5,000 人〜 |
+| 障害頻度 | 月 1 回以下 | 週 1 回以上 |
+| 自分の稼働 | 週 10 時間以下 | 週 15 時間以上が常態化 |
+| Creator 数 | 〜100 人 | 300 人〜 (信頼確保が重い) |
+| サポート問い合わせ | 月 10 件以下 | 月 50 件以上 |
 
-**意思決定:** 上記のいずれか3つ以上が「本業化」側に振れたら、専任化 or 共同運営者の確保 を真剣に検討。
+**意思決定**: 上記のうち **3 つ以上が本業化側に振れたら**、専任化 or 共同運営者の確保を真剣に検討。
 
 ---
 
-## 9. 学習コスト (副業前提で覚えるべきこと)
+## 7. 学習コスト + 次のアクション
+
+### 7.1 必要な学習領域
 
 | 領域 | 必要レベル | 学習目安 |
 |---|---|---|
-| Docker / コンテナ基礎 | 読み書き可 | 1週間 |
-| Cloudflare / Fly.io / Neon | 管理画面操作 | 各1日 |
+| Docker / コンテナ基礎 | 読み書き可 | 1 週間 |
+| Cloudflare / Fly.io / Neon | 管理画面操作 | 各 1 日 |
 | Sentry / Better Stack | ダッシュボード読解 | 各半日 |
-| PostgreSQL 運用 | バックアップ / リストア / EXPLAIN | 1週間 |
+| PostgreSQL 運用 | バックアップ / リストア / EXPLAIN | 1 週間 |
 | ネットワーク / TLS | 概念理解 | 数日 |
-| セキュリティ基礎 (OWASP) | チェックリスト運用 | 1週間 |
+| セキュリティ基礎 (OWASP) | チェックリスト運用 | 1 週間 |
 
-→ 既存スキルがあれば **2〜4週間で運用可能** な水準に到達できる。
+→ 既存スキルがあれば **2〜4 週間で運用可能** な水準に到達できる。
 
----
+### 7.2 本番化に向けた次のアクション
 
-## 10. 終わりに
-
-本アプリは **音源データ管理 + 課金 + creator 支払い** が絡むため、純粋な Web アプリより監視項目は多いものの、SaaS を組み合わせれば **副業範囲で完全に運用可能** な設計になっている (peaks v2 / signed URL / activity_logs / Commission 状態機械が独立しているため、自動化しやすい)。
-
-**重要:** β リリース直後の 1〜3ヶ月は ユーザ 数が少なくても**監視体制の確立**に時間を使うこと。それを乗り越えれば、その後は本ドキュメントの「日次5分 + 週末1時間」で回せる。
-
----
-
-**次のアクション (本番化に向けて):**
 1. このドキュメントを基に「最小構成」での staging 環境構築 → 動作確認
 2. Sentry / Better Stack のアカウント作成 + 統合テスト
-3. Cloudflare R2 への storage 移行 (ORDER_SPEC §9.1: 9-A8)
+3. Cloudflare R2 への storage 移行 (`ORDER_SPEC.md §9.1: 9-A8`)
 4. CI/CD パイプライン (GitHub Actions) の整備
-5. **β リリース対象ユーザを 10〜20人に絞って** 1ヶ月運用、本ガイドの所要時間を実測
+5. **β リリース対象を 10〜20 人に絞って** 1 ヶ月運用、本ガイドの所要時間を実測
 
-実測した値が本ガイドと乖離していたら、その時点で構成見直し。
+> **重要**: β リリース直後の 1〜3 ヶ月は ユーザ数が少なくても**監視体制の確立**に時間を使う。それを越えれば日次 5 分 + 週末 1 時間で回せるようになる。
 
----
-
-## 11. licファイルの暗号化 — リテラシーと実装指針
-
-> 作成: 2026-05-31 / 目的: 実装前に「何を守るか」と「どの技術が適切か」を整理する
+実測値が本ガイドと乖離していたら、その時点で構成見直し。
 
 ---
 
-### 11.1 現状の問題と脅威モデル
+## 付録: 関連ドキュメント
 
-#### 現在の lic ファイル
-
-```json
-{
-  "username": "saaaaa",
-  "role": "licensee",
-  "licenseId": "LIC-2026-0001",
-  "monthlyQuotaTokens": 18000,
-  "issuedAt": "2026-05-26T00:00:00Z",
-  "signature": "base64(HMAC-SHA256(...))"
-}
-```
-
-テキストエディタで開けば全フィールドが読める。
-
-#### 何が守れていて、何が守れていないか
-
-| 脅威 | 現状の対応 | 不足 |
-|---|---|---|
-| **改ざん** (role を admin に書き換える) | HMAC署名で検知 → サーバが 401 | ✅ すでに守れる |
-| **リプレイ** (他人の lic を使う) | DB 側 `revoked_at` チェック | ✅ すでに守れる |
-| **内容の盗み見** (quota / role を確認される) | **なし。JSON 平文なので丸見え** | ❌ 暗号化が必要 |
-| **フォーマット解析** (自作クライアントで形式を模倣) | **なし。構造が自明** | △ バイナリ化で緩和 |
-| **鍵の漏洩** (HMAC key が流出) | 環境変数管理のみ | △ key rotation で緩和 |
-
-**結論:** 改ざん・リプレイはすでに防げている。追加で守るのは **「内容の隠蔽」と「フォーマット難読化」**。
-
----
-
-### 11.2 一般的なアプローチ (技術カタログ)
-
-#### A. HMAC 署名のみ (現状)
-
-```
-[JSON平文] + [HMAC-SHA256 署名]
-```
-
-- 改ざん検知 ✅ / 内容秘匿 ❌
-- Base64 デコードすれば誰でも読める
-- Vercel / Stripe 等の webhook 検証はこの方式
-
-#### B. JWT (JSON Web Token) — 署名付き、非暗号化
-
-```
-eyJhbGciOiJIUzI1NiJ9.eyJ1c2VybmFtZSI6InNhYWFhYSIsInJvbGUiOiJ1c2VyIn0.xxxx
-```
-
-- 3つのドット区切り: `Header.Payload.Signature`
-- Payload は Base64URL エンコードのみ → **デコードすれば読める**
-- 署名アルゴリズム: HS256 (HMAC) / RS256 (RSA) / ES256 (ECDSA) / EdDSA (Ed25519)
-- 現状の HMAC 署名 JSON を JWT 形式にしただけで内容秘匿にはならない
-- **用途:** 現状から移行する最小コストの標準化。ツールが豊富 (pyjwt, jose)
-
-#### C. JWE (JSON Web Encryption) — 暗号化 JWT
-
-```
-eyJhbGciOiJSU0EtT0FFUCIsImVuYyI6IkEyNTZHQ00ifQ.xxxx.xxxx.xxxx.xxxx
-```
-
-- 5つのドット区切り: `Header.EncryptedKey.IV.Ciphertext.Tag`
-- **Payload が完全に暗号化されており、鍵なしでは読めない**
-- アルゴリズム例:
-  - `RSA-OAEP` + `A256GCM`: RSA で鍵を暗号化、AES-GCM でペイロードを暗号化
-  - `ECDH-ES` + `A256GCM`: 楕円曲線 DH で鍵合意、AES-GCM で暗号化 (鍵配送が不要)
-- Python: `joserfc` / `python-jose` / `authlib`
-- **用途:** JWT の延長線で内容を隠したい場合の最有力候補
-
-#### D. 対称暗号 AES-256-GCM (バイナリ形式)
-
-```
-[8B magic "ADMLIC\x01\x00"] [12B nonce] [N bytes ciphertext] [16B GCM tag]
-```
-
-- **AES-GCM**: Authenticated Encryption。暗号化 + 改ざん検知を同時に提供
-- nonce (IV) は暗号化ごとにランダム生成 (12 byte / 96 bit)
-- 鍵は 256 bit (32 byte)、環境変数 `ADM_LIC_ENC_KEY` に保管
-- バイナリなので `.lic` を開いても文字化けのみ
-- Python: `cryptography` パッケージの `AESGCM` クラス (3行で実装可)
-
-```python
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-import os
-
-KEY = bytes.fromhex(os.environ["ADM_LIC_ENC_KEY"])  # 32 bytes
-MAGIC = b"ADMLIC\x01\x00"
-
-def encrypt_lic(payload: bytes) -> bytes:
-    nonce = os.urandom(12)
-    ct = AESGCM(KEY).encrypt(nonce, payload, MAGIC)  # MAGIC = AAD
-    return MAGIC + nonce + ct  # GCM tag は ct の末尾 16 bytes に含まれる
-
-def decrypt_lic(blob: bytes) -> bytes:
-    assert blob[:8] == MAGIC
-    nonce, ct = blob[8:20], blob[20:]
-    return AESGCM(KEY).decrypt(nonce, ct, MAGIC)
-```
-
-- **用途:** 完全バイナリ化 + 内容秘匿が最優先な場合
-
-#### E. 非対称署名 Ed25519 (ソフトウェアライセンスの定番)
-
-```
-[JSON平文 または CBOR] + [Ed25519 署名 64 bytes]
-```
-
-- 秘密鍵 (server only) で署名、公開鍵 (アプリに埋め込み) で検証
-- **内容は読めるが偽造が数学的に不可能** (HMAC より鍵管理が楽: 公開鍵は漏れても問題ない)
-- JetBrains, HashiCorp, 多くの OSS 商用ライセンスがこの方式
-- Python: `cryptography` の `Ed25519PrivateKey`
-
-#### F. ハードウェアバインド + オンライン検証 (エンタープライズ DRM)
-
-- MAC アドレス / マシン ID をハッシュして lic に埋め込み
-- 起動のたびにサーバに ping して有効性確認
-- Adobe Creative Cloud / Microsoft 365 がこの方式
-- **ADM のユースケースには過剰** (副業規模には不要)
-
----
-
-### 11.3 実務での配布ファイルの扱い
-
-#### lic ファイルを「秘密」にすべきか
-
-lic ファイルはユーザが持つものなので「秘密」にはできない。設計の核心は:
-
-> lic ファイルはユーザが手元に持つが、**サーバ側の検証なしに役に立たない**設計にする。
-
-具体的には:
-
-1. **ライセンスの権限はサーバ DB が master** — lic ファイルの内容だけでは何もできない
-2. `/auth/activate` での検証時にのみ lic を使い、以降は JWT セッションに切り替える
-3. 失効 (`revoked_at`) は DB 側で管理し、lic ファイル自体を無効化できる
-
-この設計ができていれば、**lic の暗号化は「UX としての格」と「内容漏洩への備え」**であり、セキュリティの根幹ではない。
-
-#### 配布チャネルの注意点
-
-| チャネル | リスク | 対策 |
-|---|---|---|
-| メール添付 | 盗み見、誤送信 | 暗号化で中身を隠す / TLS 前提 |
-| DM (Slack/LINE) | ログに残る | 短命 URL (signed URL で 1回のみ DL) |
-| Admin UI からダウンロード | 正規フロー | ✅ 問題なし |
-| 再利用 (他人に渡す) | licenseId 共有 | DB 側で「最終アクティベート日時/IP」を記録し異常検知 |
-
----
-
-### 11.4 ADM への推奨実装案
-
-#### フェーズ分け
-
-| フェーズ | 内容 | 工数 |
-|---|---|---|
-| **Phase A** | JSON + HMAC 署名 (読める) | 完了済み |
-| **Phase B** | JWE (ECDH-ES + A256GCM) に移行。内容暗号化、形式は標準 JWT | **完了済み (2026-06-01)** |
-| **Phase C (本番前)** | バイナリ magic header 付与 (AES-GCM blob) + Ed25519 署名の二重構造 | 2〜3日 (未着手) |
-
-#### Phase B 推奨設計 (JWE)
-
-```
-# lic ファイルの内容
-eyJhbGciOiJFQ0RILUVTIiwiZW5jIjoiQTI1NkdDTSIsImtpZCI6ImFkbS12MSJ9.
-.xxxxxxxx.xxxxxxxxxxxxxxxx.xxxxxxxx
-```
-
-- アルゴリズム: `ECDH-ES` + `A256GCM` (鍵配送なし、公開鍵だけでも暗号化可能)
-- サーバの EC 秘密鍵で復号、lic 発行時は EC 公開鍵で暗号化
-- ファイルを開いても `eyJ...` の文字列のみ (JWT と同じ見た目だが復号できない)
-- 既存の `licenseId` + `signature` フィールドは JWE の claims に統合
-
-```python
-# 発行 (authlib を使う例)
-from authlib.jose import JsonWebEncryption
-
-jwe = JsonWebEncryption()
-header = {"alg": "ECDH-ES", "enc": "A256GCM", "kid": "adm-v1"}
-token = jwe.serialize_compact(header, payload_bytes, ec_public_key)
-
-# 検証 (/auth/activate)
-data = jwe.deserialize_compact(token, ec_private_key)
-```
-
-#### 鍵管理
-
-```
-# 鍵生成 (初回のみ)
-from cryptography.hazmat.primitives.asymmetric.ec import generate_private_key, SECP256R1
-private_key = generate_private_key(SECP256R1())
-# PEM を環境変数 ADM_LIC_EC_PRIVATE_KEY に保存
-# public_key は管理 UI に埋め込み (漏れても暗号化には使えるが復号できない)
-```
-
-- **鍵ローテーション:** `kid` (Key ID) で世代管理。古い lic は旧鍵で復号できるよう旧鍵も保持。
-- **鍵の保管場所:** Fly.io secrets / GitHub Actions secrets / Vault。`.env` に直書き禁止。
-
----
-
-### 11.5 実装チェックリスト
-
-実装前に確認すること:
-
-- [ ] 鍵を環境変数で管理し、コードに埋め込まない
-- [ ] nonce / IV は暗号化ごとに必ずランダム生成 (使い回し = 致命的な脆弱性)
-- [ ] GCM tag / JWE の整合性検証が失敗したら **必ず 401 を返す** (サイレント成功禁止)
-- [ ] 旧フォーマット (JSON 平文) の lic も移行期間中は受け入れる仕組み (`schemaVersion` で判別)
-- [ ] 鍵ローテーション手順を Runbook に記載 (kid + 旧鍵の保持期間)
-- [ ] バックアップに lic 発行用の EC 秘密鍵のバックアップを含める
+- **lic ファイル暗号化の仕組みと実装**: [LIC_ENCRYPTION_DEEP_DIVE.md](LIC_ENCRYPTION_DEEP_DIVE.md)
+- **lic ファイル仕様**: [LICENSE_FILE_SPEC.md](LICENSE_FILE_SPEC.md)
+- **storage 移行 (9-A8 タスク)**: [ORDER_SPEC.md](ORDER_SPEC.md) §9.1
+- **データモデル**: [DATA_MODEL.md](DATA_MODEL.md)
+- **要件定義**: [REQUIREMENTS.md](REQUIREMENTS.md)
