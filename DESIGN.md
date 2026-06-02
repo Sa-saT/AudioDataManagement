@@ -283,8 +283,8 @@ Cursor リファレンスから以下の点のみ差し替え。他のトーク�
 - `transform: translateY(-1px)` + border-color → turquoise (200ms)
 
 ### Waveform
-- Idle: `{colors.muted}` (#2f4f4f)
-- Playing progress: turquoise #40e0d0
+- Idle (未再生): DarkGray `#a9a9a9` (専用色、`muted` トークンとは独立)
+- Playing progress (再生後): MediumAquamarine `#66cdaa`
 - Cursor: turquoise
 
 ### Card content (AudioCard)

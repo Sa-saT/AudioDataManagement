@@ -38,10 +38,10 @@ const playPos = computed(() =>
 )
 const peaksRef = computed(() => props.peaks)
 
-// 単一色 = waveColor (#2f4f4f DarkSlateGray)。
-// 再生済みはシェーダー側で alpha を下げて dim 表示。
+// 未再生 = #a9a9a9 DarkGray / 再生後 = #66cdaa MediumAquamarine
 const colors = ref<WaveformColors>({
-  wave: [0x2f / 255, 0x4f / 255, 0x4f / 255],
+  wave:   [0xa9 / 255, 0xa9 / 255, 0xa9 / 255],
+  played: [0x66 / 255, 0xcd / 255, 0xaa / 255],
 })
 
 // ─── reduced-motion (再生ボタン EQ アニメだけに影響) ─────

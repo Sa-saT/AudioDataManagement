@@ -9,7 +9,8 @@ import { drawWaveformFallback, type Fallback2DColors } from './fallback2d'
 import { packPeaksRGB, toPeaksV2, type PeaksAny, type PeaksV2 } from './peaks'
 
 export interface WaveformColors {
-  wave: [number, number, number]      // 単一色 (0..1 RGB)
+  wave: [number, number, number]      // 未再生側の色 (0..1 RGB)
+  played: [number, number, number]    // 再生後の色 (0..1 RGB)
 }
 
 interface UseWaveformGLOptions {
@@ -83,8 +84,8 @@ export function useWaveformGL(opts: UseWaveformGLOptions) {
     ctx.enableVertexAttribArray(loc)
     ctx.vertexAttribPointer(loc, 2, ctx.FLOAT, false, 0, 0)
 
-    // Uniform locations (簡略化済み: 単一色 + 再生位置 + ガンマ)
-    for (const name of ['uPeaks', 'uPlayPos', 'uGamma', 'uWaveColor']) {
+    // Uniform locations
+    for (const name of ['uPeaks', 'uPlayPos', 'uGamma', 'uWaveColor', 'uPlayedColor']) {
       uniforms[name] = ctx.getUniformLocation(prog, name)
     }
 
@@ -157,6 +158,7 @@ export function useWaveformGL(opts: UseWaveformGLOptions) {
 
     const c = opts.colors.value
     ctx.uniform3f(uniforms.uWaveColor!, c.wave[0], c.wave[1], c.wave[2])
+    ctx.uniform3f(uniforms.uPlayedColor!, c.played[0], c.played[1], c.played[2])
 
     ctx.clearColor(0, 0, 0, 0)
     ctx.clear(ctx.COLOR_BUFFER_BIT)
@@ -176,7 +178,7 @@ export function useWaveformGL(opts: UseWaveformGLOptions) {
     const c = opts.colors.value
     const toCss = (rgb: [number, number, number], a = 1) =>
       `rgba(${Math.round(rgb[0] * 255)},${Math.round(rgb[1] * 255)},${Math.round(rgb[2] * 255)},${a})`
-    const fallbackColors: Fallback2DColors = { wave: toCss(c.wave) }
+    const fallbackColors: Fallback2DColors = { wave: toCss(c.wave), played: toCss(c.played) }
     drawWaveformFallback(canvas, peaks, opts.playPos.value, fallbackColors, { gamma: opts.gamma ?? 0.4 })
   }
 
