@@ -137,7 +137,7 @@ function formatDuration(sec: number): string {
     <div class="flex shrink-0 items-end justify-between gap-4 pb-3 pt-5">
       <div>
         <h1 class="text-[20px] font-normal tracking-[-0.0125em] text-ink">Download List</h1>
-        <p class="mt-0.5 text-[12px] text-[#4682b4]">購入済み音源の再ダウンロード / 管理</p>
+        <p class="mt-0.5 text-[12px] text-muted">購入済み音源の再ダウンロード / 管理</p>
       </div>
 
       <!-- Storage usage -->

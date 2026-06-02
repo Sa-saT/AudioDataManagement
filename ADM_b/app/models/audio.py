@@ -59,7 +59,7 @@ class Audio(Base, TimestampMixin):
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     downloaded_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("users.id"), unique=True
+        PgUUID(as_uuid=True), ForeignKey("users.id")
     )
     downloaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

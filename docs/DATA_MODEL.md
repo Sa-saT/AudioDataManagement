@@ -103,7 +103,7 @@ DL成功時は購入者の Downloads ストレージ (`/storage/downloads/{user_
 | `recommend_score` | NUMERIC(6,2) | NOT NULL, DEFAULT 0 | オススメ順ソート用 |
 | `published_at` | TIMESTAMPTZ |  | 公開日時 |
 | `file_size_bytes` | BIGINT | NOT NULL | 原本ファイルサイズ。Downloads ストレージの残量計算に使用 (FR-DL-08) |
-| `downloaded_by_user_id` | UUID | FK→users.id, UNIQUE, NULLABLE | 売却済みなら買い手のID |
+| `downloaded_by_user_id` | UUID | FK→users.id, NULLABLE | 売却済みなら買い手のID (1音源=1購入者は audios の行で保証。買い手は重複可能 = 1ユーザが多数購入できる) |
 | `downloaded_at` | TIMESTAMPTZ |  | 売却日時 |
 | `download_file_exists` | BOOLEAN | NOT NULL, DEFAULT false | 購入者の Downloads ストレージにコピーが存在するか。購入者が削除すると false になる (FR-MYDL-06) |
 | `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
