@@ -60,5 +60,11 @@ ADM_b/storage/
 # ---- License files ----
 *.lic
 
+# ---- Local reference assets (mockups / screenshots / sample wav) ----
+# 実アプリが使う public 素材は ADM_f/public/ に置く。
+# images/ はあくまでローカル参照用 (デザインモック・スクショ等) なので
+# GitHub には載せない。
+images/
+
 # ---- Build / Misc ----
 *.tsbuildinfo
