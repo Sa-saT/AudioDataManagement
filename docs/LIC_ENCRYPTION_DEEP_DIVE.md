@@ -327,7 +327,7 @@ Phase C は「ファイルを見ただけで何かわからない」という心
 ### セキュリティ的に理にかなっているか
 
 ```
-問: role=admin の lic を role=user に改ざんできるか?
+問: role=admin の lic を role=licensee に改ざんできるか?
 答: ❌ 不可能
     → ciphertext を変えると GCM tag が不一致 → 検証エラー
     → header の enc/alg を変えると GCM tag (AAD) が不一致 → 検証エラー

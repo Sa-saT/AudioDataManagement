@@ -449,15 +449,15 @@ const isAssignedCreator = computed(() => order.value?.assigned_creator_id === au
 // role=creator は creator view、user は user view、admin は creator view を既定
 // localStorage に保存して次回も復元
 const BRIEF_VIEW_KEY = 'pathfinder.briefView'
-type BriefView = 'user' | 'creator'
+type BriefView = 'licensee' | 'creator'
 const briefView = ref<BriefView>('creator')  // 仮値、auth.hydrate 後に正値を再設定
 function applyBriefViewDefault() {
   if (typeof window === 'undefined') return
   const saved = localStorage.getItem(BRIEF_VIEW_KEY) as BriefView | null
-  briefView.value = saved ?? (auth.role === 'user' ? 'user' : 'creator')
+  briefView.value = saved ?? (auth.role === 'licensee' ? 'licensee' : 'creator')
 }
 function toggleBriefView() {
-  briefView.value = briefView.value === 'creator' ? 'user' : 'creator'
+  briefView.value = briefView.value === 'creator' ? 'licensee' : 'creator'
   if (typeof window !== 'undefined') localStorage.setItem(BRIEF_VIEW_KEY, briefView.value)
 }
 // 締切までの残日数 (creator view 用)
@@ -1006,9 +1006,9 @@ const myCandidate = computed(() =>
               <!-- 9-A4: 視点切替トグル -->
               <button
                 class="flex items-center gap-1 rounded-md border border-hairline-soft bg-white/60 px-2 py-0.5 text-[10px] text-muted transition-colors hover:border-primary hover:text-primary-active"
-                :title="briefView === 'creator' ? 'ユーザ視点に切替' : 'クリエイター視点に切替'"
+                :title="briefView === 'creator' ? '利用者視点に切替' : 'クリエイター視点に切替'"
                 @click="toggleBriefView"
-              >{{ briefView === 'creator' ? '🎵 クリエイター視点' : '👤 ユーザ視点' }}</button>
+              >{{ briefView === 'creator' ? '🎵 クリエイター視点' : '👤 利用者視点' }}</button>
               <!-- 履歴アイコン -->
               <button
                 v-if="briefEdits.length > 0"
@@ -1143,7 +1143,7 @@ const myCandidate = computed(() =>
             </div>
           </template>
 
-          <!-- 👤 ユーザ視点 (既存レイアウト、入力エコー) ───────────────────── -->
+          <!-- 👤 利用者視点 (既存レイアウト、入力エコー) ───────────────────── -->
           <template v-else>
           <!-- 基本 -->
           <div class="space-y-1">

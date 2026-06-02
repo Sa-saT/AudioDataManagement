@@ -98,11 +98,13 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 | ロール | 識別 | 主な権限 |
 |---|---|---|
 | guest | 未アクティベート | 公開音源の閲覧・視聴のみ。DL不可 |
-| user | licファイル (role=user) | 視聴 / DL (token消費) / DL済み再取得 / お気に入り / Commission 発注 |
+| licensee | licファイル (role=licensee) | 視聴 / DL (token消費) / DL済み再取得 / お気に入り / Commission 発注 |
 | creator | licファイル (role=creator) | 音源のアップロード / 編集 / 削除 / 公開設定 / Commission 受注 |
 | admin | licファイル (role=admin) | 全リソース管理、ランク変更、lic発行、token追加付与、payout承認、Commission 仲介、ログ閲覧 |
 
 サイト初回アクセスは guest として `/dashboard` 表示。`/activate` で `.lic` を適用するとロール・月間token量が反映される。
+
+> **ロール命名 (2026-06-02)**: 旧 `user` → `licensee` にリネーム済み。`.lic` の概念 (licensor=creator / licensee=客) と一致させた。UI 表記ルール: バッジ等の短い識別子は英語 `licensee` / `Users` / 説明文・選択画面は「利用者」「ユーザ」(長音なし)。
 
 詳細: [docs/REQUIREMENTS.md §4](docs/REQUIREMENTS.md)
 
@@ -219,7 +221,7 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 |---|---|
 | licファイル | ユーザ/ロールを識別する `.lic` 拡張子のライセンスファイル |
 | peaks | 波形プレビューデータ。**v2** = `{n, max, min, rms}` (1000ポイント、`WAVEFORM_SHADER_SPEC.md` §3) |
-| アクティベート | licファイル適用で guest → user/creator/admin になる操作 |
+| アクティベート | licファイル適用で guest → licensee/creator/admin になる操作 |
 | ランク | クリエイターの段位 (bronze/silver/gold/platinum) |
 | Commission / 発注 | オリジナル音源の制作依頼チケット。Dashboard の単発DL とは独立 (`ORDER_SPEC.md`) |
 | activity_logs | session ping / order_view を統合した活動ログテーブル (`LOG_SPEC.md` §2.1) |

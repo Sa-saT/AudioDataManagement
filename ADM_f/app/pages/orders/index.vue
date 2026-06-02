@@ -181,7 +181,7 @@ function stripSerialFromTitle(title: string): string {
   return title.replace(/\s*#\d+\s*$/, '')
 }
 
-const isUser = computed(() => auth.role === 'user')
+const isLicensee = computed(() => auth.role === 'licensee')
 const isAdmin = computed(() => auth.role === 'admin')
 
 // ─── Admin: draft 表示モーダル ───────────────────
@@ -278,7 +278,7 @@ const BGM_SCENE_L: Record<string, string> = {
         </div>
       </div>
       <button
-        v-if="auth.isActivated && system.commissionEnabled && isUser"
+        v-if="auth.isActivated && system.commissionEnabled && isLicensee"
         class="flex items-center gap-1.5 rounded-md bg-ink px-3 py-1.5 text-[12px] font-medium text-canvas transition-colors hover:bg-primary"
         @click="openCreate"
       >
@@ -321,7 +321,7 @@ const BGM_SCENE_L: Record<string, string> = {
       <!-- Empty -->
       <div v-else-if="orders.length === 0" class="py-16 text-center text-[13px] text-muted">
         発注はまだありません。
-        <template v-if="isUser">
+        <template v-if="isLicensee">
           <br/><button class="mt-2 text-primary-active hover:underline" @click="openCreate">新規発注を作成する</button>
         </template>
       </div>

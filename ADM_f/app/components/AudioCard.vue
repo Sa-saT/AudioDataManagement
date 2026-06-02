@@ -57,11 +57,11 @@ const isOwnAudio = computed(() =>
 )
 
 // DL ボタン表示条件:
-//   user   → 常に表示 (token check あり)
-//   creator → 自分の音源のみ (token不要)
-//   admin  → 常に表示 (token不要)
+//   licensee → 常に表示 (token check あり)
+//   creator  → 自分の音源のみ (token不要)
+//   admin    → 常に表示 (token不要)
 const showDlButton = computed(() => {
-  if (auth.role === 'user') return true
+  if (auth.role === 'licensee') return true
   if (auth.role === 'creator') return isOwnAudio.value
   if (auth.role === 'admin') return true
   return false

@@ -24,7 +24,7 @@ class LicenseError(Exception):
         self.message = message
 
 
-_VALID_ROLES = {"user", "creator", "admin"}
+_VALID_ROLES = {"licensee", "creator", "admin"}
 _USERNAME_RE = re.compile(r"^[a-zA-Z0-9_.-]{1,32}$")
 
 
@@ -225,6 +225,8 @@ def validate_payload(data: dict[str, Any]) -> LicensePayload:
         raise LicenseError("MALFORMED_LICENSE", "username must match ^[a-zA-Z0-9_.-]{1,32}$")
 
     role = data["role"]
+    if role == "user":  # 旧 role 名の後方互換 (2026-06-02 リネーム)
+        role = "licensee"
     if role not in _VALID_ROLES:
         raise LicenseError("MALFORMED_LICENSE", f"role must be one of {_VALID_ROLES}")
 

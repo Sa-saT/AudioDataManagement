@@ -160,7 +160,7 @@ GET /api/v1/admin/logs/users?days=30
   {
     "user_id": "uuid",
     "username": "string",
-    "role": "user",
+    "role": "licensee",
     "score": 72,
     "signal": "green",
     "metrics": {

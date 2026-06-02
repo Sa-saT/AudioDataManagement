@@ -16,7 +16,7 @@ Dashboard の単発 DL 販売とは独立した仕組みであり、ユーザー
 
 | ロール | できること |
 |---|---|
-| user | 発注作成・提出・キャンセル / メッセージ / 完了ファイルDL |
+| licensee | 発注作成・提出・キャンセル / メッセージ / 完了ファイルDL |
 | creator | 候補打診への応答 / メッセージ / 音源提出 |
 | admin | 上記すべて + 候補指名 / クリエイターアサイン / 承認 / 差し戻し / token_cost調整 / 機能フラグ管理 |
 
@@ -32,14 +32,14 @@ OFFの場合、関連API全体が `503 COMMISSION_DISABLED` を返す。
 ## 2. ステータス遷移
 
 ```
-draft ──[submit by user]──→ open ──[nominate by admin]──→ recruiting
+draft ──[submit by licensee]──→ open ──[nominate by admin]──→ recruiting
                                  └─────────────────────────────┘
                                          ↓ [assign by admin]
                                       assigned ──[submit-file by creator]──→ reviewing
                                                                                  │
                                                                ┌────[reject]─────┘
                                                                │                 │
-                                                            assigned          done ──[DL by user]
+                                                            assigned          done ──[DL by licensee]
                                                                          (token消費・payout生成)
  どのステータスからでも [cancel] → cancelled (done/cancelled からは不可)
 ```
@@ -60,15 +60,15 @@ draft ──[submit by user]──→ open ──[nominate by admin]──→ re
 
 | 遷移 | 誰が | 前提ステータス | 副作用 |
 |---|---|---|---|
-| `submit` | user | draft | **token 残量チェック + 予約開始** (改訂2.2: `available_tokens` が `reserved_by_open_orders` を差し引く実装になり、Order時点で確実に弾く) |
+| `submit` | licensee | draft | **token 残量チェック + 予約開始** (改訂2.2: `available_tokens` が `reserved_by_open_orders` を差し引く実装になり、Order時点で確実に弾く) |
 | `nominate` | admin | open / recruiting | `order_candidate_creators` にレコード追加、status → recruiting |
 | `respond` | creator | recruiting | candidate の response_status を accepted/declined に更新 |
 | `assign` | admin | open / recruiting | creator確定、token_cost 調整可能 |
 | `submit-file` | creator | assigned | ファイルをサーバに保存、status → reviewing |
 | `reject` | admin | reviewing | status → assigned (差し戻し)、理由メッセージ記録 |
 | `done` | admin | reviewing | 提出ファイルを最終パスへコピー / status → done (**token 消費はまだ無い、改訂2.2 で close に移動**) |
-| `close` (受け取る) | user / admin (代理) | done && closed_at IS NULL | **token 消費 + Creator payout 生成 + closed_at セット** (改訂2.2) |
-| `cancel` | user / creator / admin | 全て (done, cancelled 以外) | token消費なし |
+| `close` (受け取る) | licensee / admin (代理) | done && closed_at IS NULL | **token 消費 + Creator payout 生成 + closed_at セット** (改訂2.2) |
+| `cancel` | licensee / creator / admin | 全て (done, cancelled 以外) | token消費なし |
 
 ---
 
@@ -89,7 +89,7 @@ draft ──[submit by user]──→ open ──[nominate by admin]──→ re
 | `purpose` | `"game" \| "video" \| "podcast" \| "other"` | 用途 |
 | `purpose_note` | string | purpose=other 時の自由記述 |
 | `length_sec` | number | **曲の長さ (秒)**。スライダー 10〜600 + 数値直接入力可。**この値が `token_cost` になる (1秒=1token)** |
-| `desired_deadline` | string (ISO date) | 希望締切日。**デフォルト: 作成日 + 7日**。user が変更可能 |
+| `desired_deadline` | string (ISO date) | 希望締切日。**デフォルト: 作成日 + 7日**。licensee が変更可能 |
 
 **タイトル:** 入力フィールドは廃止 (改訂2)。サーバ側で自動生成:  
 形式: `YYYYMMDD_<username>_Order #<serial>`  
@@ -253,7 +253,7 @@ melody (メロディライン), rhythm (リズムパターン), density (音の�
 
 ### `order_memos` テーブル (改訂2.4)
 
-Order ごとの共有メモ。admin / creator 各 1 枠で、user は完全不可視。詳細は [§16.2](#162-メモ仕様) 参照。
+Order ごとの共有メモ。admin / creator 各 1 枠で、licensee は完全不可視。詳細は [§16.2](#162-メモ仕様) 参照。
 
 | カラム | 型 | 説明 |
 |---|---|---|
@@ -283,7 +283,7 @@ Order ごとの共有メモ。admin / creator 各 1 枠で、user は完全不�
 |---|---|---|
 | GET | `/system/commission` | `{ "enabled": bool }` を返す |
 
-### user ロール以上
+### licensee ロール以上
 
 | Method | Path | 説明 |
 |---|---|---|
@@ -296,7 +296,7 @@ Order ごとの共有メモ。admin / creator 各 1 枠で、user は完全不�
 | GET | `/orders/{id}/file-url` | 完了ファイルのsigned URL取得 (done時・発注者のみ) |
 | GET | `/orders/download-file` | signed URL でファイルDL |
 | POST | `/orders/{id}/view` | チケット閲覧記録 (改訂2 追加。`activity_logs` に `order_view` 挿入) |
-| PATCH | `/orders/{id}/deadline` | 希望締切日変更 (改訂2 追加。user / admin、status≠done/cancelled) |
+| PATCH | `/orders/{id}/deadline` | 希望締切日変更 (改訂2 追加。licensee / admin、status≠done/cancelled) |
 
 ### creator ロール以上
 
@@ -318,7 +318,7 @@ Order ごとの共有メモ。admin / creator 各 1 枠で、user は完全不�
 
 ### アクセス制御ルール
 
-- **user**: 自分の発注のみ閲覧・操作可
+- **licensee**: 自分の発注のみ閲覧・操作可
 - **creator**: 候補としてノミネートされたまたはアサインされた発注のみ閲覧・操作可
 - **admin**: **全発注の全メッセージ・全候補・全状態を閲覧可** (実装済み)。チケットの宛先に常時含まれる扱い (= 全やりとりを監督できる)
 
@@ -386,8 +386,8 @@ Order ごとの共有メモ。admin / creator 各 1 枠で、user は完全不�
 | 「できる送信」 (accept) | admin | 1人を assign |
 | assign 確定 | 選ばれた creator | 音源提出 |
 | 提出 (reviewing) | admin | done / reject |
-| チケット内メッセージ送信 | 自分以外の宛先 (user / creator / admin) | チケットを開く (= `activity_logs` に `order_view` 追加) |
-| done | 発注 user | チケットを開く (= 受け取り) |
+| チケット内メッセージ送信 | 自分以外の宛先 (licensee / creator / admin) | チケットを開く (= `activity_logs` に `order_view` 追加) |
+| done | 発注 licensee | チケットを開く (= 受け取り) |
 
 ### B. 情報通知 (info-only)
 
@@ -404,7 +404,7 @@ Order ごとの共有メモ。admin / creator 各 1 枠で、user は完全不�
 
 assign 確定 / cancelled / close 後の対象チケットは **dim 化** する (詳細は [NOTIFICATION_SPEC §8](NOTIFICATION_SPEC.md))。
 
-- 該当 status: 候補 creator にとって `assigned`(他者) / `cancelled`、user にとって `cancelled` / `close` 後
+- 該当 status: 候補 creator にとって `assigned`(他者) / `cancelled`、licensee にとって `cancelled` / `close` 後
 - ステータスラベルは「**クローズ**」に変更 (muted カラー)
 - バッジ (青ドット) が解除されてもカードの dim は **維持**
 
@@ -422,7 +422,7 @@ assign 確定 / cancelled / close 後の対象チケットは **dim 化** する
 
 | ページ | パス | ロール |
 |---|---|---|
-| 発注一覧・作成 | `/orders` | user / creator / admin |
+| 発注一覧・作成 | `/orders` | licensee / creator / admin |
 | 発注詳細・メッセージ | `/orders/[id]` | アクセス制御あり |
 | Admin: 全発注管理 | `/admin` > Commissionタブ | admin |
 
@@ -492,7 +492,7 @@ Step 2 は `sound_type` (BGM/SE/both) によって表示項目が変わる。
 | ✅ | **NOTIFICATION Phase B** 統合 API `/me/notifications` + admin タブ Level 3 ドット | 3d2f4c1 |
 | ✅ | **NOTIFICATION Phase C** 一覧 Level 4 per-row 金ドット (orders + payouts) | 2d327f1 |
 | ✅ | **改訂2.4** 私信廃止 + admin Commission メニュー統合 (R2.4-B) | e3cba8c |
-| ✅ | **改訂2.4** Order 共有メモ (admin/creator 各1枠、左右分割、user 不可視) (R2.4-A) | 75aac99 |
+| ✅ | **改訂2.4** Order 共有メモ (admin/creator 各1枠、左右分割、licensee 不可視) (R2.4-A) | 75aac99 |
 | ✅ | **改訂2.4** admin↔creator Direct Message (DM_SPEC Phase A-D) | 3889d85 |
 | ✅ | **9-A3** Creator 複数提出のバージョン管理 (`submissions/{id}_v{n}.wav` + peaks v2 per version + GET /submissions + 履歴 UI) + リテラルルート順序バグ修正 | (改訂2.5 / migration 0019) |
 | ✅ | **9-A4** クリエイター視点 UI 最適化 (役割優先順序の brief 再構成 + tx_* スライダー視覚化 + 視点切替トグル + localStorage 保存) | (改訂2.5) |
@@ -527,7 +527,7 @@ Step 2 は `sound_type` (BGM/SE/both) によって表示項目が変わる。
 |---|---|---|
 | R2-01 | **発注タイトル入力廃止** → サーバ側で `YYYYMMDD_<username>_Order #<serial>` 自動生成。**serial は Commission Order 全体の通し番号 (sequence 採番、cancel 番号は再利用しない)** | orders スキーマ (`serial` 列 + sequence) / CreateOrderRequest / Wizard step6 / 一覧表示 |
 | R2-02 | `sound_type` から **`both` 削除** (`bgm` / `se` の二択) | OrderBriefWizard step1/step2 / OrderBrief 型 / 詳細画面の表示分岐 |
-| R2-03 | **希望締切 (`desired_deadline`)** Step1 に追加 / デフォルト `created_at + 7日` / user 編集可 | orders スキーマ / Wizard step1 / 詳細画面に編集 UI |
+| R2-03 | **希望締切 (`desired_deadline`)** Step1 に追加 / デフォルト `created_at + 7日` / licensee 編集可 | orders スキーマ / Wizard step1 / 詳細画面に編集 UI |
 | R2-04 | **`token_cost` 自動算出** = `length_sec`。手入力廃止 / Step1 で曲長スライダー (10〜600s) + 直接入力 | Wizard step1 / step6 / API (token_cost を body で受けない) |
 | R2-05 | Step6 から `deadline` `budget_range` 削除 | Wizard step6 / OrderBrief 型 |
 
@@ -552,7 +552,7 @@ Step 2 は `sound_type` (BGM/SE/both) によって表示項目が変わる。
 
 | # | 変更 |
 |---|---|
-| R2-13 | admin は全 user/creator のチケット全閲覧可。チケットの宛先に常時含まれる扱い (実装は現状通り) |
+| R2-13 | admin は全 licensee/creator のチケット全閲覧可。チケットの宛先に常時含まれる扱い (実装は現状通り) |
 
 ### 11.5 必要マイグレーション
 
@@ -589,16 +589,16 @@ CREATE UNIQUE INDEX uq_orders_serial ON orders (serial);
 
 ```mermaid
 stateDiagram-v2
-    [*] --> draft : user 新規作成 / admin 代理作成
+    [*] --> draft : licensee 新規作成 / admin 代理作成
     draft --> draft : 一時保存 (continue input)
-    draft --> open : user 発注 / admin 代理発注
+    draft --> open : licensee 発注 / admin 代理発注
     draft --> cancelled : cancel
     open --> recruiting : admin が候補 creator をノミネート
     recruiting --> recruiting : creator が「できる送信」(accepted)
     recruiting --> assigned : admin が 1人を assign
     assigned --> reviewing : creator が音源提出 (submit-file)
     reviewing --> done : admin が承認 (ファイルコピーのみ)
-    done --> closed : user 受け取り (token 消費 + payout 生成 + closed_at)
+    done --> closed : licensee 受け取り (token 消費 + payout 生成 + closed_at)
     reviewing --> assigned : admin が差し戻し (reject)
     open --> cancelled : cancel
     recruiting --> cancelled : cancel
@@ -612,7 +612,7 @@ stateDiagram-v2
 
 ```mermaid
 sequenceDiagram
-    participant U as user
+    participant U as licensee
     participant A as admin
     participant C1 as creator (候補)
     participant Cx as creator (選ばれた人)
@@ -650,11 +650,11 @@ sequenceDiagram
 
 ### 12.3 admin の権限早見表
 
-| 操作 | user (owner) | admin |
+| 操作 | licensee (owner) | admin |
 |---|---|---|
-| draft の表示 (`GET /orders/{id}`) | 自分のみ | 全 user の draft |
-| draft の編集 (`PATCH /orders/{id}/draft`) | 自分のみ | **全 user の draft (代理編集 / 改訂2.1 で開放)** |
-| draft の発注 (`POST /orders/{id}/submit`) | 自分のみ | **代理発注可 / 改訂2.1 で開放** (token 残量は order.user の license で判定) |
+| draft の表示 (`GET /orders/{id}`) | 自分のみ | 全 licensee の draft |
+| draft の編集 (`PATCH /orders/{id}/draft`) | 自分のみ | **全 licensee の draft (代理編集 / 改訂2.1 で開放)** |
+| draft の発注 (`POST /orders/{id}/submit`) | 自分のみ | **代理発注可 / 改訂2.1 で開放** (token 残量は order.licensee の license で判定) |
 | 候補ノミネート (`POST /orders/{id}/nominate`) | × | ○ |
 | assign 確定 (`POST /orders/{id}/assign`) | × | ○ |
 | reject (`POST /orders/{id}/reject`) | × | ○ |
@@ -671,7 +671,7 @@ sequenceDiagram
 
 ### 13.1 ユーザ要求
 
-- user が発注後でもチケット内でブリーフを編集できる
+- licensee が発注後でもチケット内でブリーフを編集できる
 - 編集された箇所は**色変化**で視覚的に区別
 - チャットに**bot 通知** (例:「ブリーフを編集しました: 狙う感情, 長さ」) が自動投稿される
 - creator/admin は変更を即時把握でき、認識ズレを防止
@@ -684,7 +684,7 @@ sequenceDiagram
 |---|---|---|
 | `id` | UUID PK | |
 | `order_id` | UUID FK → orders | |
-| `editor_id` | UUID FK → users | 編集者 (user / admin) |
+| `editor_id` | UUID FK → users | 編集者 (licensee / admin) |
 | `field_path` | TEXT | 変更フィールド (例: `"emotions_target"`, `"length_sec"`) |
 | `old_value` | JSONB | 変更前の値 |
 | `new_value` | JSONB | 変更後の値 |
@@ -767,7 +767,7 @@ REDMINE 風 ID / 件名分離 + 受け取る/アーカイブ + 音源プレビ�
 | # | 変更 | 実装場所 |
 |---|---|---|
 | R2.2-01 | `_generate_title` から `#N` 削除 (件名と ID を完全分離) | orders.py |
-| R2.2-02 | `POST /orders/{id}/close` (user の「受け取る」) | orders.py |
+| R2.2-02 | `POST /orders/{id}/close` (licensee の「受け取る」) | orders.py |
 | R2.2-03 | `orders.closed_at` カラム + フィルタ (admin の archive タブで管理) | migration 0013 |
 | R2.2-04 | submission stream エンドポイント (チケット参加者プレビュー) | orders.py + signed_url.py |
 | R2.2-05 | チャット欄に音源添付ボタン (creator が提出 UI を統合) | orders/[id].vue |
@@ -787,7 +787,7 @@ LINE 風チャット + admin↔creator 私信 + 細部 UX。
 |---|---|---|
 | R2.3-01 | `order_messages.visibility ENUM('public', 'admin_creator')` | migration 0014 |
 | R2.3-02 | `AddMessageRequest.private` フィールド追加 (admin/creator のみ有効) | orders.py |
-| R2.3-03 | `_visible_messages()` で viewer role に応じてフィルタ (user は admin_creator 不可視) | orders.py |
+| R2.3-03 | `_visible_messages()` で viewer role に応じてフィルタ (licensee は admin_creator 不可視) | orders.py |
 | R2.3-04 | LINE 風チャット吹き出し UI (自分=右、相手=左、アバター頭文字 + 役割色) | orders/[id].vue |
 | R2.3-05 | 連続発言は名前・アバター省略 (5分超で再表示) + 自動スクロール最下部 | orders/[id].vue |
 | R2.3-06 | 私信送信 UI (admin / creator のみ表示)、有効時は紫色で強調 | orders/[id].vue |
@@ -823,7 +823,7 @@ Order 内 admin↔creator 私信を **廃止** し、用途別に2機能へ分�
 | R2.4-03 | チャット LINE UI から「私信送信」UI を撤去 | orders/[id].vue |
 | R2.4-04 | 新規 `order_memos` テーブル (admin 枠 / creator 枠 各1) | migration 0017 |
 | R2.4-05 | brief 下部に左右分割メモ UI (左=admin / 右=creator) | orders/[id].vue |
-| R2.4-06 | `[メモ]` ボタンで自身の枠のみ編集可。user 不可視 | orders/[id].vue |
+| R2.4-06 | `[メモ]` ボタンで自身の枠のみ編集可。licensee 不可視 | orders/[id].vue |
 | R2.4-07 | TopNav: admin の Commission メニュー項目を撤去 (Admin → Commission タブに統合) | TopNav.vue |
 | R2.4-08 | DM 機能は [DM_SPEC.md](DM_SPEC.md) を一次ソースとする | (別 spec) |
 
@@ -845,7 +845,7 @@ Order 内 admin↔creator 私信を **廃止** し、用途別に2機能へ分�
 
 | ロール | 閲覧 | 編集 |
 |---|---|---|
-| user | × (完全不可視) | × |
+| licensee | × (完全不可視) | × |
 | creator (assigned) | ○ (両枠) | ○ (creator 枠のみ) |
 | creator (候補のみ・未assigned) | × | × |
 | admin | ○ (両枠) | ○ (admin 枠のみ) |
@@ -859,7 +859,7 @@ Order 内 admin↔creator 私信を **廃止** し、用途別に2機能へ分�
 
 | Method | Path | 説明 |
 |---|---|---|
-| GET | `/orders/{id}/memos` | 両枠のメモを返す (user は 403) |
+| GET | `/orders/{id}/memos` | 両枠のメモを返す (licensee は 403) |
 | PUT | `/orders/{id}/memo` | 自分の枠のメモを upsert (body: `{content: str}`) |
 
 #### UI 配置

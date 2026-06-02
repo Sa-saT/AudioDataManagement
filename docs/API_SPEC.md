@@ -53,7 +53,7 @@ Response 200:
   "user": {
     "id": "uuid",
     "username": "saaaaa",
-    "role": "user",
+    "role": "licensee",
     "monthly_quota_tokens": 18000
   }
 }
@@ -69,7 +69,7 @@ Response 200:
 {
   "id": "uuid",
   "username": "saaaaa",
-  "role": "user",
+  "role": "licensee",
   "activated_at": "...",
   "monthly_quota_tokens": 18000
 }
@@ -325,7 +325,7 @@ Response 200: `{ "enabled": true }`
 
 ### GET `/orders`
 ロールに応じた発注一覧。
-- user: 自分が作成した発注
+- licensee: 自分が作成した発注
 - creator: 自分が候補または受注者の発注
 - admin: 全発注
 
@@ -465,7 +465,7 @@ Request: `{ "reason": "..." }`
 ### POST `/orders/{order_id}/done` (admin のみ)
 reviewing → done。同時実行:
 1. 提出 .wav を `/storage/orders/{id}.wav` にコピー
-2. token_cost 分を user の当月 token から消費
+2. token_cost 分を licensee の当月 token から消費
 3. Creator への `creator_payouts` 行を生成 (rank_at_payout × token_cost)
 4. `notified_at` を設定
 
@@ -487,7 +487,7 @@ Response 200:
 ```
 
 ロール別に表示する area が異なる:
-- user: `commission` のみ
+- licensee: `commission` のみ
 - creator: `commission`, `creator_dm`
 - admin: 全 area
 
@@ -555,7 +555,7 @@ Response 200: `[{ "key": "commission_enabled", "value": "false", "description": 
 ```json
 {
   "username": "saaaaa",
-  "role": "user",
+  "role": "licensee",
   "monthly_quota_tokens": 18000,
   "expires_at": "2027-05-26T00:00:00Z"
 }

@@ -54,7 +54,7 @@ Level 2: メニュー項目 (Dashboard / Admin / Commission / Uploads / DL List)
    ↓ 集約
 Level 3: ページ内タブ (admin の8タブ等)
    ↓ 集約
-Level 4: 一覧の各行 (order / payout / user / lic 等)
+Level 4: 一覧の各行 (order / payout / licensee / lic 等)
    ↓ (詳細を開けば current)
 Level 5: 詳細ページ内セクション (オプション、必要に応じて)
 ```
@@ -97,7 +97,7 @@ Level 5: 詳細ページ内セクション (オプション、必要に応じて
 
 ## 4. ロール別の通知源
 
-### 4.1 user
+### 4.1 licensee
 
 | 通知源 | 種別 | 解除条件 |
 |---|---|---|
@@ -113,19 +113,19 @@ Level 5: 詳細ページ内セクション (オプション、必要に応じて
 | 自分のチケットに新メッセージ | action | チケットを開く |
 | 候補だった発注が他 creator にアサインされた | info | チケットを開く OR 1週間 |
 | **admin からの新着 DM** | action | DM ToAdmin を開く ([DM_SPEC](DM_SPEC.md)) |
-| ※ 自分が user として発注している場合は user の通知源も合算 |  |  |
+| ※ 自分が licensee として発注している場合は licensee の通知源も合算 |  |  |
 
 ### 4.3 admin
 
 | 通知源 | 種別 | 解除条件 |
 |---|---|---|
-| **Commission**: 全 user/creator の action 全般 (nominate / assign / done 決裁待ち) | action | 当該操作完了 |
-| **Commission**: 全 user/creator のチャットメッセージ (監督枠) | action | チケットを開く |
+| **Commission**: 全 licensee/creator の action 全般 (nominate / assign / done 決裁待ち) | action | 当該操作完了 |
+| **Commission**: 全 licensee/creator のチャットメッセージ (監督枠) | action | チケットを開く |
 | **Payout**: 承認待ち creator 支払い | action | paid 化 |
 | **Creator DM**: creator からの新着 DM | action | DM スレッドを開く ([DM_SPEC](DM_SPEC.md)) |
 | **Token grant 申請** (将来) | action | 付与 / 却下 |
 | **lic 発行依頼** (将来) | action | lic 発行 / 却下 |
-| ※ 自分が user/creator として参加していれば各通知源も合算 |  |  |
+| ※ 自分が licensee/creator として参加していれば各通知源も合算 |  |  |
 
 ### 4.4 通知源の追加ルール
 

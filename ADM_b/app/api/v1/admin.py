@@ -366,8 +366,8 @@ def issue_license(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> Response:
-    if body.role not in {"user", "creator", "admin"}:
-        raise _err("INVALID_ROLE", "role must be user, creator, or admin", 400)
+    if body.role not in {"licensee", "creator", "admin"}:
+        raise _err("INVALID_ROLE", "role must be licensee, creator, or admin", 400)
 
     license_id = _next_license_code(db)
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")

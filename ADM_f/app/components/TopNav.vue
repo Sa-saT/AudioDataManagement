@@ -47,12 +47,12 @@ watch(menuOpen, (v) => { if (!v) infoOpen.value = null })
 
 // ─── Menu item definitions ────────────────────────
 const INFO: Record<string, string> = {
-  activate:    'ライセンスファイル (.lic) を適用してユーザーロールを有効化します',
+  activate:    'ライセンスファイル (.lic) を適用してユーザロールを有効化します',
   deactivate:  'ロールを解除してゲストモードに戻ります。再アクティベートは .lic ファイルから行えます',
   commission:  'オリジナル音源の制作依頼フロー。発注 → クリエイター選定 → 制作 → 承認まで一元管理します',
   downloads:   '購入済み音源の管理。ストレージ内のファイルを再ダウンロード・削除できます',
   uploads:     '音源のアップロード・公開設定・編集・削除ができます (creator / admin)',
-  admin:       'ユーザー管理・payout 承認・lic 発行・token 付与・システム設定 (admin)',
+  admin:       'Users 管理・payout 承認・lic 発行・token 付与・システム設定 (admin)',
 }
 
 // ─── Activate modal ────────────────────────────────

@@ -42,7 +42,7 @@ erDiagram
 | `id` | UUID | PK | |
 | `username` | TEXT | UNIQUE, NOT NULL | 表示名 |
 | `email` | TEXT | UNIQUE | 任意 (Phase 2) |
-| `role` | ENUM(`user`,`creator`,`admin`) | NOT NULL, DEFAULT `user` | |
+| `role` | ENUM(`licensee`,`creator`,`admin`) | NOT NULL, DEFAULT `licensee` | (旧 `user` から 2026-06-02 リネーム) |
 | `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
 
@@ -81,7 +81,7 @@ creator ロール限定の追加情報。
 `duration_sec` がそのままDL時のtoken消費量となる (1秒=1token)。
 `downloaded_by_user_id` が NULL でない音源は **sold (売却済み)** で、Dashboard 一覧から除外する。
 
-**sold後の権限:** アップロード元 Creator の編集・削除権限は消滅する。Admin のみ全権を持つ。購入者 (DL user) は自身の Downloads ストレージ内のコピーのみ管理できる (FR-DL-09)。
+**sold後の権限:** アップロード元 Creator の編集・削除権限は消滅する。Admin のみ全権を持つ。購入者 (DL licensee) は自身の Downloads ストレージ内のコピーのみ管理できる (FR-DL-09)。
 
 視聴は **動的チャンク切り出し** (ffmpeg -ss start -t 10 -c:a copy)。事前生成プレビューファイルは持たない。DL は原本ファイルを signed URL で配信。
 DL成功時は購入者の Downloads ストレージ (`/storage/downloads/{user_id}/{id}.wav`) にコピーを保存する (FR-DL-07)。

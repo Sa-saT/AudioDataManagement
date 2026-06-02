@@ -1,7 +1,9 @@
 # licファイル仕様 — Audio Data Management
 
-`.lic` ファイルは user / creator / admin を識別するためのライセンスファイル。
+`.lic` ファイルは licensee / creator / admin を識別するためのライセンスファイル。
 Admin が発行し、利用者は `/activate` 画面でアップロードしてアクティベートする。
+
+> **ロール命名 (2026-06-02 確定)**: 旧 `user` ロールは `licensee` にリネーム。`.lic` の概念 (licensor=creator / licensee=客) と一致させる目的。旧 `role=user` の lic は `validate_payload()` 内で `licensee` に正規化する互換シムあり。
 
 ## 1. 拡張子・MIME
 
@@ -16,7 +18,7 @@ Admin が発行し、利用者は `/activate` 画面でアップロードして�
 ```json
 {
   "username": "saaaaa",
-  "role": "user",
+  "role": "licensee",
   "licenseId": "LIC-2026-0001",
   "monthlyQuotaTokens": 18000,
   "issuedAt": "2026-05-26T00:00:00Z",
@@ -29,7 +31,7 @@ Admin が発行し、利用者は `/activate` 画面でアップロードして�
 
 ```
 username=saaaaa
-role=user
+role=licensee
 licenseId=LIC-2026-0001
 monthlyQuotaTokens=18000
 issuedAt=2026-05-26T00:00:00Z
@@ -42,7 +44,7 @@ JSON / KV のいずれもフロントの `useAuthStore.activateFromText()` で�
 | 名前 | 型 | 必須 | 説明 |
 |---|---|---|---|
 | `username` | string | ✓ | 表示名。`^[a-zA-Z0-9_.-]{1,32}$` を推奨 |
-| `role` | `user`/`creator`/`admin` | ✓ | |
+| `role` | `licensee`/`creator`/`admin` | ✓ | (旧 `user` は `licensee` に自動正規化) |
 | `licenseId` | string | ✓ | 一意ID。例: `LIC-{年}-{連番}` |
 | `monthlyQuotaTokens` | integer | ✓ | 月間ダウンロード許容token量 (1秒=1token)。例: 18000 = 5時間相当。0は実質guest扱い |
 | `issuedAt` | ISO 8601 datetime | ✓ | 発行日時 (UTC) |
@@ -154,9 +156,9 @@ eyJhbGciOiJFQ0RILUVTIiwiZW5jIjoiQTI1NkdDTSIsImtpZCI6ImFkbS12MSJ9..IV.ciphertext.
 
 ## 8. サンプル
 
-### user (月5時間相当)
+### licensee (月5時間相当)
 ```json
-{ "username": "saaaaa", "role": "user", "licenseId": "LIC-2026-0001", "monthlyQuotaTokens": 18000, "issuedAt": "2026-05-26T00:00:00Z" }
+{ "username": "saaaaa", "role": "licensee", "licenseId": "LIC-2026-0001", "monthlyQuotaTokens": 18000, "issuedAt": "2026-05-26T00:00:00Z" }
 ```
 
 ### creator (DLしない運用なら 0)

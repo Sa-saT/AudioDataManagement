@@ -232,7 +232,7 @@ def _order_action_required(
     if order.id in unread_order_ids:
         return True
     role = viewer.role.value
-    if role == "user":
+    if role == "licensee":
         if order.user_id != viewer.id:
             return False
         if order.status == OrderStatus.reviewing:
@@ -363,7 +363,7 @@ INFO_NOTIFICATION_TTL_DAYS = 7
 def _count_action_required(db: Session, user: User) -> int:
     """要対応 (ステータス遷移ベース)。完了するまで残る。"""
     role = user.role.value
-    if role == "user":
+    if role == "licensee":
         # 自分の発注で reviewing (納品をレビューする番)
         q = select(func.count()).select_from(Order).where(
             Order.user_id == user.id,
@@ -390,7 +390,7 @@ def _count_action_required(db: Session, user: User) -> int:
 def _participant_order_ids_subq(user: User):
     """自分がチケットに参加している order_id 集合を返すサブクエリ。"""
     role = user.role.value
-    if role == "user":
+    if role == "licensee":
         return select(Order.id).where(Order.user_id == user.id)
     if role == "creator":
         # 候補 or assigned の order
@@ -532,7 +532,7 @@ def list_orders(
             joinedload(Order.candidates),
         )
     )
-    if role == "user":
+    if role == "licensee":
         # user/creator は closed (受け取り済) を非表示
         q = base.where(Order.user_id == current_user.id, Order.closed_at.is_(None))
     elif role == "creator":
@@ -802,7 +802,7 @@ def _check_access(order: Order, user: User) -> None:
     role = user.role.value
     if role == "admin":
         return
-    if role == "user" and order.user_id == user.id:
+    if role == "licensee" and order.user_id == user.id:
         return
     if role == "creator":
         is_candidate = any(str(c.creator_id) == str(user.id) for c in order.candidates)

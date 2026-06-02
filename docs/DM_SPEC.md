@@ -53,7 +53,7 @@
 
 | ロール | 操作 |
 |---|---|
-| user | × (DM 機能自体を提供しない) |
+| licensee | × (DM 機能自体を提供しない) |
 | creator | 自分宛のスレッドのみ閲覧/送信 |
 | admin (誰でも) | **全 creator** との全 DM 閲覧/送信 (admin はチーム扱い、§4.1 参照) |
 
@@ -152,7 +152,7 @@ Level 4 (admin > DM タブ > creator 行)  — その creator との未読あり
 
 | 反例 | 理由 |
 |---|---|
-| user に DM 機能を提供する | DM は admin↔creator の業務連絡用。user の問い合わせは別チャネル (将来) |
+| licensee に DM 機能を提供する | DM は admin↔creator の業務連絡用。licensee の問い合わせは別チャネル (将来) |
 | Order 内に DM を組み込む | Order は3者参加のチケット。DM は admin↔creator の継続関係 (役割が違う) |
 | admin ごとに別スレッドを切る | 一貫対応の妨げになる (§4.1) |
 | DM を「お知らせ」として乱用 | NOTIFICATION_SPEC §10 の禁則。要対応のみ |

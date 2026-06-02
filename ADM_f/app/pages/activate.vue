@@ -38,7 +38,7 @@ async function onPick(e: Event) {
 
 const sampleLic = `{
   "username": "saaaaa",
-  "role": "user",
+  "role": "licensee",
   "licenseId": "LIC-2026-0001",
   "issuedAt": "2026-05-26T00:00:00Z"
 }`

@@ -123,7 +123,7 @@ def list_user_logs(
     cutoff = _cutoff(days)
 
     users = db.execute(
-        select(User).where(User.role == UserRole.user).order_by(User.username)
+        select(User).where(User.role == UserRole.licensee).order_by(User.username)
     ).scalars().all()
 
     items: list[UserLogItem] = []

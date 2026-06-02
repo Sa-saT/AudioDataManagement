@@ -10,7 +10,7 @@ from app.models.base import Base, TimestampMixin, new_uuid
 
 
 class UserRole(str, enum.Enum):
-    user = "user"
+    licensee = "licensee"
     creator = "creator"
     admin = "admin"
 
@@ -24,7 +24,7 @@ class User(Base, TimestampMixin):
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole, name="user_role", native_enum=True),
         nullable=False,
-        default=UserRole.user,
+        default=UserRole.licensee,
     )
 
     license: Mapped["License | None"] = relationship(back_populates="user", uselist=False)

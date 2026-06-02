@@ -32,7 +32,7 @@
 | ロール | 識別方法 | 主な権限 |
 |---|---|---|
 | **guest** | 未アクティベート | 公開音源の閲覧・視聴 (ストリーミング再生) のみ。ダウンロード不可 |
-| **user** | `.lic` ファイル (role=user) | 視聴 / ダウンロード (token消費) / ダウンロード済み再取得 / お気に入り |
+| **licensee** | `.lic` ファイル (role=licensee) | 視聴 / ダウンロード (token消費) / ダウンロード済み再取得 / お気に入り |
 | **creator** | `.lic` ファイル (role=creator) | 音源アップロード / 編集 / 削除 / 公開設定。**自身がアップロードした音源のみ DL可能 (token消費なし、sold遷移なし)**。他の Creator 音源は DL 不可。**sold 状態の音源に対する編集・削除権限を失う。** |
 | **admin** | `.lic` ファイル (role=admin) | 全リソース管理、ユーザ/クリエイター管理、ランク変更、システム設定、lic発行、token手動付与、Creator支払い承認。**全音源 DL可能 (token消費なし、sold遷移なし)**。sold状態の音源も含め編集・削除が可能。 |
 
@@ -83,7 +83,7 @@
 - FR-DL-06: DL対象ファイルは `.wav` 形式。
 - FR-DL-07: DL成功時、原本のコピーが購入者の Downloads ストレージ (`/storage/downloads/{user_id}/{audio_id}.wav`) に保存される。以降、購入者は signed URL 経由でこのコピーから再DLできる (FR-MYDL-03)。
 - FR-DL-08: 購入者の Downloads ストレージには licファイルで設定した容量上限 (`max_download_storage_bytes`) がある。DL後のコピー格納でこの上限を超える場合は DL 不可とし、「ストレージ容量が不足しています」を表示する。
-- FR-DL-09: **sold状態に遷移した音源に対して、アップロード元 Creator の編集・削除権限は即座に消滅する。** その後の管理権限は Admin のみが持つ。購入者 (DL user) は自身の Downloads ストレージ内のコピーのみ管理できる (削除してストレージを解放可能)。
+- FR-DL-09: **sold状態に遷移した音源に対して、アップロード元 Creator の編集・削除権限は即座に消滅する。** その後の管理権限は Admin のみが持つ。購入者 (DL licensee) は自身の Downloads ストレージ内のコピーのみ管理できる (削除してストレージを解放可能)。
 - FR-DL-10: **Creator は自身がアップロードした音源のみ DL可能。** token消費なし。DL しても音源は sold 状態に遷移しない (`downloaded_by_user_id` は変更されない)。他の Creator の音源はDL不可 (`CREATOR_CANNOT_DOWNLOAD`)。ログには `admin_preview` として記録する。
 - FR-DL-11: **Admin は全音源を DL可能。** token消費なし。DL しても音源は sold 状態に遷移しない。ログには `admin_preview` として記録する。
 
@@ -182,14 +182,14 @@ cancelled (任意の段階でキャンセル可)
 |---|---|---|---|---|
 | SC-001 | Dashboard | `/dashboard` | 全ロール | 販売中音源一覧、ソート/件数/ページャー、残token表示 |
 | SC-002 | Activate | `/activate` | guest | licファイル選択、現在のアクティベート状況 |
-| SC-003 | My Downloads | `/me/downloads` | user/creator/admin | 自身がDLした音源一覧、再DLボタン |
-| SC-004 | My Quota | `/me/quota` | user/creator/admin | 当月の付与/消費/残量と履歴 |
+| SC-003 | My Downloads | `/me/downloads` | licensee/creator/admin | 自身がDLした音源一覧、再DLボタン |
+| SC-004 | My Quota | `/me/quota` | licensee/creator/admin | 当月の付与/消費/残量と履歴 |
 | SC-101 | 音源詳細 | `/audios/:id` | 全ロール | 大きな波形、メタ、token量、DLボタン |
 | SC-201 | Creator: 音源管理 | `/creator/audios` | creator | 自身の音源一覧 (販売中/売却済) (Phase 3) |
 | SC-202 | Creator: アップロード | `/creator/upload` | creator | `.wav` アップロード (Phase 3) |
 | SC-203 | Creator: 売上 | `/creator/payouts` | creator | 自身の支払い予定/確定一覧 (Phase 3) |
-| SC-401 | 発注一覧 (User) | `/orders` | user/creator/admin | 自身の発注チケット一覧・状態確認 (Phase 3) |
-| SC-402 | 発注詳細 | `/orders/:id` | user/creator/admin | チケット本文・メッセージ履歴・提出音源 (Phase 3) |
+| SC-401 | 発注一覧 (Licensee) | `/orders` | licensee/creator/admin | 自身の発注チケット一覧・状態確認 (Phase 3) |
+| SC-402 | 発注詳細 | `/orders/:id` | licensee/creator/admin | チケット本文・メッセージ履歴・提出音源 (Phase 3) |
 | SC-403 | 発注管理 (Admin) | `/admin/orders` | admin | 全発注チケット管理・Creator 指名・Done処理 (Phase 3) |
 | SC-301 | Admin: ユーザ管理 | `/admin/users` | admin | (Phase 3) |
 | SC-302 | Admin: クリエイター管理 | `/admin/creators` | admin | ランク変更含む (Phase 3) |

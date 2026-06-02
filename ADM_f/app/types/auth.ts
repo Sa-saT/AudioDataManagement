@@ -1,4 +1,4 @@
-export type Role = 'guest' | 'user' | 'creator' | 'admin'
+export type Role = 'guest' | 'licensee' | 'creator' | 'admin'
 
 export interface AuthUser {
   id: string
@@ -15,7 +15,7 @@ export interface ActivateApiResponse {
   user: {
     id: string
     username: string
-    role: 'user' | 'creator' | 'admin'
+    role: 'licensee' | 'creator' | 'admin'
     license_code: string
     monthly_quota_tokens: number
   }

@@ -168,12 +168,12 @@ async function fetchUsers() {
 }
 
 // ─── User list role filter ───────────────────────────────────────────────────
-type RoleFilter = 'creator' | 'user'
+type RoleFilter = 'creator' | 'licensee'
 const roleFilter = ref<RoleFilter>('creator')
 const groupFilter = ref<string>('all')
 
 const creatorList = computed(() => users.value.filter(u => u.role === 'creator' || u.role === 'admin'))
-const userList = computed(() => users.value.filter(u => u.role === 'user'))
+const userList = computed(() => users.value.filter(u => u.role === 'licensee'))
 
 const availableGroups = computed(() => {
   const s = new Set<string>()
@@ -342,7 +342,7 @@ const grantReason = ref('')
 const grantLoading = ref(false)
 const grantError = ref<string | null>(null)
 const grantSuccess = ref<string | null>(null)
-const userOnlyList = computed(() => users.value.filter(u => u.role === 'user'))
+const userOnlyList = computed(() => users.value.filter(u => u.role === 'licensee'))
 
 function resetGrant() {
   grantUserId.value = ''
@@ -375,7 +375,7 @@ async function submitGrant() {
 
 // ─── Lic issuance tab ────────────────────────────────────────────────────────
 const licUsername = ref('')
-const licRole = ref<'user' | 'creator' | 'admin'>('user')
+const licRole = ref<'licensee' | 'creator' | 'admin'>('licensee')
 const licQuota = ref(18000)
 const licGroup = ref('')
 const licExpires = ref('')
@@ -384,7 +384,7 @@ const licError = ref<string | null>(null)
 
 function resetLic() {
   licUsername.value = ''
-  licRole.value = 'user'
+  licRole.value = 'licensee'
   licQuota.value = 18000
   licGroup.value = ''
   licExpires.value = ''
@@ -399,7 +399,7 @@ async function issueLic() {
     const body: Record<string, unknown> = {
       username: licUsername.value.trim(),
       role: licRole.value,
-      ...(licRole.value === 'user' ? { monthly_quota_tokens: licQuota.value } : {}),
+      ...(licRole.value === 'licensee' ? { monthly_quota_tokens: licQuota.value } : {}),
       ...(licGroup.value.trim() ? { group: licGroup.value.trim() } : {}),
     }
     if (licExpires.value) body.expires_at = new Date(licExpires.value).toISOString()
@@ -744,7 +744,7 @@ watch(tab, (t) => {
     <!-- Tabs -->
     <div class="flex shrink-0 flex-wrap gap-4 border-b border-hairline-soft pb-0">
       <button
-        v-for="t in ([['users','ユーザ管理'],['payouts','Payout'],['tokens','Token付与'],['licenses','lic発行'],['orders','Commission'],['archive','アーカイブ'],['logs','ログ'],['settings','設定']] as [Tab, string][])"
+        v-for="t in ([['users','Users'],['payouts','Payout'],['tokens','Token付与'],['licenses','lic発行'],['orders','Commission'],['archive','アーカイブ'],['logs','ログ'],['settings','設定']] as [Tab, string][])"
         :key="t[0]"
         class="relative pb-2 text-[14px] font-semibold transition-all"
         :class="[
@@ -772,14 +772,14 @@ watch(tab, (t) => {
 
     <div class="flex-1 overflow-y-auto py-4">
 
-      <!-- ① ユーザ管理 -->
+      <!-- ① Users 管理 -->
       <div v-if="tab === 'users'">
 
         <!-- role フィルタ + 更新 -->
         <div class="mb-3 flex items-center gap-4">
           <div class="flex gap-3">
             <button
-              v-for="r in (['creator','user'] as RoleFilter[])"
+              v-for="r in (['creator','licensee'] as RoleFilter[])"
               :key="r"
               class="text-[12px] font-semibold text-ink transition-all"
               :class="roleFilter === r ? 'filter-active' : 'opacity-40 hover:opacity-70'"
@@ -790,7 +790,7 @@ watch(tab, (t) => {
         </div>
 
         <!-- User: group filter -->
-        <div v-if="roleFilter === 'user' && availableGroups.length > 0" class="mb-3 flex flex-wrap gap-2">
+        <div v-if="roleFilter === 'licensee' && availableGroups.length > 0" class="mb-3 flex flex-wrap gap-2">
           <button
             v-for="g in ['all', ...availableGroups, '__none__']"
             :key="g"
@@ -1098,19 +1098,19 @@ watch(tab, (t) => {
         <div class="card space-y-4 p-5">
           <div>
             <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.07em] text-body-strong">
-              対象ユーザ <span class="text-accent">*</span>
-              <span class="ml-1 font-normal normal-case tracking-normal text-muted">(role=user のみ)</span>
+              対象利用者 <span class="text-accent">*</span>
+              <span class="ml-1 font-normal normal-case tracking-normal text-muted">(role=licensee のみ)</span>
             </label>
             <div v-if="usersLoading" class="py-2 text-[12px] text-muted">読み込み中…</div>
             <div v-else-if="userOnlyList.length === 0" class="rounded-md border border-hairline-soft bg-surface-strong/40 px-3 py-2 text-[12px] text-muted">
-              role=user のアカウントがまだありません。
+              role=licensee のアカウントがまだありません。
             </div>
             <select
               v-else
               v-model="grantUserId"
               class="w-full rounded-md border border-hairline-strong bg-white/85 px-3 py-2 text-[12px] text-ink outline-none transition-colors focus:border-primary"
             >
-              <option value="" disabled>ユーザを選択…</option>
+              <option value="" disabled>利用者を選択…</option>
               <option v-for="u in userOnlyList" :key="u.id" :value="u.id">
                 {{ u.username }}<template v-if="u.group_name"> ({{ u.group_name }})</template>
                 <template v-if="u.monthly_quota_tokens !== null">（月{{ u.monthly_quota_tokens.toLocaleString() }}tk）</template>
@@ -1159,7 +1159,7 @@ watch(tab, (t) => {
             <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.07em] text-body-strong">ロール</label>
             <div class="flex gap-2">
               <button
-                v-for="r in ['user','creator','admin'] as const" :key="r" type="button"
+                v-for="r in ['licensee','creator','admin'] as const" :key="r" type="button"
                 class="rounded-full border px-3 py-1 text-[11px] font-medium transition-colors"
                 :class="licRole === r ? 'border-primary bg-primary/10 text-primary-active' : 'border-hairline text-muted hover:text-ink'"
                 @click="licRole = r"
@@ -1167,7 +1167,7 @@ watch(tab, (t) => {
             </div>
           </div>
           <!-- token: user のみ表示 -->
-          <div v-if="licRole === 'user'">
+          <div v-if="licRole === 'licensee'">
             <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.07em] text-body-strong">月間 token</label>
             <div class="flex items-center gap-2">
               <input v-model.number="licQuota" type="number" min="0"
