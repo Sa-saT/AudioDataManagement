@@ -116,7 +116,7 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
       </div>
       <span v-else />
 
-      <div v-if="auth.isActivated" class="flex items-center gap-4">
+      <div v-if="auth.isActivated && auth.role !== 'creator'" class="flex items-center gap-4">
         <div class="flex min-w-[200px] flex-col gap-1">
           <div class="flex justify-between font-mono text-[11px] font-semibold text-ink">
             <span>TOKENS</span>
