@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 
+import { useAuthStore } from '~/stores/auth'
+
 interface UnreadBreakdown {
   action_required: number
   message_unread: number
@@ -127,16 +129,15 @@ export const useSystemStore = defineStore('system', {
     },
 
     async sessionPing() {
+      // useApi を経由することで 401 SESSION_INVALIDATED → 自動ポップアップに繋がる
+      const auth = useAuthStore()
+      if (!auth.token) return
       try {
-        const config = useRuntimeConfig()
-        const token = useCookie('adm_token').value
-        if (!token) return
-        await $fetch('/api/v1/me/session/ping', {
-          method: 'POST',
-          baseURL: config.public.apiBaseUrl as string,
-          headers: { Authorization: `Bearer ${token}` },
-        })
-      } catch { /* silent */ }
+        const api = useApi()
+        await api.post('/api/v1/me/session/ping', { body: {} })
+      } catch {
+        // 401 系は useApi 内で invalidateSession 済み。それ以外は黙殺
+      }
     },
 
     clearCommissionUnread() {

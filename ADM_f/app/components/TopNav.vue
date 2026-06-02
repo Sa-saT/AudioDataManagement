@@ -8,10 +8,11 @@ const system = useSystemStore()
 onMounted(async () => {
   auth.hydrate()
   await system.fetchCommissionStatus()
-  if (auth.isActivated && system.commissionEnabled) {
-    // 改訂2: 主要ページ訪問時に session ping (30分dedupはサーバ側)
+  if (auth.isActivated) {
+    // B案 単一セッション制: 起動毎に ping して sid 検証
+    // (401 SESSION_INVALIDATED が返れば useApi が自動でポップアップ起動)
     system.sessionPing()
-    system.fetchCommissionUnread()
+    if (system.commissionEnabled) system.fetchCommissionUnread()
   }
 })
 
