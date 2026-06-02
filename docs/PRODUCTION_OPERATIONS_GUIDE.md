@@ -41,6 +41,64 @@
 
 ## 2. デプロイ先候補 (規模別)
 
+### 2.0 サービスの用途と役割 (初めての人向け)
+
+> 複雑なデプロイが初めての場合、各サービスが「何の代わり / 何をしてくれるか」を理解しておくと、構成図を読むのが楽になる。
+> 一言で言えば: **自前で運用すると週末が消えるものを、SaaS が肩代わりしてくれる。**
+
+#### A. アプリ本体のホスティング
+
+| サービス | 役割 (一言で) | ADM での用途 | 自前でやる場合の代替 |
+|---|---|---|---|
+| **Cloudflare Pages** | 静的サイトを CDN で配る Vercel ライクの無料ホスト | Nuxt をビルドした `index.html` + JS をユーザに高速配信 | nginx + Let's Encrypt + CDN 自前構築 |
+| **Fly.io** | Docker コンテナを世界各地に立てる軽量 PaaS | FastAPI + uvicorn + ffmpeg を「マシン」として動かす (= サーバ実体) | EC2 / VPS に Docker を自前デプロイ |
+| **Neon** | PostgreSQL を「サーバレス」で提供。使ってない時は停止 (= 安い) | DB 本体。ローカルの PostgreSQL をそのまま移す | RDS Aurora や VPS 上の Postgres 自前運用 |
+| **Cloudflare R2** | S3 互換のオブジェクトストレージ。**egress (転送量) が無料** | `/storage/sounds/` `/storage/downloads/` の wav ファイル保管 | EC2 にディスクをアタッチして自前管理 (重い) |
+
+**ADM 特有の注意:** wav ファイル (1曲 20-30MB) を多数配信するため、egress 無料の R2 が **AWS S3 より圧倒的に安い** (S3 は 1GB あたり ¥10〜15、R2 は ¥0)。R2 が無ければこの規模で副業運用は厳しい。
+
+#### B. 監視・通知 (障害に気づくため)
+
+| サービス | 役割 | ADM での用途 | これが無いと困る瞬間 |
+|---|---|---|---|
+| **Sentry** | アプリ内のエラーを自動収集して通知 | FastAPI の例外、Nuxt の JS エラー、stack trace を Slack に飛ばす | ユーザが「壊れてる」と DM するまで気づけない |
+| **Better Stack** | URL を一定間隔で叩いて死活監視 | `https://api.example.com/healthz` を 30 秒おきにチェック、落ちたら通知 | Fly.io 自体が落ちた時、Sentry すら通知できない |
+| **Grafana Cloud (Loki)** | ログを集約して検索可能に | Fly.io が出力する application log を一元保存、grep | 障害調査で「あのとき何が起きた?」が追えない |
+
+#### C. CI/CD・コード管理
+
+| サービス | 役割 | ADM での用途 |
+|---|---|---|
+| **GitHub** | コードのリモートリポジトリ | source of truth、Issue/PR ベースで運用 |
+| **GitHub Actions** | push をトリガに自動でビルド・テスト・デプロイ | `main` に push → 自動で Fly.io デプロイ + alembic migration |
+
+#### D. 周辺 (必要になったら)
+
+| サービス | 役割 | 必要になる時期 |
+|---|---|---|
+| **Stripe / PAY.JP** | クレジットカード決済の代行 + Creator への自動振込 | Creator payout を自動化したくなった時 (現状は手動振込) |
+| **Cloudflare WAF** | 不正アクセス・ボット遮断 | 1,000 ユーザ超え or 攻撃を観測した時 |
+
+#### なぜこの組み合わせか (副業前提の設計判断)
+
+1. **すべて managed service** = サーバの OS パッチ・ログローテーション・SSL 証明書更新を**自分でやらない**
+2. **ほぼ全部 Free tier から始まる** = β リリースは月 ¥0 で立ち上げ可能
+3. **段階的にスケール** = Free → 有料の移行が GUI で完結 (移行作業ほぼ不要)
+4. **連携が標準化** = Fly.io ↔ Sentry, GitHub Actions ↔ Fly.io はワンクリックで繋がる
+
+逆に避けるべき選択肢:
+- **生 EC2 / VPS 1台運用**: OS 管理が必須、副業時間を吸う
+- **AWS フルセット (ECS + RDS + S3 + CloudFront)**: 月 5 万円〜、IAM 設定だけで週末が消える
+- **Vercel + AWS Lambda**: ffmpeg バイナリ同梱が手間 (Fly.io なら Dockerfile に書くだけ)
+
+#### 学習順序 (初めての人向け)
+
+1週間目: **GitHub Actions** (CI 自動化に慣れる) → 2週間目: **Fly.io** (`fly deploy` 1コマンドの体験) → 3週間目: **Cloudflare Pages + R2** → 4週間目: **Neon** (DB の本番化) → 最後: **Sentry / Better Stack** (監視は最後に整える)。
+
+**最初から全部やろうとしない**こと。staging 環境を 1 サービスずつ繋ぐのが結果的に早い。
+
+---
+
 ### 2.1 最小構成 (β / 100 ユーザ)
 
 ```
@@ -548,9 +606,9 @@ lic ファイルはユーザが持つものなので「秘密」にはできな�
 
 | フェーズ | 内容 | 工数 |
 |---|---|---|
-| **Phase A (現在)** | JSON + HMAC 署名 (読める) | 完了済み |
-| **Phase B (次回)** | JWE (ECDH-ES + A256GCM) に移行。内容暗号化、形式は標準 JWT | 1〜2日 |
-| **Phase C (本番前)** | バイナリ magic header 付与 (AES-GCM blob) + Ed25519 署名の二重構造 | 2〜3日 |
+| **Phase A** | JSON + HMAC 署名 (読める) | 完了済み |
+| **Phase B** | JWE (ECDH-ES + A256GCM) に移行。内容暗号化、形式は標準 JWT | **完了済み (2026-06-01)** |
+| **Phase C (本番前)** | バイナリ magic header 付与 (AES-GCM blob) + Ed25519 署名の二重構造 | 2〜3日 (未着手) |
 
 #### Phase B 推奨設計 (JWE)
 
