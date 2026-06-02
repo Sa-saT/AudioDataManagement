@@ -276,7 +276,7 @@ async function executeDownload() {
       <template v-if="!isFreeDownload">
         <p class="text-[12px] text-muted">
           この音源は <span class="text-accent font-medium">単発販売</span> のため、
-          ダウンロード後は他ユーザの Dashboard から消えます。再ダウンロードは My Downloads から無料です。
+          ダウンロード後は他ユーザの Dashboard から消えます。再ダウンロードは Download List から無料です。
         </p>
         <p class="mt-3 font-mono text-[12px]">
           消費: <span class="text-accent font-semibold">{{ track.tokenCost }} tk</span>

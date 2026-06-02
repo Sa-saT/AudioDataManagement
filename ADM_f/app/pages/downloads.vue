@@ -3,7 +3,7 @@ import { useAuthStore } from '~/stores/auth'
 import { errorMessageJa } from '~/utils/errorMessageJa'
 
 definePageMeta({ layout: 'default' })
-useHead({ title: 'My Downloads — Pathfinder' })
+useHead({ title: 'Download List — Pathfinder' })
 
 const auth = useAuthStore()
 const api = useApi()
@@ -31,6 +31,9 @@ const items = ref<DownloadItem[]>([])
 const storageUsedBytes = ref(0)
 const loading = ref(false)
 const error = ref<string | null>(null)
+
+// コピーが残っているものだけ表示 (削除済みのレコードは履歴的役割のみで UI 非表示)
+const visibleItems = computed(() => items.value.filter(i => i.copy_exists))
 
 onMounted(async () => {
   auth.hydrate()
@@ -133,12 +136,12 @@ function formatDuration(sec: number): string {
     <!-- Header -->
     <div class="flex shrink-0 items-end justify-between gap-4 pb-3 pt-5">
       <div>
-        <h1 class="text-[20px] font-normal tracking-[-0.0125em] text-ink">My Downloads</h1>
-        <p class="mt-0.5 text-[12px] text-muted">購入済み音源の再ダウンロード / 管理</p>
+        <h1 class="text-[20px] font-normal tracking-[-0.0125em] text-ink">Download List</h1>
+        <p class="mt-0.5 text-[12px] text-[#4682b4]">購入済み音源の再ダウンロード / 管理</p>
       </div>
 
       <!-- Storage usage -->
-      <div v-if="auth.isActivated && items.length > 0" class="shrink-0 text-right font-mono text-[11px] text-muted">
+      <div v-if="auth.isActivated && visibleItems.length > 0" class="shrink-0 text-right font-mono text-[11px] text-muted">
         <span>ストレージ使用量</span>
         <span class="ml-2 font-semibold text-ink">{{ formatBytes(storageUsedBytes) }}</span>
       </div>
@@ -176,14 +179,14 @@ function formatDuration(sec: number): string {
       </div>
 
       <!-- Empty -->
-      <div v-else-if="items.length === 0" class="py-16 text-center text-[13px] text-muted">
+      <div v-else-if="visibleItems.length === 0" class="py-16 text-center text-[13px] text-muted">
         まだ購入した音源はありません。
       </div>
 
-      <!-- List -->
+      <!-- List (copy_exists=true のみ) -->
       <div v-else class="space-y-2">
         <div
-          v-for="item in items"
+          v-for="item in visibleItems"
           :key="item.id"
           class="card flex items-center gap-4 px-4 py-3"
         >
