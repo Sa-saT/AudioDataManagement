@@ -41,7 +41,7 @@ def upgrade() -> None:
     op.execute("CREATE SEQUENCE orders_serial_seq AS BIGINT START WITH 1 INCREMENT BY 1")
     op.execute(
         "SELECT setval('orders_serial_seq', "
-        "COALESCE((SELECT MAX(serial) FROM orders), 0), true)"
+        "COALESCE((SELECT MAX(serial) FROM orders), 0) + 1, false)"
     )
     op.execute("ALTER SEQUENCE orders_serial_seq OWNED BY orders.serial")
 
