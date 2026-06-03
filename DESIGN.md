@@ -287,6 +287,37 @@ Cursor リファレンスから以下の点のみ差し替え。他のトーク�
 - Playing progress (再生後): MediumAquamarine `#66cdaa`
 - Cursor: turquoise
 
+### Navigation Conventions
+
+#### 戻るボタン `[<]`
+
+親子関係にある全ページのヘッダーに共通して配置するルール。
+
+| 項目 | 値 |
+|---|---|
+| アイコン | `<polyline points="15 18 9 12 15 6"/>` / 22×22px / stroke-width=3 |
+| 色 | `text-ink/70`、hover: `text-ink` |
+| 動作 | `router.back()` / 履歴なし時は親一覧へ |
+| 縦揃え | ヘッダー flex コンテナは **`items-center`** に統一 |
+
+**ヘッダーレイアウト規則:**
+
+```html
+<!-- 親子ページ共通テンプレート -->
+<div class="flex shrink-0 items-center gap-3 pb-3 pt-5">
+  <button @click="goBack">          <!-- 常に items-center で縦中央 -->
+    <svg width="22" height="22" stroke-width="3">
+      <polyline points="15 18 9 12 15 6"/>
+    </svg>
+  </button>
+  <div>タイトル / メタ情報</div>
+</div>
+```
+
+- admin 限定の `[<]` は `v-if="isAdmin"` で出し分けるが、コンテナは常に `items-center` を維持する
+- `items-end` は使わない（子ページ間で `[<]` の縦位置がずれるため）
+- 適用ページ: `orders/index.vue`（Commission 一覧）、`orders/[id].vue`（チケット詳細）、および今後追加する親子ページすべて
+
 ### Card content (AudioCard)
 - Layout (grid): `[WaveformPlayer: 260px] [meta+tags: 1fr] [right: 88px]`
 - meta: title / creator / tags (イメージタグ pill)
