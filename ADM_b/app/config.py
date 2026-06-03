@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     LICENSE_SECRET: str = ""
     # Phase B: EC private key PEM for JWE issuance/verification (ECDH-ES + A256GCM)
     ADM_LIC_EC_PRIVATE_KEY: str = ""
+    # Phase C: AES-256-GCM binary lic encryption key (64 hex chars = 32 bytes)
+    ADM_LIC_ENC_KEY: str = ""
 
     # Storage
     STORAGE_BACKEND: str = "local"

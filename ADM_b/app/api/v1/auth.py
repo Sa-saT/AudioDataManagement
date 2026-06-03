@@ -15,7 +15,7 @@ from app.security.license import (
     LicenseError,
     LicensePayload,
     check_validity,
-    parse_lic_text,
+    parse_lic_bytes,
     validate_payload,
     verify_signature,
 )
@@ -27,13 +27,11 @@ def _error(code: str, message: str, status_code: int) -> HTTPException:
     return HTTPException(status_code=status_code, detail={"code": code, "message": message})
 
 
-async def _read_lic_text(request: Request, file: UploadFile | None) -> str:
+async def _read_lic_bytes(request: Request, file: UploadFile | None) -> bytes:
+    """ファイルアップロードまたは JSON body {"lic": "..."} から raw bytes を返す。
+    Phase C バイナリは file 経由で送る (JSON body は text 専用)。"""
     if file is not None:
-        data = await file.read()
-        try:
-            return data.decode("utf-8")
-        except UnicodeDecodeError as exc:
-            raise _error("MALFORMED_LICENSE", f"not utf-8: {exc}", 400)
+        return await file.read()
 
     content_type = (request.headers.get("content-type") or "").split(";")[0].strip().lower()
     if content_type == "application/json":
@@ -42,10 +40,10 @@ async def _read_lic_text(request: Request, file: UploadFile | None) -> str:
         except ValueError as exc:
             raise _error("MALFORMED_LICENSE", f"invalid json body: {exc}", 400)
         try:
-            payload = ActivateJsonRequest(**body)
+            req = ActivateJsonRequest(**body)
         except Exception as exc:
             raise _error("MALFORMED_LICENSE", str(exc), 400)
-        return payload.lic
+        return req.lic.encode("utf-8")
 
     raise _error(
         "MALFORMED_LICENSE",
@@ -137,10 +135,10 @@ async def activate(
     file: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
 ) -> ActivateResponse:
-    text = await _read_lic_text(request, file)
+    raw = await _read_lic_bytes(request, file)
 
     try:
-        data = parse_lic_text(text)
+        data = parse_lic_bytes(raw)
         payload = validate_payload(data)
         verify_signature(payload, require=True)
         check_validity(payload)

@@ -7,6 +7,8 @@ import os
 os.environ["JWT_SECRET"] = "test-jwt-secret-at-least-32-chars!!"
 os.environ["LICENSE_SECRET"] = "test-license-secret"
 os.environ["ADM_LIC_EC_PRIVATE_KEY"] = ""
+# 64 hex chars = 32 bytes; all-zero key for unit tests only
+os.environ["ADM_LIC_ENC_KEY"] = "00" * 32
 os.environ["DB_APP_PASSWORD"] = "test"
 os.environ["DB_MIGRATOR_PASSWORD"] = "test"
 

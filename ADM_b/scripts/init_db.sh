@@ -33,6 +33,9 @@ text = text.replace('__MIGRATOR_PASSWORD__', token(32))
 text = text.replace('__JWT_SECRET__', token(64))
 text = text.replace('__SIGNED_URL_SECRET__', token(64))
 text = text.replace('__LICENSE_SECRET__', token(64))
+import subprocess
+lic_enc_key = subprocess.check_output(['openssl', 'rand', '-hex', '32']).decode().strip()
+text = text.replace('__LIC_ENC_KEY__', lic_enc_key)
 p.write_text(text)
 PY
   chmod 600 .env

@@ -138,9 +138,9 @@ Bob    /activate ─→ DB.sid = S2 に上書き, JWT2.sid = S2
 
 | Phase | フォーマット | 内容秘匿 | 改ざん検知 |
 |---|---|---|---|
-| A (現在) | JSON 平文 + HMAC-SHA256 署名 | ❌ | ✅ |
-| B (次回) | JWE (ECDH-ES + A256GCM) | ✅ | ✅ (GCM tag) |
-| C (本番前) | バイナリ magic blob (AES-256-GCM) + Ed25519 署名 | ✅ | ✅ |
+| A | JSON 平文 + HMAC-SHA256 署名 | ❌ | ✅ |
+| B | JWE (ECDH-ES + A256GCM) | ✅ | ✅ (GCM tag) |
+| C (実装済) | バイナリ AES-256-GCM (magic + nonce + ciphertext+tag) | ✅ | ✅ (GCM tag) |
 
 `schemaVersion` フィールドでフォーマット世代を判別し、移行期間中は複数世代を受け入れる。
 
@@ -156,15 +156,21 @@ eyJhbGciOiJFQ0RILUVTIiwiZW5jIjoiQTI1NkdDTSIsImtpZCI6ImFkbS12MSJ9..IV.ciphertext.
 - claims (暗号化されたペイロード) は §2.1 の JSON フィールドと同一
 - `kid` で鍵世代を識別。サーバは対応する EC 秘密鍵で復号
 
-### 7.3 Phase C — バイナリ形式
+### 7.3 Phase C — バイナリ形式 (実装済)
 
 ```
 [8B magic "ADMLIC\x01\x00"][12B nonce][N bytes AES-256-GCM ciphertext + 16B tag]
 ```
 
-- magic bytes でフォーマット検出 / バージョン管理
-- nonce は発行ごとにランダム生成 (使い回し禁止)
+- magic bytes (`ADMLIC\x01\x00`) でフォーマット検出 / バージョン管理。AAD としても使用するため magic 改ざんも GCM tag で検知できる
+- nonce は発行ごとに `os.urandom(12)` でランダム生成 (使い回し禁止)
 - GCM tag で改ざん検知を兼ねるため HMAC 署名は不要
+- ペイロード JSON に `"schemaVersion": 3` を付与
+- 環境変数: `ADM_LIC_ENC_KEY` (64 hex chars = 32 bytes AES-256 鍵)
+  - 生成: `openssl rand -hex 32`
+  - `scripts/init_db.sh` が初期化時に自動生成
+- 発行: `scripts/issue_lic.py --format phase-c`
+- 復号エントリポイント: `parse_lic_bytes(raw: bytes)` — magic 先頭バイト検査後に Phase A/B/C を自動判別
 
 ### 7.4 鍵管理規則
 

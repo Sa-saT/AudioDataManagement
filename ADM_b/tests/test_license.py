@@ -7,9 +7,12 @@ import pytest
 from app.security.license import (
     LicenseError,
     LicensePayload,
+    _PHASE_C_MAGIC,
     _parse_iso8601,
     check_validity,
     compute_signature,
+    issue_phase_c_license,
+    parse_lic_bytes,
     parse_lic_text,
     validate_payload,
     verify_signature,
@@ -215,3 +218,73 @@ class TestParseIso8601:
         with pytest.raises(LicenseError) as exc:
             _parse_iso8601("not-a-date", "issuedAt")
         assert exc.value.code == "MALFORMED_LICENSE"
+
+
+# ─── Phase C: AES-256-GCM バイナリ ───────────────────────────────────────────
+
+class TestPhaseCLicense:
+    def test_roundtrip(self):
+        """issue → parse_lic_bytes → validate_payload が正常に通ること。"""
+        raw = issue_phase_c_license(dict(VALID_DATA))
+        parsed = parse_lic_bytes(raw)
+        payload = validate_payload(parsed)
+        assert payload.username == "testuser"
+        assert payload.role == "licensee"
+        assert payload.monthly_quota_tokens == 3600
+
+    def test_starts_with_magic(self):
+        raw = issue_phase_c_license(dict(VALID_DATA))
+        assert raw[:8] == _PHASE_C_MAGIC
+
+    def test_schema_version_3_in_payload(self):
+        raw = issue_phase_c_license(dict(VALID_DATA))
+        parsed = parse_lic_bytes(raw)
+        assert parsed.get("schemaVersion") == 3
+
+    def test_tampered_ciphertext_raises(self):
+        """暗号文の 1 バイト改ざん → GCM tag 不一致 → INVALID_LICENSE_SIGNATURE。"""
+        raw = issue_phase_c_license(dict(VALID_DATA))
+        tampered = bytearray(raw)
+        tampered[20] ^= 0xFF  # 暗号文先頭バイトを反転
+        with pytest.raises(LicenseError) as exc:
+            parse_lic_bytes(bytes(tampered))
+        assert exc.value.code == "INVALID_LICENSE_SIGNATURE"
+
+    def test_tampered_nonce_raises(self):
+        """nonce 改ざん → GCM tag 不一致 → INVALID_LICENSE_SIGNATURE。"""
+        raw = issue_phase_c_license(dict(VALID_DATA))
+        tampered = bytearray(raw)
+        tampered[8] ^= 0xFF  # nonce 先頭バイトを反転
+        with pytest.raises(LicenseError) as exc:
+            parse_lic_bytes(bytes(tampered))
+        assert exc.value.code == "INVALID_LICENSE_SIGNATURE"
+
+    def test_too_short_raises(self):
+        """magic 一致だが短すぎるデータ → MALFORMED_LICENSE。"""
+        with pytest.raises(LicenseError) as exc:
+            parse_lic_bytes(_PHASE_C_MAGIC + b"\x00" * 10)
+        assert exc.value.code == "MALFORMED_LICENSE"
+
+    def test_wrong_key_raises(self):
+        """別の鍵で復号 → GCM tag 不一致 → INVALID_LICENSE_SIGNATURE。"""
+        from unittest.mock import MagicMock, patch
+
+        raw = issue_phase_c_license(dict(VALID_DATA))
+        fake = MagicMock()
+        fake.ADM_LIC_ENC_KEY = "ff" * 32
+        with patch("app.security.license.get_settings", return_value=fake):
+            with pytest.raises(LicenseError) as exc:
+                parse_lic_bytes(raw)
+        assert exc.value.code == "INVALID_LICENSE_SIGNATURE"
+
+    def test_text_lic_falls_through_to_phase_a(self):
+        """Phase C magic がない UTF-8 バイト列 → Phase A JSON として処理される。"""
+        raw = json.dumps(VALID_DATA).encode("utf-8")
+        parsed = parse_lic_bytes(raw)
+        assert parsed["username"] == "testuser"
+
+    def test_non_utf8_non_magic_raises(self):
+        """magic なし & non-UTF-8 → INVALID_LICENSE_FORMAT。"""
+        with pytest.raises(LicenseError) as exc:
+            parse_lic_bytes(b"\xff\xfe\x00\x01invalid")
+        assert exc.value.code == "INVALID_LICENSE_FORMAT"

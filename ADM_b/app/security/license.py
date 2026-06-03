@@ -285,3 +285,70 @@ def check_validity(payload: LicensePayload, *, now: datetime | None = None) -> N
     current = now or datetime.now(timezone.utc)
     if payload.expires_at is not None and payload.expires_at <= current:
         raise LicenseError("LICENSE_EXPIRED", "license has expired")
+
+
+# ─── Phase C: AES-256-GCM バイナリ ───────────────────────────────────────────
+# フォーマット: magic(8B) + nonce(12B) + GCM ciphertext+tag(N+16B)
+# magic を AAD として用いるため、magic 改変も tag 検証で検出できる。
+
+_PHASE_C_MAGIC = b"ADMLIC\x01\x00"  # 8 bytes
+
+
+def _load_phase_c_key() -> bytes:
+    key_hex = get_settings().ADM_LIC_ENC_KEY
+    if not key_hex:
+        raise LicenseError("INVALID_LICENSE_FORMAT", "ADM_LIC_ENC_KEY not configured")
+    try:
+        key = bytes.fromhex(key_hex)
+    except ValueError as exc:
+        raise LicenseError("INVALID_LICENSE_FORMAT", f"ADM_LIC_ENC_KEY must be hex: {exc}") from exc
+    if len(key) != 32:
+        raise LicenseError("INVALID_LICENSE_FORMAT", "ADM_LIC_ENC_KEY must be 64 hex chars (256 bit)")
+    return key
+
+
+def issue_phase_c_license(data: dict[str, Any]) -> bytes:
+    """JSON ペイロードを AES-256-GCM で暗号化して Phase C バイナリを返す。"""
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    key = _load_phase_c_key()
+    nonce = os.urandom(12)
+    plaintext = json.dumps({**data, "schemaVersion": 3}, separators=(",", ":")).encode()
+    ct_tag = AESGCM(key).encrypt(nonce, plaintext, _PHASE_C_MAGIC)
+    return _PHASE_C_MAGIC + nonce + ct_tag
+
+
+def _parse_phase_c(raw: bytes) -> dict[str, Any]:
+    """Phase C バイナリを復号してペイロード dict を返す。"""
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    if len(raw) < len(_PHASE_C_MAGIC) + 12 + 16:
+        raise LicenseError("MALFORMED_LICENSE", "Phase C data too short")
+    nonce = raw[8:20]
+    ct_tag = raw[20:]
+    key = _load_phase_c_key()
+    try:
+        plaintext = AESGCM(key).decrypt(nonce, ct_tag, _PHASE_C_MAGIC)
+    except Exception as exc:
+        raise LicenseError("INVALID_LICENSE_SIGNATURE", f"Phase C decryption failed: {exc}") from exc
+    try:
+        result = json.loads(plaintext)
+    except json.JSONDecodeError as exc:
+        raise LicenseError("MALFORMED_LICENSE", f"Phase C payload not valid JSON: {exc}") from exc
+    if not isinstance(result, dict):
+        raise LicenseError("MALFORMED_LICENSE", "Phase C payload must be JSON object")
+    return result
+
+
+def parse_lic_bytes(raw: bytes) -> dict[str, Any]:
+    """フォーマット統一エントリ: Phase C バイナリ / Phase B JWE / Phase A JSON・KV。"""
+    if raw[:8] == _PHASE_C_MAGIC:
+        return _parse_phase_c(raw)
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise LicenseError(
+            "INVALID_LICENSE_FORMAT",
+            f"not UTF-8 and not Phase C binary: {exc}",
+        ) from exc
+    return parse_lic_text(text)

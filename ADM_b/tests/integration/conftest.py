@@ -9,6 +9,9 @@ import os
 # DB_NAME を adm_test に向けてから app モジュールを import する。
 # conftest は pytest が最初に解釈するため、app.db の engine がこの値で初期化される。
 os.environ["DB_NAME"] = "adm_test"
+# unit conftest.py が ADM_LIC_ENC_KEY を設定しているが念のため統合テスト側でも保証
+if "ADM_LIC_ENC_KEY" not in os.environ:
+    os.environ["ADM_LIC_ENC_KEY"] = "00" * 32
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,7 +19,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.security.license import compute_signature
+from app.security.license import compute_signature, issue_phase_c_license
 
 # lru_cache をクリアして DB_NAME=adm_test を反映
 get_settings.cache_clear()
@@ -96,6 +99,28 @@ def make_lic(
     if sign:
         data["signature"] = compute_signature(data)
     return json.dumps(data)
+
+
+def make_phase_c_lic(
+    *,
+    username: str = "testuser",
+    role: str = "licensee",
+    license_id: str = "test-phc-001",
+    monthly_quota_tokens: int = 3600,
+    issued_at: str = "2026-01-01T00:00:00Z",
+    expires_at: str | None = None,
+) -> bytes:
+    """テスト用 Phase C バイナリ .lic を生成する。"""
+    data: dict = {
+        "username": username,
+        "role": role,
+        "licenseId": license_id,
+        "monthlyQuotaTokens": monthly_quota_tokens,
+        "issuedAt": issued_at,
+    }
+    if expires_at:
+        data["expiresAt"] = expires_at
+    return issue_phase_c_license(data)
 
 
 @pytest.fixture
