@@ -235,7 +235,7 @@ function formatDuration(sec: number): string {
             <!-- Delete copy (警告色 + 大きめ) -->
             <button
               v-if="item.copy_exists"
-              class="flex items-center justify-center rounded-md border border-accent/50 bg-accent/10 p-2.5 text-accent transition-colors hover:border-accent hover:bg-accent hover:text-white active:scale-95"
+              class="flex items-center justify-center rounded-md border border-accent/50 bg-accent/10 p-2.5 text-accent transition-colors hover:border-accent hover:bg-accent hover:text-white"
               aria-label="コピーを削除"
               @click="openDelete(item)"
             >

@@ -18,7 +18,7 @@
 - pnpm
 - TailwindCSS (`@nuxtjs/tailwindcss`)
 - Pinia (`@pinia/nuxt`)
-- WebGL2 (波形描画は自前 Fragment Shader、wavesurfer.js は撤去済)
+- WebGL2 (波形描画は自前 Fragment Shader)
 
 ### Backend (`ADM_b/`)
 - FastAPI

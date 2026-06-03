@@ -365,7 +365,7 @@ async function executeDownload() {
     4px 4px 8px 0 rgba(0,0,0,.1);
 }
 .dl-flip-btn:not(.is-disabled):active {
-  transform: scale(0.95);
+  transform: scale(0.97);
   transition: transform .1s;
 }
 .dl-flip-btn.is-disabled {

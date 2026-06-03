@@ -874,12 +874,14 @@ watch(tab, (t) => {
 
         <!-- role フィルタ + 更新 -->
         <div class="mb-3 flex items-center gap-4">
-          <div class="flex gap-3">
+          <div class="flex gap-2">
             <button
               v-for="r in (['creator','licensee'] as RoleFilter[])"
               :key="r"
-              class="text-[12px] font-semibold text-ink transition-all"
-              :class="roleFilter === r ? 'filter-active' : 'opacity-40 hover:opacity-70'"
+              class="rounded-full px-3 py-1 text-[11px] font-semibold transition-colors"
+              :class="roleFilter === r
+                ? 'bg-ink text-canvas'
+                : 'border border-hairline-strong text-body hover:border-primary hover:text-ink'"
               @click="roleFilter = r"
             >{{ r === 'creator' ? 'Creator' : 'Licensee' }}</button>
           </div>
@@ -1110,12 +1112,14 @@ watch(tab, (t) => {
       <div v-if="tab === 'payouts'">
         <div class="mb-3 flex items-center gap-4">
           <span class="text-[11px] font-semibold uppercase tracking-widest text-body-strong">Creator 支払い</span>
-          <div class="flex gap-3">
+          <div class="flex gap-2">
             <button
               v-for="f in (['pending','all'] as const)"
               :key="f"
-              class="text-[12px] font-semibold text-ink transition-all"
-              :class="payoutFilter === f ? 'filter-active' : 'opacity-40 hover:opacity-70'"
+              class="rounded-full px-3 py-1 text-[11px] font-semibold transition-colors"
+              :class="payoutFilter === f
+                ? 'bg-ink text-canvas'
+                : 'border border-hairline-strong text-body hover:border-primary hover:text-ink'"
               @click="payoutFilter = f; fetchPayouts()"
             >{{ f === 'pending' ? '未払い' : '全件' }}</button>
           </div>
@@ -1734,7 +1738,7 @@ watch(tab, (t) => {
                   @keyup.enter="addImageTag"
                 />
                 <button
-                  class="rounded-md px-4 py-1.5 text-[12px] font-medium text-canvas transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
+                  class="rounded-md px-4 py-1.5 text-[12px] font-medium text-canvas transition-all duration-150 disabled:opacity-50"
                   :class="addedFlash ? 'bg-primary scale-95 shadow-inner' : 'bg-ink hover:bg-primary'"
                   :disabled="!imageTagDraft.trim() || settingSaving['image_tag_presets']"
                   @click="addImageTag"

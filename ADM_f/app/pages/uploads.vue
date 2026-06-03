@@ -77,6 +77,47 @@ function toggleTag(tag: string) {
 
 const canSubmit = computed(() => !!file.value && title.value.trim().length > 0 && !loading.value)
 
+// ─── Upload burst effect ──────────────────────────────
+const uploadFilterRef = ref<HTMLSpanElement | null>(null)
+
+const _noise = (n = 1) => n / 2 - Math.random() * n
+const _getXY = (dist: number, idx: number, total: number): [number, number] => {
+  const a = ((360 + _noise(8)) / total) * idx * (Math.PI / 180)
+  return [dist * Math.cos(a), dist * Math.sin(a)]
+}
+const BURST_COLORS = ['#66cdaa', '#20b2aa', '#2e8b57', '#006400', '#66cdaa', '#20b2aa', '#66cdaa', '#2e8b57']
+
+function triggerUploadBurst() {
+  const el = uploadFilterRef.value
+  if (!el) return
+  const count = 15
+  el.querySelectorAll('.up-particle').forEach(p => el.removeChild(p))
+  for (let i = 0; i < count; i++) {
+    const t = 1200 + _noise(600)
+    const [sx, sy] = _getXY(90, count - i, count)
+    const [ex, ey] = _getXY(10 + _noise(7), count - i, count)
+    const rot = _noise(10)
+    const color = BURST_COLORS[Math.floor(Math.random() * BURST_COLORS.length)]!
+    setTimeout(() => {
+      const particle = document.createElement('span')
+      const point = document.createElement('span')
+      particle.classList.add('up-particle')
+      particle.style.setProperty('--start-x', `${sx}px`)
+      particle.style.setProperty('--start-y', `${sy}px`)
+      particle.style.setProperty('--end-x', `${ex}px`)
+      particle.style.setProperty('--end-y', `${ey}px`)
+      particle.style.setProperty('--time', `${t}ms`)
+      particle.style.setProperty('--scale', `${1 + _noise(0.2)}`)
+      particle.style.setProperty('--color', color)
+      particle.style.setProperty('--rotate', `${(rot > 0 ? rot + 0.5 : rot - 0.5) * 10}deg`)
+      point.classList.add('up-point')
+      particle.appendChild(point)
+      el.appendChild(particle)
+      setTimeout(() => { try { el.removeChild(particle) } catch {} }, t)
+    }, 30)
+  }
+}
+
 // ─── Submit ───────────────────────────────────────────
 const loading = ref(false)
 const errorMsg = ref<string | null>(null)
@@ -86,6 +127,7 @@ const succeeded = ref(false)
 
 async function submit() {
   if (!canSubmit.value || !file.value) return
+  triggerUploadBurst()
   loading.value = true
   errorMsg.value = null
   errorCode.value = null
@@ -131,7 +173,8 @@ function formatBytes(bytes: number): string {
 </script>
 
 <template>
-  <div v-if="canAccess" class="mx-auto max-w-2xl px-4 py-10">
+  <div v-if="canAccess" class="h-full overflow-y-auto">
+  <div class="mx-auto max-w-2xl px-4 py-10">
 
     <!-- ─── Success ─────────────────────────────────── -->
     <div v-if="succeeded" class="card p-10 text-center">
@@ -313,22 +356,25 @@ function formatBytes(bytes: number): string {
             class="text-[12px] text-muted transition-colors hover:text-ink"
             @click="router.push('/dashboard')"
           >キャンセル</button>
-          <button
-            class="btn-ink flex items-center gap-2 disabled:opacity-50"
-            :disabled="!canSubmit"
-            @click="submit"
-          >
-            <svg
-              v-if="loading"
-              class="animate-spin"
-              width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-            ><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-            <svg
-              v-else
-              width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-            ><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            {{ loading ? 'アップロード中...' : 'アップロード' }}
-          </button>
+          <div class="relative">
+            <button
+              class="btn-ink relative z-[3] flex items-center gap-2 disabled:opacity-50"
+              :disabled="!canSubmit"
+              @click="submit"
+            >
+              <svg
+                v-if="loading"
+                class="animate-spin"
+                width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+              ><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+              <svg
+                v-else
+                width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+              ><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              {{ loading ? 'アップロード中...' : 'アップロード' }}
+            </button>
+            <span ref="uploadFilterRef" class="up-burst" />
+          </div>
         </div>
       </div>
     </template>
@@ -342,4 +388,85 @@ function formatBytes(bytes: number): string {
     />
 
   </div>
+  </div>
 </template>
+
+<style>
+.up-burst {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.up-particle,
+.up-point {
+  display: block;
+  opacity: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  transform-origin: center;
+}
+
+.up-particle {
+  position: absolute;
+  top: calc(50% - 8px);
+  left: calc(50% - 8px);
+  animation: up-particle var(--time, 1s) ease 1 -350ms;
+}
+
+.up-point {
+  background: var(--color, #66cdaa);
+  opacity: 1;
+  animation: up-point var(--time, 1s) ease 1 -350ms;
+}
+
+@keyframes up-particle {
+  0% {
+    transform: rotate(0deg) translate(var(--start-x), var(--start-y));
+    opacity: 1;
+    animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45);
+  }
+  70% {
+    transform: rotate(calc(var(--rotate) * 0.5)) translate(calc(var(--end-x) * 1.2), calc(var(--end-y) * 1.2));
+    opacity: 1;
+    animation-timing-function: ease;
+  }
+  85% {
+    transform: rotate(calc(var(--rotate) * 0.66)) translate(var(--end-x), var(--end-y));
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(calc(var(--rotate) * 1.2)) translate(calc(var(--end-x) * 0.5), calc(var(--end-y) * 0.5));
+    opacity: 1;
+  }
+}
+
+@keyframes up-point {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+    animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45);
+  }
+  25% {
+    transform: scale(calc(var(--scale) * 0.25));
+  }
+  38% {
+    opacity: 1;
+  }
+  65% {
+    transform: scale(var(--scale));
+    opacity: 1;
+    animation-timing-function: ease;
+  }
+  85% {
+    transform: scale(var(--scale));
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0);
+    opacity: 0;
+  }
+}
+</style>

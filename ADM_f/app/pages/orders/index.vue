@@ -266,8 +266,8 @@ const BGM_SCENE_L: Record<string, string> = {
   <div class="mx-auto flex h-full max-w-[1200px] flex-col px-6">
 
     <!-- Header -->
-    <div class="flex shrink-0 items-end justify-between gap-4 pb-3 pt-5">
-      <div class="flex items-end gap-3">
+    <div class="flex shrink-0 items-center justify-between gap-4 pb-3 pt-5">
+      <div class="flex items-center gap-3">
         <!-- Admin 限定: 前画面に戻る ([<] = router.back() アプリ共通ルール) -->
         <button
           v-if="isAdmin"

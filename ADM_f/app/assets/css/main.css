@@ -22,8 +22,14 @@
      既に scale 系 transform を持つボタン (例: AudioCard の 3D flip) は
      no-press クラスで明示的に opt-out できる。 */
   button:not(:disabled):not(.no-press):active {
-    transform: scale(0.96);
-    transition: transform .08s ease-out;
+    transform: scale(0.990);
+    transition: transform .1s ease-out;
+  }
+  /* NuxtLink (.card として使われる <a>) と role=button な div Card にも同じ押下感を付与 */
+  a.card:active,
+  [role="button"].card:active {
+    transform: scale(0.990);
+    transition: transform .1s ease-out;
   }
 }
 

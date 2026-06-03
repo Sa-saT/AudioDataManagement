@@ -51,6 +51,7 @@ interface OrderBrief {
   // Step 2 SE
   se_trigger?: string
   se_functions?: string[]
+  se_slots?: number
   // Step 3 Emotional
   emotions_target?: string[]
   emotions_avoid?: string[]
@@ -565,7 +566,6 @@ async function cancelOrder() {
 // ─── Message ─────────────────────────────────────
 const msgContent = ref('')
 const msgLoading = ref(false)
-const messagesRef = ref<HTMLDivElement | null>(null)
 // brief / memo / submission / messages を一本に貫通させるスクロール参照
 const contentScrollRef = ref<HTMLDivElement | null>(null)
 
@@ -876,14 +876,6 @@ const STATUS_CLASS: Record<string, string> = {
   reviewing: 'bg-[#f0a84022] text-[#b07000]',
   done: 'bg-[#2ecc7122] text-[#1a9950]',
   cancelled: 'bg-accent/15 text-accent',
-}
-const KIND_CLASS: Record<string, string> = {
-  comment: '',
-  status_change: 'opacity-60 italic',
-  submission: 'border-l-2 border-primary/40 pl-3',
-  rejection: 'border-l-2 border-accent/40 pl-3',
-  done: 'border-l-2 border-[#2ecc71]/50 pl-3',
-  brief_edit: 'border-l-2 border-accent/60 bg-accent/5 pl-3',
 }
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -1409,7 +1401,7 @@ const myCandidate = computed(() =>
         </div>
 
         <!-- Messages (改訂2.3: LINE 風チャット吹き出し)。スクロールは親 contentScrollRef に統合 -->
-        <div ref="messagesRef" class="px-2 py-2">
+        <div class="px-2 py-2">
           <div v-if="order.messages.length === 0" class="py-12 text-center text-[12px] text-muted">
             メッセージはまだありません。
           </div>
