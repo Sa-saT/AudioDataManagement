@@ -184,7 +184,7 @@ ECDH-ES は鍵をラップしない (Direct Key Agreement) ため `encrypted_key
 | **JWE (ECDH-ES + A256GCM)** (Phase B) | Keycloak / Auth0 JWT | ✅ | ✅ | 中 | ✅ 今回実装 |
 | **RSA-OAEP + AES** | JetBrains lic 旧世代 | ✅ | ✅ (署名別途) | 中〜高 | △ 鍵サイズ大、ECC の方が効率的 |
 | **X.509証明書 + PKCS#7** | Adobe / Microsoft lic | ✅ | ✅ | 高 | ✗ 過剰。CA構築が必要 |
-| **バイナリ magic + AES-GCM** (Phase C) | Steam / Spotify | ✅ | ✅ | 中 | ✅ Phase 4 前に実装予定 |
+| **バイナリ magic + AES-GCM** (Phase C) | Steam / Spotify | ✅ | ✅ | 中 | ✅ 実装済み (2026-06-03) |
 | **HSM + KMS wrap** | AWS / Azure ライセンス管理 | ✅✅ | ✅✅ | 非常に高 | ✗ 過剰 (コスト・インフラ) |
 | **ハードウェアドングル** | Avid (Pro Tools) 旧世代 | ✅✅ | ✅✅ | 高 | ✗ 論外 (物理配布が前提) |
 
@@ -311,14 +311,17 @@ lic 発行は頻度が低いので実害はないが、意識はしておく。
 | 特性 | Phase B (JWE) | Phase C (バイナリ) |
 |---|---|---|
 | 可読性 | base64url テキスト (コピペ可) | バイナリ (テキストエディタ不可) |
-| サイズ | ~500〜700 bytes | ~50〜70 bytes |
+| サイズ | ~280〜340 bytes (base64url 込み) | ~160〜200 bytes (実測 ~179 bytes) |
 | 標準準拠 | RFC 7516 ✅ | 独自仕様 |
 | ライブラリ依存 | JWE ライブラリ不要 (自前実装) | なし |
-| Ed25519 署名 | なし | ✅ (独立した署名アルゴリズム) |
+| 改ざん検知 | GCM tag (AEAD) | GCM tag (AEAD) — Ed25519 は不使用 |
+
+> **サイズ内訳 (Phase C):** magic 8B + nonce 12B + ciphertext + GCM tag 16B。  
+> payload JSON が ~143 bytes の場合、合計 ~179 bytes になる。
 
 Phase C は「ファイルを見ただけで何かわからない」という心理的障壁も含め、より強固な難読化。  
 ただし RFC 標準でない分、将来の実装者が理解しにくい。  
-**ADM の用途・規模では Phase B で十分**。Phase C は本番化直前の選択肢。
+**いずれも GCM tag で改ざん検知を完結させており、独立した署名アルゴリズム (Ed25519 等) は使用しない。**
 
 ---
 
@@ -358,7 +361,8 @@ RFC 標準準拠・Ephemeral key・GCM tag による AEAD・AAD でのヘッダ�
 将来の改善優先順位:
 1. **kid ローテーション対応** (鍵漏洩時の手順整備)
 2. **APU/APV への binding 追加** (複数システム展開時)
-3. **Phase C 移行判断** (本番化前にバイナリ形式にするかどうか)
+
+> Phase C (バイナリ AES-256-GCM) は 2026-06-03 に実装済み。`parse_lic_bytes()` が Phase A/B/C を自動判別するエントリポイントとなっている。
 
 ---
 
@@ -392,14 +396,20 @@ print(priv.public_key().public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKey
 **使えます。**
 
 Desktop に保存している `demo_admin.lic` / `demo_creator.lic` / `demo_user.lic` は  
-Phase A (JSON 平文 + HMAC) 形式。現在の `parse_lic_text()` は先頭文字で形式を自動判別するため、  
+Phase A (JSON 平文 + HMAC) 形式。`/activate` の実際のエントリポイントは `parse_lic_bytes()` で、  
+先頭 8 bytes を見て Phase C バイナリを判別し、それ以外は UTF-8 デコード後に `parse_lic_text()` へ委譲する。  
 追加作業なしでそのまま `/activate` にアップロードできる。
 
 ```python
-# parse_lic_text() の分岐 (license.py)
-if _is_jwe_token(stripped):   # "eyJ..." 5-part → Phase B (JWE)
+# parse_lic_bytes() の分岐 (license.py) ← /activate の実際のエントリポイント
+if raw[:8] == _PHASE_C_MAGIC:          # magic "ADMLIC\x01\x00" → Phase C (AES-256-GCM)
+    return _parse_phase_c(raw)
+text = raw.decode("utf-8")             # それ以外は UTF-8 テキストとして parse_lic_text() へ
+
+# parse_lic_text() の分岐
+if _is_jwe_token(stripped):            # "eyJ..." 5-part → Phase B (JWE)
     return parse_jwe_lic_text(stripped)
-if stripped.startswith("{"):  # "{" → Phase A JSON ← 既存 desktop/*.lic はここ
+if stripped.startswith("{"):           # "{" → Phase A JSON ← 既存 desktop/*.lic はここ
     ...
 ```
 
@@ -445,7 +455,7 @@ print(k.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()).decode(
 | 既存 `desktop/*.lic` の動作 | ✅ そのまま使える (Phase A backward compat) |
 | Phase B 発行コード (`license.py` / `admin.py`) | ✅ 実装済み |
 | Phase B 発行の有効化 | ⬜ `.env` に `ADM_LIC_EC_PRIVATE_KEY` を追加すれば即有効 |
-| Phase C (バイナリ形式) | ⬜ Phase 4 前に実装予定 |
+| Phase C (バイナリ AES-256-GCM) | ✅ 実装済み (2026-06-03)。`ADM_LIC_ENC_KEY` (64 hex chars) を `.env` に設定して `--format phase-c` で発行 |
 
 ---
 
