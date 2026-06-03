@@ -64,7 +64,7 @@ onBeforeUnmount(() => {
       :open="auth.sessionInvalidatedMessage !== null"
       title="ログアウトされました"
       variant="danger"
-      confirm-label="再アクティベートへ"
+      confirm-label="再アクティベート"
       cancel-label="閉じる"
       @update:open="(v) => { if (!v) dismissSessionInvalidated() }"
       @confirm="confirmReactivate"
