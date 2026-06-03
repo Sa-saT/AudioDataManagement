@@ -57,7 +57,7 @@ const INFO: Record<string, string> = {
 }
 
 // ─── Activate modal ────────────────────────────────
-const showModal = ref(false)
+const showModal = useState('showActivateModal', () => false)
 const fileName = ref<string | null>(null)
 const errorMsg = ref<string | null>(null)
 

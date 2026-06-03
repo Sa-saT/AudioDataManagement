@@ -73,7 +73,6 @@ export function useApi() {
       if (e.status === 401) {
         if (code === 'SESSION_INVALIDATED') {
           auth.invalidateSession('別の端末でアクティベートされたため、ログアウトしました。再アクティベートしてください。')
-          if (import.meta.client) navigateTo('/activate')
         } else {
           auth.deactivate()
         }

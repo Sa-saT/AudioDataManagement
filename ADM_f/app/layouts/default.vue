@@ -6,8 +6,15 @@ const auth = useAuthStore()
 const system = useSystemStore()
 
 // B案: 401 SESSION_INVALIDATED でログアウトされた瞬間にポップアップ表示
+const showActivateModal = useState('showActivateModal', () => false)
+
 function dismissSessionInvalidated() {
   auth.clearSessionInvalidatedMessage()
+}
+function confirmReactivate() {
+  auth.clearSessionInvalidatedMessage()
+  showActivateModal.value = true
+  navigateTo('/dashboard')
 }
 
 // 単一セッション制のための定期 ping (60秒に1回) + ウィンドウ復帰時の即時 ping。
@@ -60,7 +67,7 @@ onBeforeUnmount(() => {
       confirm-label="再アクティベートへ"
       cancel-label="閉じる"
       @update:open="(v) => { if (!v) dismissSessionInvalidated() }"
-      @confirm="dismissSessionInvalidated"
+      @confirm="confirmReactivate"
       @cancel="dismissSessionInvalidated"
     >
       <p class="text-[13px] text-body">{{ auth.sessionInvalidatedMessage }}</p>
