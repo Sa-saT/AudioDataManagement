@@ -29,7 +29,7 @@ const DEFAULT_PER_PAGE = 10
  *   - total >= STEP: 5刻み + 最終に total 自体を追加 (5倍数でない場合)
  *     例: total=12 → [5, 10, 12]  /  total=80 → [5,10,...,80]
  */
-function computePerPageOptions(total: number): number[] {
+export function computePerPageOptions(total: number): number[] {
   if (total < STEP) return []
   const opts: number[] = []
   const maxMultiple = Math.floor(total / STEP) * STEP
