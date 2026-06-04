@@ -8,6 +8,9 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       apiBaseUrl: 'http://localhost:8000',
+      // NUXT_PUBLIC_SENTRY_DSN 環境変数で上書き可。空 = Sentry 無効
+      sentryDsn: '',
+      environment: 'development',
     },
   },
   tailwindcss: {

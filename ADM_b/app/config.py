@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000"
 
+    # 監視
+    SENTRY_DSN: str = ""         # 空文字 = Sentry 無効 (開発時はそのままでOK)
+    ENVIRONMENT: str = "development"   # development / staging / production
+
     @property
     def app_database_url(self) -> str:
         return self._build_url(self.DB_APP_USER, self.DB_APP_PASSWORD)
