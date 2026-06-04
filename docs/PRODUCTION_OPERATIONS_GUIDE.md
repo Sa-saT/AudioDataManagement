@@ -373,7 +373,7 @@ GitHub (main push)
 1. このドキュメントを基に「最小構成」での staging 環境構築 → 動作確認
 2. Sentry / Better Stack のアカウント作成 + 統合テスト
 3. ~~Cloudflare R2 への storage 移行~~ **✅ 完了 (2026-06-04, ebb9682)** — `.env` に R2 認証情報を設定するだけで切替可
-4. CI/CD パイプライン (GitHub Actions) の整備
+4. ~~CI/CD パイプライン (GitHub Actions) の整備~~ **✅ 完了 (2026-06-04, 6955d1c)** — `.github/workflows/` に deploy-frontend / deploy-backend 追加済み
 5. **β リリース対象を 10〜20 人に絞って** 1 ヶ月運用、本ガイドの所要時間を実測
 
 > **重要**: β リリース直後の 1〜3 ヶ月は ユーザ数が少なくても**監視体制の確立**に時間を使う。それを越えれば日次 5 分 + 週末 1 時間で回せるようになる。
