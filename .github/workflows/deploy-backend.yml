@@ -1,0 +1,24 @@
+name: Deploy Backend (Fly.io)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ADM_b/**'
+
+jobs:
+  deploy:
+    name: Build & Deploy FastAPI
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        # fly.toml の release_command で alembic upgrade head が自動実行される
+        run: flyctl deploy --remote-only
+        working-directory: ADM_b
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

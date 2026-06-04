@@ -1,0 +1,14 @@
+# Cloudflare Pages カスタムヘッダー
+# https://developers.cloudflare.com/pages/configuration/headers/
+
+# ハッシュ付きアセット — Nuxt が content hash をファイル名に埋め込むので immutable キャッシュ可
+/_nuxt/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# 全ルート — セキュリティヘッダー + HTML は毎回再検証
+/*
+  Cache-Control: no-cache, must-revalidate
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()

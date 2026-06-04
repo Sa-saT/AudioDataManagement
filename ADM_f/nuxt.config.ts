@@ -2,6 +2,7 @@
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
+  ssr: false, // SPA モード — Cloudflare Pages で静的配信
   modules: ['@nuxtjs/tailwindcss', '@pinia/nuxt'],
   // Nuxt auto-overrides public.apiBaseUrl from NUXT_PUBLIC_API_BASE_URL env var
   runtimeConfig: {

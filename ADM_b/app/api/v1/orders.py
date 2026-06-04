@@ -710,7 +710,11 @@ def submission_stream(
         finally:
             proc.kill()
 
-    return StreamingResponse(_iter_chunks(), media_type="audio/wav")
+    return StreamingResponse(
+        _iter_chunks(),
+        media_type="audio/wav",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @router.get("/orders/download-file")
@@ -733,11 +737,12 @@ def download_order_file(
     storage = orders_storage()
     url = storage.get_download_url(order.file_path)
     if url:
-        return RedirectResponse(url=url)
+        return RedirectResponse(url=url, headers={"Cache-Control": "no-store"})
     local = storage.local_path(order.file_path)
     if local is None or not local.exists():
         raise HTTPException(status_code=404, detail={"code": "FILE_NOT_FOUND", "message": "file missing"})
-    return FileResponse(path=str(local), media_type="audio/wav", filename=f"{order.title}.wav")
+    return FileResponse(path=str(local), media_type="audio/wav", filename=f"{order.title}.wav",
+                        headers={"Cache-Control": "no-store"})
 
 
 # ─── Draft cleanup ────────────────────────────────────────────────────────────

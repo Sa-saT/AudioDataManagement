@@ -1,0 +1,45 @@
+name: Deploy Frontend (Cloudflare Pages)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ADM_f/**'
+
+jobs:
+  deploy:
+    name: Build & Deploy Nuxt SPA
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: ADM_f/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: ADM_f
+
+      - name: Generate static site
+        run: pnpm generate
+        working-directory: ADM_f
+        env:
+          # GitHub Secrets に登録: Fly.io の本番 API URL (例: https://adm-pathfinder-api.fly.dev)
+          NUXT_PUBLIC_API_BASE_URL: ${{ secrets.API_BASE_URL }}
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          projectName: adm-pathfinder       # ← Cloudflare Pages のプロジェクト名に変更
+          directory: ADM_f/.output/public
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}

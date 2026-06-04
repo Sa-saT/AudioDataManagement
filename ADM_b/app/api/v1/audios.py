@@ -324,7 +324,11 @@ def stream_audio(
             proc.stdout.close()
             proc.wait()
 
-    return StreamingResponse(_iter_chunks(), media_type="audio/wav")
+    return StreamingResponse(
+        _iter_chunks(),
+        media_type="audio/wav",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @router.get("/download-file")
@@ -354,7 +358,7 @@ def download_file(
     storage = sounds_storage()
     url = storage.get_download_url(audio.file_path)
     if url:
-        return RedirectResponse(url=url)
+        return RedirectResponse(url=url, headers={"Cache-Control": "no-store"})
     local = storage.local_path(audio.file_path)
     if local is None or not local.exists():
         raise HTTPException(
@@ -365,6 +369,7 @@ def download_file(
         path=str(local),
         media_type="audio/wav",
         filename=f"{_safe_filename(audio.title)}.wav",
+        headers={"Cache-Control": "no-store"},
     )
 
 

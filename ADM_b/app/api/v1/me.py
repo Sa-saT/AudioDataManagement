@@ -97,21 +97,23 @@ def download_copy_file(
         snd = sounds_storage()
         url = snd.get_download_url(audio.file_path)
         if url:
-            return RedirectResponse(url=url)
+            return RedirectResponse(url=url, headers={"Cache-Control": "no-store"})
         local = snd.local_path(audio.file_path)
         if local is None or not local.exists():
             raise HTTPException(status_code=404, detail={"code": "FILE_NOT_FOUND", "message": "file missing"})
-        return FileResponse(path=str(local), media_type="audio/wav", filename=f"{audio.title}.wav")
+        return FileResponse(path=str(local), media_type="audio/wav", filename=f"{audio.title}.wav",
+                            headers={"Cache-Control": "no-store"})
 
     url = dl_storage.get_download_url(dk)
     if url:
-        return RedirectResponse(url=url)
+        return RedirectResponse(url=url, headers={"Cache-Control": "no-store"})
     local = dl_storage.local_path(dk)
     if local is None:
         raise HTTPException(status_code=500, detail={"code": "STORAGE_ERROR", "message": "storage error"})
     audio = db.execute(select(Audio).where(Audio.id == parsed_audio_id)).scalar_one_or_none()
     title = audio.title if audio else audio_id
-    return FileResponse(path=str(local), media_type="audio/wav", filename=f"{title}.wav")
+    return FileResponse(path=str(local), media_type="audio/wav", filename=f"{title}.wav",
+                        headers={"Cache-Control": "no-store"})
 
 
 @router.get("/downloads", response_model=MyDownloadsResponse)
