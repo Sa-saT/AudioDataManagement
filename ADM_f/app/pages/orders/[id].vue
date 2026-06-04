@@ -1001,8 +1001,9 @@ const myCandidate = computed(() =>
           <div class="flex items-center justify-between">
             <p class="text-[10px] font-semibold text-ink/40 tracking-widest uppercase">サウンドブリーフ</p>
             <div class="flex items-center gap-2">
-              <!-- 9-A4: 視点切替トグル -->
+              <!-- 9-A4: 視点切替トグル (admin / creator のみ) -->
               <button
+                v-if="auth.role !== 'licensee'"
                 class="flex items-center gap-1 rounded-md border border-hairline-soft bg-white/60 px-2 py-0.5 text-[10px] text-muted transition-colors hover:border-primary hover:text-primary-active"
                 :title="briefView === 'creator' ? '利用者視点に切替' : 'クリエイター視点に切替'"
                 @click="toggleBriefView"

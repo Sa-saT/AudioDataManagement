@@ -493,7 +493,7 @@ Step 2 は `sound_type` (BGM/SE/both) によって表示項目が変わる。
 | ✅ | **改訂2.4** Order 共有メモ (admin/creator 各1枠、左右分割、licensee 不可視) (R2.4-A) | 75aac99 |
 | ✅ | **改訂2.4** admin↔creator Direct Message (DM_SPEC Phase A-D) | 3889d85 |
 | ✅ | **9-A3** Creator 複数提出のバージョン管理 (`submissions/{id}_v{n}.wav` + peaks v2 per version + GET /submissions + 履歴 UI) + リテラルルート順序バグ修正 | (改訂2.5 / migration 0019) |
-| ✅ | **9-A4** クリエイター視点 UI 最適化 (役割優先順序の brief 再構成 + tx_* スライダー視覚化 + 視点切替トグル + localStorage 保存) | (改訂2.5) |
+| ✅ | **9-A4** クリエイター視点 UI 最適化 (役割優先順序の brief 再構成 + tx_* スライダー視覚化 + 視点切替トグル + localStorage 保存)。**視点切替トグルは admin/creator のみ表示。licensee には非表示 (不安要素になるため)。** | (改訂2.5) |
 | ✅ | **9-A7** R2-Q1〜Q3 (sound_type=both UI 対応済み / 期限超過アラート色 / draft 30日自動削除) | — |
 | ✅ | **9-A6** R2.1-Q1〜Q3 (reviewing 中編集不可維持 / 編集回数上限なし / 自動 assign 取消なし: 設計決定のみ) | — |
 | ✅ | **9-A5** SE 複数バリエーション納品 (`se_slots` フィールド / `_vN_sM.wav` 命名 / multi-file submit / スロットタブ preview / migration 0020) | — |
