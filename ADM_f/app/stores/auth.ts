@@ -7,7 +7,7 @@ interface AuthState {
   user: AuthUser | null
   /** Tokens used this period (synced from /download response) */
   tokensUsed: number
-  /** B案: 他端末で activate された結果ログアウトされた時の通知。/activate 画面で表示 */
+  /** B案: 他端末で activate された結果ログアウトされた時の通知。~~/activate 画面で表示~~ → default.vue の ConfirmModal で処理 */
   sessionInvalidatedMessage: string | null
 }
 
