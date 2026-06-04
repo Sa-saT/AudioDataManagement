@@ -468,9 +468,7 @@ Step 2 は `sound_type` (BGM/SE/both) によって表示項目が変わる。
 
 ### 9.1 未実装 (実装すべき)
 
-| # | 項目 | 優先度 | 備考 |
-|---|---|---|---|
-| 9-A8 | **本番ストレージ移行** | Phase 4 | ローカル `/storage/*` → S3 互換切替 |
+*(現在なし)*
 
 ### 9.2 実装済
 
@@ -501,6 +499,7 @@ Step 2 は `sound_type` (BGM/SE/both) によって表示項目が変わる。
 | ✅ | **9-A5** SE 複数バリエーション納品 (`se_slots` フィールド / `_vN_sM.wav` 命名 / multi-file submit / スロットタブ preview / migration 0020) | — |
 | ✅ | **9-A12** NOTIFICATION Phase E (POST /view から prev_view_at を返す / チャット「ここから未読」ディバイダー / 未読位置へ自動スクロール) | — |
 | ✅ | **9-A13** メモ既読マーカー (MemosResponse に admin/creator_last_view_at を追加 / メモ枠に「確認済 / 未確認」表示) | — |
+| ✅ | **9-A8** 本番ストレージ移行 — `StorageBackend` ABC + `LocalStorageBackend` + `S3StorageBackend` (Cloudflare R2 / AWS S3) 実装。`.env` の `STORAGE_BACKEND=s3` + R2 認証情報設定のみで切替可 | ebb9682 |
 
 ---
 

@@ -31,7 +31,7 @@
 | DB | PostgreSQL 14+ | JSONB / sequence / FK 多用、マネージド推奨 |
 | 音源処理 | ffmpeg `-c:a copy` (10 秒チャンク) | 同時接続が増えるとプロセス数で詰まる |
 | 認証 | JWT + HMAC signed URL (TTL 30 秒) | secret rotation の体制要 |
-| ストレージ | ローカル `/storage/{sounds,downloads,orders}/` | **本番では S3 互換必須** |
+| ストレージ | ローカル `/storage/{sounds,downloads,orders}/` | **本番では S3 互換必須** ← 抽象化実装済 (2026-06-04)。`.env` で `STORAGE_BACKEND=s3` + R2 認証情報を設定するだけ |
 | キュー | なし (同期処理) | スケール時に Celery / RQ 検討 |
 
 ### 1.2 ADM 固有の制約 — ファイルサイズ
@@ -372,7 +372,7 @@ GitHub (main push)
 
 1. このドキュメントを基に「最小構成」での staging 環境構築 → 動作確認
 2. Sentry / Better Stack のアカウント作成 + 統合テスト
-3. Cloudflare R2 への storage 移行 (`ORDER_SPEC.md §9.1: 9-A8`)
+3. ~~Cloudflare R2 への storage 移行~~ **✅ 完了 (2026-06-04, ebb9682)** — `.env` に R2 認証情報を設定するだけで切替可
 4. CI/CD パイプライン (GitHub Actions) の整備
 5. **β リリース対象を 10〜20 人に絞って** 1 ヶ月運用、本ガイドの所要時間を実測
 
@@ -386,6 +386,6 @@ GitHub (main push)
 
 - **lic ファイル暗号化の仕組みと実装**: [LIC_ENCRYPTION_DEEP_DIVE.md](LIC_ENCRYPTION_DEEP_DIVE.md)
 - **lic ファイル仕様**: [LICENSE_FILE_SPEC.md](LICENSE_FILE_SPEC.md)
-- **storage 移行 (9-A8 タスク)**: [ORDER_SPEC.md](ORDER_SPEC.md) §9.1
+- **storage 移行 (9-A8 完了)**: [ORDER_SPEC.md](ORDER_SPEC.md) §9.2 / `ADM_b/app/services/storage.py`
 - **データモデル**: [DATA_MODEL.md](DATA_MODEL.md)
 - **要件定義**: [REQUIREMENTS.md](REQUIREMENTS.md)
