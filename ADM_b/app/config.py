@@ -44,6 +44,13 @@ class Settings(BaseSettings):
     DOWNLOADS_DIR: str = "/tmp/adm_storage/downloads"
     ORDERS_DIR: str = "/tmp/adm_storage/orders"
 
+    # Cloudflare R2 / AWS S3 (STORAGE_BACKEND=s3 の場合のみ使用)
+    S3_BUCKET: str = ""
+    S3_ENDPOINT_URL: str = ""
+    S3_ACCESS_KEY_ID: str = ""
+    S3_SECRET_ACCESS_KEY: str = ""
+    S3_REGION: str = "auto"
+
     # Audio
     PREVIEW_DURATION_SEC: int = 10
     MAX_SAMPLE_RATE: int = 48000

@@ -8,7 +8,6 @@ Roles:
 from __future__ import annotations
 
 import json
-import shutil
 import tempfile
 import uuid
 from datetime import date, datetime, timedelta, timezone
@@ -25,7 +24,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
@@ -63,6 +62,7 @@ from app.security.signed_url import (
 )
 from app.services import tokens as tokens_service
 from app.services.audio_file import compute_peaks_v2
+from app.services.storage import orders_storage
 
 settings = get_settings()
 router = APIRouter(tags=["orders"])
@@ -682,9 +682,10 @@ def submission_stream(
         raise HTTPException(status_code=403, detail={"code": exc.code, "message": exc.message})
 
     parsed = _parse_uuid(order_id)
-    path = _resolve_submission_path(db, parsed, version, slot)
-    if path is None or not path.exists():
+    sub_key = _resolve_submission_key(db, parsed, version, slot)
+    if sub_key is None:
         raise HTTPException(status_code=404, detail={"code": "FILE_NOT_FOUND", "message": "no submission file"})
+    stream_src = orders_storage().get_stream_source(sub_key)
 
     import subprocess
     from fastapi.responses import StreamingResponse
@@ -692,7 +693,7 @@ def submission_stream(
         [
             "ffmpeg", "-loglevel", "error",
             "-ss", str(start), "-t", "10",
-            "-i", str(path),
+            "-i", stream_src,
             "-c:a", "copy",
             "-f", "wav", "pipe:1",
         ],
@@ -719,7 +720,7 @@ def download_order_file(
     exp: int = Query(...),
     sig: str = Query(...),
     db: Session = Depends(get_db),
-) -> FileResponse:
+):
     try:
         verify_order_download(order_id, user_id, exp, sig)
     except SignedURLError as exc:
@@ -729,10 +730,14 @@ def download_order_file(
     order = db.execute(select(Order).where(Order.id == parsed)).scalar_one_or_none()
     if order is None or order.file_path is None:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "file not found"})
-    fp = Path(order.file_path)
-    if not fp.exists():
+    storage = orders_storage()
+    url = storage.get_download_url(order.file_path)
+    if url:
+        return RedirectResponse(url=url)
+    local = storage.local_path(order.file_path)
+    if local is None or not local.exists():
         raise HTTPException(status_code=404, detail={"code": "FILE_NOT_FOUND", "message": "file missing"})
-    return FileResponse(path=str(fp), media_type="audio/wav", filename=f"{order.title}.wav")
+    return FileResponse(path=str(local), media_type="audio/wav", filename=f"{order.title}.wav")
 
 
 # ─── Draft cleanup ────────────────────────────────────────────────────────────
@@ -1331,12 +1336,12 @@ def list_submissions(
 
 # ─── Submission stream (改訂2.2: 受け取る前のプレビュー) ─────────────────────
 
-def _resolve_submission_path(db: Session, order_id: uuid.UUID, version: int, slot: int = 1) -> Path | None:
-    """改訂2.5: 指定 version (0=latest) + slot の submission ファイルパスを解決。
+def _resolve_submission_key(db: Session, order_id: uuid.UUID, version: int, slot: int = 1) -> str | None:
+    """改訂2.5: 指定 version (0=latest) + slot の orders area-relative key を解決。
     9-A5: slot > 1 の場合は _vN_s{slot}.wav、それ以外は _vN.wav。
     新形式 → 旧形式 → done 後の確定ファイル の順でフォールバック。
     """
-    sub_dir = Path(settings.ORDERS_DIR) / "submissions"
+    storage = orders_storage()
     if version == 0:
         latest_v = db.execute(
             select(func.max(OrderMessage.submission_version))
@@ -1346,24 +1351,24 @@ def _resolve_submission_path(db: Session, order_id: uuid.UUID, version: int, slo
             )
         ).scalar_one()
         if latest_v:
-            # slot 対応: スロット付きファイルを優先、なければ単一ファイル
-            slot_p = sub_dir / f"{order_id}_v{latest_v}_s{slot}.wav"
-            if slot_p.exists():
-                return slot_p
-            p = sub_dir / f"{order_id}_v{latest_v}.wav"
-            if p.exists():
-                return p
-        old = sub_dir / f"{order_id}.wav"
-        if old.exists():
-            return old
-        final = Path(settings.ORDERS_DIR) / f"{order_id}.wav"
-        return final if final.exists() else None
+            for key in (
+                f"submissions/{order_id}_v{latest_v}_s{slot}.wav",
+                f"submissions/{order_id}_v{latest_v}.wav",
+            ):
+                if storage.exists(key):
+                    return key
+        for key in (f"submissions/{order_id}.wav", f"{order_id}.wav"):
+            if storage.exists(key):
+                return key
+        return None
     else:
-        slot_p = sub_dir / f"{order_id}_v{version}_s{slot}.wav"
-        if slot_p.exists():
-            return slot_p
-        p = sub_dir / f"{order_id}_v{version}.wav"
-        return p if p.exists() else None
+        for key in (
+            f"submissions/{order_id}_v{version}_s{slot}.wav",
+            f"submissions/{order_id}_v{version}.wav",
+        ):
+            if storage.exists(key):
+                return key
+        return None
 
 
 @router.get("/orders/{order_id}/submission-stream-url")
@@ -1526,26 +1531,23 @@ def submit_file(
         )
     ).scalar_one())
 
-    sub_dir = Path(settings.ORDERS_DIR) / "submissions"
-    sub_dir.mkdir(parents=True, exist_ok=True)
-
     import shutil as _shutil
 
     if len(files) == 1:
         # 単一ファイル: 既存の命名規則 (_vN.wav)
-        dest = sub_dir / f"{parsed}_v{next_version}.wav"
+        sub_key = f"submissions/{parsed}_v{next_version}.wav"
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
             tmp_path = Path(tmp.name)
         try:
             with open(tmp_path, "wb") as fh:
                 _shutil.copyfileobj(files[0].file, fh)
-            _shutil.copy2(tmp_path, dest)
+            try:
+                first_peaks = compute_peaks_v2(tmp_path)
+            except Exception:
+                first_peaks = None
+            orders_storage().put(sub_key, tmp_path)
         finally:
             tmp_path.unlink(missing_ok=True)
-        try:
-            first_peaks = compute_peaks_v2(dest)
-        except Exception:
-            first_peaks = None
         order.submission_peaks = first_peaks
         order.status = OrderStatus.reviewing
         order.updated_at = func.now()
@@ -1553,30 +1555,30 @@ def submit_file(
             order_id=parsed,
             sender_id=current_user.id,
             content=note or "音源を提出しました。",
-            attachment_path=str(dest),
+            attachment_path=sub_key,
             kind=OrderMessageKind.submission,
             submission_version=next_version,
             attachment_peaks=first_peaks,
         ))
     else:
         # 9-A5: 複数スロット (_vN_s1.wav, _vN_s2.wav, ...)
-        saved_paths: list[str] = []
+        saved_keys: list[str] = []
         saved_peaks: list[dict | None] = []
         for i, up_file in enumerate(files, start=1):
-            dest = sub_dir / f"{parsed}_v{next_version}_s{i}.wav"
+            sub_key = f"submissions/{parsed}_v{next_version}_s{i}.wav"
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
                 tmp_path = Path(tmp.name)
             try:
                 with open(tmp_path, "wb") as fh:
                     _shutil.copyfileobj(up_file.file, fh)
-                _shutil.copy2(tmp_path, dest)
+                try:
+                    saved_peaks.append(compute_peaks_v2(tmp_path))
+                except Exception:
+                    saved_peaks.append(None)
+                orders_storage().put(sub_key, tmp_path)
             finally:
                 tmp_path.unlink(missing_ok=True)
-            saved_paths.append(str(dest))
-            try:
-                saved_peaks.append(compute_peaks_v2(dest))
-            except Exception:
-                saved_peaks.append(None)
+            saved_keys.append(sub_key)
         first_peaks = saved_peaks[0] if saved_peaks else None
         order.submission_peaks = first_peaks
         order.status = OrderStatus.reviewing
@@ -1587,10 +1589,10 @@ def submit_file(
             content=note or f"音源を提出しました。({len(files)} ファイル)",
             kind=OrderMessageKind.submission,
             submission_version=next_version,
-            attachment_paths=saved_paths,
+            attachment_paths=saved_keys,
             attachment_peaks_list=saved_peaks,
             # 先頭スロットを単一参照フィールドにもセット (後方互換)
-            attachment_path=saved_paths[0] if saved_paths else None,
+            attachment_path=saved_keys[0] if saved_keys else None,
             attachment_peaks=first_peaks,
         ))
 
@@ -1760,17 +1762,16 @@ def mark_done(
         .order_by(OrderMessage.created_at.desc())
         .limit(1)
     ).scalar_one_or_none()
-    if latest_submission is None or not Path(latest_submission.attachment_path).exists():
+    o_storage = orders_storage()
+    if latest_submission is None or not o_storage.exists(latest_submission.attachment_path):
         raise HTTPException(status_code=409, detail={"code": "NO_SUBMISSION_FILE", "message": "no submitted file found"})
 
-    # Copy submission to final path (改訂2.2: token 消費 / payout 生成は close 時に移動)
-    final_dir = Path(settings.ORDERS_DIR)
-    final_dir.mkdir(parents=True, exist_ok=True)
-    final_path = final_dir / f"{parsed}.wav"
-    shutil.copy2(latest_submission.attachment_path, final_path)
+    # Copy submission to final key (改訂2.2: token 消費 / payout 生成は close 時に移動)
+    final_key = f"{parsed}.wav"
+    o_storage.copy_object(latest_submission.attachment_path, final_key)
 
     order.status = OrderStatus.done
-    order.file_path = str(final_path)
+    order.file_path = final_key
     order.done_by_admin_id = current_user.id
     order.done_at = func.now()
     order.notified_at = func.now()

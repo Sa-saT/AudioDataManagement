@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
@@ -45,6 +45,7 @@ from app.security.signed_url import (
     verify_stream,
 )
 from app.services import audio_file, tokens as tokens_service
+from app.services.storage import sounds_storage
 
 settings = get_settings()
 
@@ -228,7 +229,7 @@ def upload_audio(
             )
 
         peaks = audio_file.compute_peaks_v2(tmp_path)
-        dest = audio_file.save_original(tmp_path, audio_id)
+        key = audio_file.save_original(tmp_path, audio_id)
     finally:
         if tmp_path and tmp_path.exists():
             tmp_path.unlink()
@@ -245,7 +246,7 @@ def upload_audio(
         creator_id=current_user.id,
         title=title,
         description=description,
-        file_path=str(dest),
+        file_path=key,
         duration_sec=meta.duration_sec,
         sample_rate=meta.sample_rate,
         bit_depth=meta.bit_depth,
@@ -293,16 +294,17 @@ def stream_audio(
     if audio is None:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "audio not found"})
 
-    file_path = Path(audio.file_path)
-    if not file_path.exists():
+    storage = sounds_storage()
+    if not storage.exists(audio.file_path):
         raise HTTPException(status_code=404, detail={"code": "FILE_NOT_FOUND", "message": "audio file missing"})
+    stream_src = storage.get_stream_source(audio.file_path)
 
     proc = subprocess.Popen(
         [
             "ffmpeg", "-y",
             "-ss", str(start),
             "-t", str(settings.PREVIEW_DURATION_SEC),
-            "-i", str(file_path),
+            "-i", stream_src,
             "-c:a", "copy",
             "-f", "wav",
             "pipe:1",
@@ -331,7 +333,7 @@ def download_file(
     exp: int = Query(...),
     sig: str = Query(...),
     db: Session = Depends(get_db),
-) -> FileResponse:
+):
     try:
         verify_download(audio_id, exp, sig)
     except SignedURLError as exc:
@@ -349,15 +351,18 @@ def download_file(
     if audio is None:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "audio not found"})
 
-    file_path = Path(audio.file_path)
-    if not file_path.exists():
+    storage = sounds_storage()
+    url = storage.get_download_url(audio.file_path)
+    if url:
+        return RedirectResponse(url=url)
+    local = storage.local_path(audio.file_path)
+    if local is None or not local.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "FILE_NOT_FOUND", "message": "audio file missing"},
         )
-
     return FileResponse(
-        path=str(file_path),
+        path=str(local),
         media_type="audio/wav",
         filename=f"{_safe_filename(audio.title)}.wav",
     )
@@ -505,7 +510,7 @@ def download_audio(
 
     # Non-critical: copy to user's downloads storage for re-download
     try:
-        audio_file.copy_to_downloads(Path(audio.file_path), current_user.id, parsed_id)
+        audio_file.copy_to_downloads(audio.file_path, current_user.id, parsed_id)
     except Exception:
         pass
 
@@ -727,12 +732,10 @@ def delete_audio(
             detail={"code": "AUDIO_ALREADY_SOLD", "message": "cannot delete a sold audio"},
         )
 
-    file_path = Path(audio.file_path)
+    key = audio.file_path
     db.delete(audio)
     db.commit()
-
-    if file_path.exists():
-        file_path.unlink(missing_ok=True)
+    sounds_storage().delete(key)
 
 
 def _to_detail(audio: Audio) -> AudioDetail:

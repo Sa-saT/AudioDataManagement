@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -31,6 +31,8 @@ from app.security.signed_url import (
     verify_copy_download,
 )
 from app.services import audio_file
+from app.services.audio_file import downloads_key
+from app.services.storage import downloads_storage, sounds_storage
 
 # 直近この秒数以内に同ユーザの session 記録があれば新規 INSERT しない。
 # 30分とした理由: Admin ログでの「DAU/起動回数」を意味ある粒度で集計するため。
@@ -67,7 +69,7 @@ def download_copy_file(
     exp: int = Query(...),
     sig: str = Query(...),
     db: Session = Depends(get_db),
-) -> FileResponse:
+):
     try:
         verify_copy_download(audio_id, user_id, exp, sig)
     except SignedURLError as exc:
@@ -82,23 +84,34 @@ def download_copy_file(
     except ValueError:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "not found"})
 
-    copy_path = audio_file.get_copy_path(parsed_user_id, parsed_audio_id)
-    if not copy_path.exists():
+    dk = downloads_key(parsed_user_id, parsed_audio_id)
+    dl_storage = downloads_storage()
+
+    if not dl_storage.exists(dk):
         # Fallback: 個人 copy が無ければ原本を直接配信。
         # ストレージ枯渇でユーザが自身の copy を削除した直後でも、
         # signed URL の有効期限内なら DL を継続させたいため (UX 優先)。
         audio = db.execute(select(Audio).where(Audio.id == parsed_audio_id)).scalar_one_or_none()
         if audio is None:
             raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "audio not found"})
-        orig_path = Path(audio.file_path)
-        if not orig_path.exists():
+        snd = sounds_storage()
+        url = snd.get_download_url(audio.file_path)
+        if url:
+            return RedirectResponse(url=url)
+        local = snd.local_path(audio.file_path)
+        if local is None or not local.exists():
             raise HTTPException(status_code=404, detail={"code": "FILE_NOT_FOUND", "message": "file missing"})
-        title = audio.title
-        return FileResponse(path=str(orig_path), media_type="audio/wav", filename=f"{title}.wav")
+        return FileResponse(path=str(local), media_type="audio/wav", filename=f"{audio.title}.wav")
 
+    url = dl_storage.get_download_url(dk)
+    if url:
+        return RedirectResponse(url=url)
+    local = dl_storage.local_path(dk)
+    if local is None:
+        raise HTTPException(status_code=500, detail={"code": "STORAGE_ERROR", "message": "storage error"})
     audio = db.execute(select(Audio).where(Audio.id == parsed_audio_id)).scalar_one_or_none()
     title = audio.title if audio else audio_id
-    return FileResponse(path=str(copy_path), media_type="audio/wav", filename=f"{title}.wav")
+    return FileResponse(path=str(local), media_type="audio/wav", filename=f"{title}.wav")
 
 
 @router.get("/downloads", response_model=MyDownloadsResponse)
@@ -130,10 +143,15 @@ def list_my_downloads(
     items: list[MyDownloadItem] = []
     storage_used = 0
 
+    dl_storage = downloads_storage()
     for audio in audios:
-        copy_path = audio_file.get_copy_path(current_user.id, audio.id)
-        copy_exists = copy_path.exists()
-        file_size = copy_path.stat().st_size if copy_exists else 0
+        dk = downloads_key(current_user.id, audio.id)
+        copy_exists = dl_storage.exists(dk)
+        if copy_exists:
+            local = dl_storage.local_path(dk)
+            file_size = local.stat().st_size if local is not None else 0
+        else:
+            file_size = 0
         storage_used += file_size
 
         items.append(MyDownloadItem(
@@ -215,9 +233,7 @@ def delete_my_download(
             detail={"code": "NOT_OWNER", "message": "not your audio"},
         )
 
-    copy_path = audio_file.get_copy_path(current_user.id, parsed_id)
-    if copy_path.exists():
-        copy_path.unlink(missing_ok=True)
+    downloads_storage().delete(downloads_key(current_user.id, parsed_id))
 
 
 # ─── Session ping (改訂2) ─────────────────────────────────────────────────────

@@ -10,3 +10,4 @@ pydantic-settings>=2.6
 soundfile>=0.12
 numpy>=1.26
 uuid-utils>=0.10
+boto3>=1.34

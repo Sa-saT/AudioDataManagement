@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 import tempfile
 import uuid
@@ -13,6 +12,7 @@ import numpy as np
 import soundfile as sf
 
 from app.config import get_settings
+from app.services.storage import copy_between_areas, downloads_storage, sounds_storage
 
 settings = get_settings()
 
@@ -162,20 +162,21 @@ def compute_peaks_v2(path: Path, *, num_points: int = 1000) -> dict:
     }
 
 
-def save_original(src: Path, audio_id: uuid.UUID) -> Path:
-    storage = Path(settings.STORAGE_DIR)
-    storage.mkdir(parents=True, exist_ok=True)
-    dest = storage / f"{audio_id}.wav"
-    shutil.copy2(src, dest)
-    return dest
+def sounds_key(audio_id: uuid.UUID) -> str:
+    return f"{audio_id}.wav"
 
 
-def get_copy_path(user_id: uuid.UUID, audio_id: uuid.UUID) -> Path:
-    return Path(settings.DOWNLOADS_DIR) / str(user_id) / f"{audio_id}.wav"
+def downloads_key(user_id: uuid.UUID, audio_id: uuid.UUID) -> str:
+    return f"{user_id}/{audio_id}.wav"
 
 
-def copy_to_downloads(src_path: Path, user_id: uuid.UUID, audio_id: uuid.UUID) -> Path:
-    dest = get_copy_path(user_id, audio_id)
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(src_path, dest)
-    return dest
+def save_original(src: Path, audio_id: uuid.UUID) -> str:
+    """sounds エリアに保存し、area-relative key を返す。"""
+    key = sounds_key(audio_id)
+    sounds_storage().put(key, src)
+    return key
+
+
+def copy_to_downloads(src_key: str, user_id: uuid.UUID, audio_id: uuid.UUID) -> None:
+    """sounds エリアから downloads エリアへクロスエリアコピー。"""
+    copy_between_areas(sounds_storage(), src_key, downloads_storage(), downloads_key(user_id, audio_id))
