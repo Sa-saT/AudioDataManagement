@@ -206,11 +206,9 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 
 詳細は **[docs/ORDER_SPEC.md §9.1](docs/ORDER_SPEC.md)** (棚卸し済) を一次ソースとする。
 
-**低 / 要検討 (残):**
-- メモ既読マーカー (9-A13)
-
-**完了済 (2026-06-01):**
+**完了済 (2026-06-01〜06-04):**
 - 9-A5 SE 複数スロット納品 / 9-A6 R2.1 残課題 (設計決定) / 9-A7 R2 残課題 / 9-A12 NOTIFICATION Phase E
+- 9-A13 メモ既読マーカー (MemosResponse に admin/creator_last_view_at / 「✓ 確認済」「— 未確認」UI)
 
 **本番準備 (Phase 4) — コード実装完了 (2026-06-04):**
 
