@@ -168,6 +168,7 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 - **本番運用 / 副業可能性 / licファイル暗号化方針**: [docs/PRODUCTION_OPERATIONS_GUIDE.md](docs/PRODUCTION_OPERATIONS_GUIDE.md)
 - **監視セットアップ (Sentry / Better Stack / 料金表)**: [docs/MONITORING_SETUP.md](docs/MONITORING_SETUP.md)
 - **バックアップ & リストア手順**: [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md)
+- **将来タスク & Phase 4 残作業**: [docs/FUTURE_TASKS.md](docs/FUTURE_TASKS.md)
 - UIデザイン: [DESIGN.md](DESIGN.md)
 
 ## 8. 進捗フェーズ

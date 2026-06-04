@@ -391,5 +391,6 @@ GitHub (main push)
 - **storage 移行 (9-A8 完了)**: [ORDER_SPEC.md](ORDER_SPEC.md) §9.2 / `ADM_b/app/services/storage.py`
 - **監視セットアップ**: [MONITORING_SETUP.md](MONITORING_SETUP.md) (Sentry / Better Stack / JSON ログ / 料金表)
 - **バックアップ & リストア**: [BACKUP_RESTORE.md](BACKUP_RESTORE.md) (pg_dump / rclone R2→B2 / 復元手順)
+- **将来タスク & Phase 4 残作業**: [FUTURE_TASKS.md](FUTURE_TASKS.md) (設定手順 / 低優先度タスク一覧 / 工数目安)
 - **データモデル**: [DATA_MODEL.md](DATA_MODEL.md)
 - **要件定義**: [REQUIREMENTS.md](REQUIREMENTS.md)
