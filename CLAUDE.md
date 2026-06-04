@@ -166,6 +166,8 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 - **DM (admin↔creator)**: [docs/DM_SPEC.md](docs/DM_SPEC.md)
 - **波形描画 Shader**: [docs/WAVEFORM_SHADER_SPEC.md](docs/WAVEFORM_SHADER_SPEC.md)
 - **本番運用 / 副業可能性 / licファイル暗号化方針**: [docs/PRODUCTION_OPERATIONS_GUIDE.md](docs/PRODUCTION_OPERATIONS_GUIDE.md)
+- **監視セットアップ (Sentry / Better Stack / 料金表)**: [docs/MONITORING_SETUP.md](docs/MONITORING_SETUP.md)
+- **バックアップ & リストア手順**: [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md)
 - UIデザイン: [DESIGN.md](DESIGN.md)
 
 ## 8. 進捗フェーズ
@@ -175,7 +177,7 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 | 1 | フロント基礎 (Dashboard / Activate / Pinia / 擬似波形) | ✅ 完了 |
 | 2 | FastAPI + PostgreSQL 接続、`/audios` `/auth/activate`、実 wav 配信 | ✅ 完了 |
 | 3 | Creator / Admin / Commission / 通知 / ログ / Shader 波形 / エラーポップアップ | ✅ **ローカル完了** |
-| 4 | 本番運用 (CDN, 監視, バックアップ, S3 互換ストレージ) | 未着手 |
+| 4 | 本番運用 (CDN, 監視, バックアップ, S3 互換ストレージ) | ✅ **コード実装完了** (アカウント設定 + Secrets 登録のみ残) |
 
 ### Phase 3 タスク (#31〜#52 全完了)
 
@@ -210,8 +212,20 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 **完了済 (2026-06-01):**
 - 9-A5 SE 複数スロット納品 / 9-A6 R2.1 残課題 (設計決定) / 9-A7 R2 残課題 / 9-A12 NOTIFICATION Phase E
 
-**本番準備 (Phase 4):**
-- S3 互換ストレージ切替 (9-A8) / CDN / 監視 / バックアップ / lic 暗号化 (Phase B/C)
+**本番準備 (Phase 4) — コード実装完了 (2026-06-04):**
+
+| タスク | 内容 | コミット |
+|---|---|---|
+| S3 互換ストレージ切替 (9-A8) | `StorageBackend` ABC + `LocalStorageBackend` / `S3StorageBackend`。`.env` の `STORAGE_BACKEND=s3` で R2 切替 | ebb9682 |
+| lic 暗号化 Phase C | AES-256-GCM バイナリ `.lic`。`parse_lic_bytes()` で JSON/binary 自動判別 | (2026-06-03) |
+| CDN 設定 | Cloudflare Pages `_redirects`/`_headers`、`fly.toml`、GitHub Actions deploy workflows 2本 | 6955d1c |
+| 監視設定 | Sentry (backend + frontend)、JSON 構造ログ、`/healthz` DB チェック、`docs/MONITORING_SETUP.md` | 87e1270 |
+| バックアップ設定 | GitHub Actions cron 2本 (pg_dump→B2 / rclone R2→B2)、`docs/BACKUP_RESTORE.md` | 930cea9 |
+
+**残作業 (設定のみ):**
+- 各 SaaS アカウント作成 (Sentry / Better Stack / Backblaze B2)
+- GitHub Secrets 登録 (詳細: `MONITORING_SETUP.md` §6、`BACKUP_RESTORE.md` §GitHub Secrets)
+- Fly.io secrets 設定 (`fly secrets set SENTRY_DSN=... ENVIRONMENT=production`)
 
 ## 9. 用語 (要点)
 
