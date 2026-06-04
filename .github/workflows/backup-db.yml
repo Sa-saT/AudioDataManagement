@@ -1,0 +1,52 @@
+name: Backup Database (Daily)
+
+on:
+  schedule:
+    # 毎日 JST 03:00 = UTC 18:00
+    - cron: '0 18 * * *'
+  workflow_dispatch:  # 手動実行も可
+
+jobs:
+  backup:
+    name: pg_dump → B2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install rclone
+        run: curl https://rclone.org/install.sh | sudo bash
+
+      - name: Configure rclone (B2)
+        run: |
+          mkdir -p ~/.config/rclone
+          cat > ~/.config/rclone/rclone.conf << 'EOF'
+          [b2]
+          type = b2
+          account = ${{ secrets.B2_ACCOUNT_ID }}
+          key = ${{ secrets.B2_APP_KEY }}
+          EOF
+
+      - name: pg_dump → gzip
+        env:
+          PGPASSWORD: ""  # URL に含まれるため不要
+        run: |
+          DATE=$(date -u +%Y%m%d)
+          FILENAME="adm_db_${DATE}.sql.gz"
+          pg_dump "${{ secrets.BACKUP_DB_URL }}" | gzip > "/tmp/${FILENAME}"
+          echo "FILENAME=${FILENAME}" >> $GITHUB_ENV
+
+      - name: Upload to B2
+        run: |
+          rclone copy "/tmp/${{ env.FILENAME }}" \
+            "b2:${{ secrets.B2_BUCKET }}/db/" \
+            --b2-hard-delete \
+            --stats 30s
+
+      - name: Delete dumps older than 7 days
+        run: |
+          rclone delete "b2:${{ secrets.B2_BUCKET }}/db/" \
+            --min-age 7d \
+            --b2-hard-delete
+
+      - name: Verify upload
+        run: |
+          rclone ls "b2:${{ secrets.B2_BUCKET }}/db/" | tail -5

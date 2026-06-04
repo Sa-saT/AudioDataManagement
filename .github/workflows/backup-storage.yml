@@ -1,0 +1,49 @@
+name: Backup Storage (Daily)
+
+on:
+  schedule:
+    # 毎日 JST 04:00 = UTC 19:00 (DB バックアップの 1 時間後)
+    - cron: '0 19 * * *'
+  workflow_dispatch:  # 手動実行も可
+
+jobs:
+  backup:
+    name: R2 → B2 (rclone copy)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install rclone
+        run: curl https://rclone.org/install.sh | sudo bash
+
+      - name: Configure rclone (R2 + B2)
+        run: |
+          mkdir -p ~/.config/rclone
+          cat > ~/.config/rclone/rclone.conf << 'EOF'
+          [r2]
+          type = s3
+          provider = Cloudflare
+          access_key_id = ${{ secrets.R2_ACCESS_KEY_ID }}
+          secret_access_key = ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          endpoint = ${{ secrets.R2_ENDPOINT_URL }}
+          acl = private
+
+          [b2]
+          type = b2
+          account = ${{ secrets.B2_ACCOUNT_ID }}
+          key = ${{ secrets.B2_APP_KEY }}
+          EOF
+
+      - name: Copy R2 → B2 (差分のみ、削除しない)
+        run: |
+          rclone copy \
+            "r2:${{ secrets.R2_BUCKET }}" \
+            "b2:${{ secrets.B2_BUCKET }}/storage/" \
+            --transfers 4 \
+            --checkers 8 \
+            --stats 60s \
+            --stats-one-line \
+            --log-level INFO
+
+      - name: Show B2 storage summary
+        run: |
+          rclone size "b2:${{ secrets.B2_BUCKET }}/storage/" --json

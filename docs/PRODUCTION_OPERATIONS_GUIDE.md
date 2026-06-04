@@ -375,7 +375,8 @@ GitHub (main push)
 3. ~~Cloudflare R2 への storage 移行~~ **✅ 完了 (2026-06-04, ebb9682)** — `.env` に R2 認証情報を設定するだけで切替可
 4. ~~CI/CD パイプライン (GitHub Actions) の整備~~ **✅ 完了 (2026-06-04, 6955d1c)** — `.github/workflows/` に deploy-frontend / deploy-backend 追加済み
 5. ~~Sentry + Better Stack のアカウント作成 + 統合テスト~~ **✅ コード実装完了 (2026-06-04)** — アカウント作成 + シークレット設定のみ残 (詳細: [MONITORING_SETUP.md](MONITORING_SETUP.md))
-6. **β リリース対象を 10〜20 人に絞って** 1 ヶ月運用、本ガイドの所要時間を実測
+6. ~~DB / ストレージバックアップ自動化~~ **✅ 完了 (2026-06-04)** — GitHub Actions cron 2本 (backup-db / backup-storage)。R2→B2 rclone copy + pg_dump 7日保持 (詳細: [BACKUP_RESTORE.md](BACKUP_RESTORE.md))
+7. **β リリース対象を 10〜20 人に絞って** 1 ヶ月運用、本ガイドの所要時間を実測
 
 > **重要**: β リリース直後の 1〜3 ヶ月は ユーザ数が少なくても**監視体制の確立**に時間を使う。それを越えれば日次 5 分 + 週末 1 時間で回せるようになる。
 
@@ -389,5 +390,6 @@ GitHub (main push)
 - **lic ファイル仕様**: [LICENSE_FILE_SPEC.md](LICENSE_FILE_SPEC.md)
 - **storage 移行 (9-A8 完了)**: [ORDER_SPEC.md](ORDER_SPEC.md) §9.2 / `ADM_b/app/services/storage.py`
 - **監視セットアップ**: [MONITORING_SETUP.md](MONITORING_SETUP.md) (Sentry / Better Stack / JSON ログ / 料金表)
+- **バックアップ & リストア**: [BACKUP_RESTORE.md](BACKUP_RESTORE.md) (pg_dump / rclone R2→B2 / 復元手順)
 - **データモデル**: [DATA_MODEL.md](DATA_MODEL.md)
 - **要件定義**: [REQUIREMENTS.md](REQUIREMENTS.md)
