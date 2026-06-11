@@ -181,7 +181,7 @@ GitHub (main push)
 
 ### 3.2 GitHub Actions — Workflow / Job 詳細
 
-`.github/workflows/` に 4 本のワークフローがある。
+`.github/workflows/` に 5 本のワークフローがある。
 
 #### Workflow 一覧
 
@@ -191,6 +191,7 @@ GitHub (main push)
 | `deploy-backend.yml` | Deploy Backend (Fly.io) | `main` push (`ADM_b/` 変更時) | FastAPI を Docker ビルド → Fly.io へデプロイ + DB マイグレーション自動実行 |
 | `backup-db.yml` | Backup Database (Daily) | 毎日 JST 03:00 (cron) / 手動 | PostgreSQL を `pg_dump` → gzip → B2 に保存 (7 日分保持) |
 | `backup-storage.yml` | Backup Storage (Daily) | 毎日 JST 04:00 (cron) / 手動 | Cloudflare R2 の wav ファイル群を rclone で B2 に差分コピー |
+| `deploy-moc.yml` | Deploy mock to Pages | `main` push (`moc/` 変更時) / 手動 | クライアント提案用の静的モック (`moc/`) を GitHub Pages へ配信 |
 
 #### 各 Workflow の Job と Step
 
@@ -232,6 +233,17 @@ GitHub (main push)
 | Copy R2 → B2 (差分のみ) | `rclone copy` で R2 の全 wav ファイルを `b2:<bucket>/storage/` へ差分コピー (削除はしない) |
 | Show B2 storage summary | B2 上のストレージ使用量を JSON で出力 |
 
+**`deploy-moc.yml` — Job: `deploy`**
+
+| Step | 内容 |
+|---|---|
+| checkout | ソースを取得 |
+| configure-pages | `actions/configure-pages@v5` (`enablement: true` で Pages を未設定でも自動有効化) |
+| Upload moc/ as Pages artifact | `moc/` ディレクトリを Pages アーティファクトとしてアップロード |
+| deploy | `actions/deploy-pages@v4` で GitHub Pages へデプロイ |
+
+> ビルド不要の静的ファイル (HTML/CSS/JS)。Secrets は不要で、既定の `GITHUB_TOKEN` (`pages: write` / `id-token: write`) のみで動く。初回は **Settings → Pages → Source = "GitHub Actions"** を有効化する (または Workflow permissions を Read and write にして `enablement: true` に任せる)。公開 URL: `https://sa-sat.github.io/AudioDataManagement/`
+
 #### 必要な GitHub Secrets
 
 | Secret 名 | 使用 Workflow | 内容 |
@@ -264,7 +276,9 @@ GitHub (main push)
 2. 左サイドバーで対象 Workflow を選択
 3. 右上の **`...`** メニュー → **Disable workflow**
 
-> **4 本すべて無効化する手順**: `Backup Database (Daily)` → `Backup Storage (Daily)` → `Deploy Backend (Fly.io)` → `Deploy Frontend (Cloudflare Pages)` の順に繰り返す。
+> **本番系 4 本すべて無効化する手順**: `Backup Database (Daily)` → `Backup Storage (Daily)` → `Deploy Backend (Fly.io)` → `Deploy Frontend (Cloudflare Pages)` の順に繰り返す。
+>
+> `Deploy mock to Pages` (`deploy-moc.yml`) は提案用デモの配信で本番アプリとは独立。停止したい場合は同様に Disable する。
 
 #### 有効化 (Enable) — 公開再開時
 
@@ -281,7 +295,7 @@ GitHub (main push)
 #### 手動実行 (動作確認用)
 
 Workflow 画面の **Run workflow** ボタン (`workflow_dispatch` トリガー対応) で即時実行できる。
-バックアップ系 2 本のみ対応 (デプロイ系は push トリガーのみ)。
+バックアップ系 2 本 + `Deploy mock to Pages` が対応 (本番デプロイ系 2 本は push トリガーのみ)。
 
 ### 3.4 環境分離 (最低 3 つ)
 
