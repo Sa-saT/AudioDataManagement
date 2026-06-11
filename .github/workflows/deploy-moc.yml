@@ -29,6 +29,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+        with:
+          # Pages が未設定でも Actions ソースとして自動で有効化する
+          enablement: true
       - name: Upload moc/ as Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
