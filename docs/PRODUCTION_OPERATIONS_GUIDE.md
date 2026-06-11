@@ -179,7 +179,111 @@ GitHub (main push)
    └─ Sentry release tracking (sourcemap 自動 upload)
 ```
 
-### 3.2 環境分離 (最低 3 つ)
+### 3.2 GitHub Actions — Workflow / Job 詳細
+
+`.github/workflows/` に 4 本のワークフローがある。
+
+#### Workflow 一覧
+
+| ファイル | Workflow 名 | トリガー | 用途 |
+|---|---|---|---|
+| `deploy-frontend.yml` | Deploy Frontend (Cloudflare Pages) | `main` push (`ADM_f/` 変更時) | Nuxt の静的ビルド → Cloudflare Pages へデプロイ |
+| `deploy-backend.yml` | Deploy Backend (Fly.io) | `main` push (`ADM_b/` 変更時) | FastAPI を Docker ビルド → Fly.io へデプロイ + DB マイグレーション自動実行 |
+| `backup-db.yml` | Backup Database (Daily) | 毎日 JST 03:00 (cron) / 手動 | PostgreSQL を `pg_dump` → gzip → B2 に保存 (7 日分保持) |
+| `backup-storage.yml` | Backup Storage (Daily) | 毎日 JST 04:00 (cron) / 手動 | Cloudflare R2 の wav ファイル群を rclone で B2 に差分コピー |
+
+#### 各 Workflow の Job と Step
+
+**`deploy-frontend.yml` — Job: `Build & Deploy Nuxt SPA`**
+
+| Step | 内容 |
+|---|---|
+| checkout | ソースを取得 |
+| pnpm setup / node setup | pnpm + Node 20 をセットアップ、依存をキャッシュ |
+| Install dependencies | `pnpm install --frozen-lockfile` |
+| Generate static site | `pnpm generate` で静的 HTML/JS 生成 (env: `API_BASE_URL` / `SENTRY_DSN_PUBLIC`) |
+| Deploy to Cloudflare Pages | `ADM_f/.output/public/` を Cloudflare Pages へアップロード |
+
+**`deploy-backend.yml` — Job: `Build & Deploy FastAPI`**
+
+| Step | 内容 |
+|---|---|
+| checkout | ソースを取得 |
+| flyctl setup | Fly.io CLI をセットアップ |
+| Deploy to Fly.io | `flyctl deploy --remote-only` — `fly.toml` の `release_command` で `alembic upgrade head` が**デプロイ直前に自動実行**される |
+
+**`backup-db.yml` — Job: `pg_dump → B2`**
+
+| Step | 内容 |
+|---|---|
+| Install rclone | rclone CLI をインストール |
+| Configure rclone (B2) | B2 の認証情報を `~/.config/rclone/rclone.conf` に書き込む |
+| pg_dump → gzip | `BACKUP_DB_URL` (Neon の接続文字列) から `pg_dump` → `adm_db_YYYYMMDD.sql.gz` |
+| Upload to B2 | `b2:<bucket>/db/` へアップロード |
+| Delete dumps older than 7 days | 8 日以上前のダンプを B2 から削除 (7 日保持) |
+| Verify upload | B2 の `db/` 直下の最新 5 件を表示して確認 |
+
+**`backup-storage.yml` — Job: `R2 → B2 (rclone copy)`**
+
+| Step | 内容 |
+|---|---|
+| Install rclone | rclone CLI をインストール |
+| Configure rclone (R2 + B2) | R2 (S3 互換) と B2 の両認証情報を設定 |
+| Copy R2 → B2 (差分のみ) | `rclone copy` で R2 の全 wav ファイルを `b2:<bucket>/storage/` へ差分コピー (削除はしない) |
+| Show B2 storage summary | B2 上のストレージ使用量を JSON で出力 |
+
+#### 必要な GitHub Secrets
+
+| Secret 名 | 使用 Workflow | 内容 |
+|---|---|---|
+| `FLY_API_TOKEN` | deploy-backend | Fly.io のデプロイ用トークン |
+| `CF_API_TOKEN` | deploy-frontend | Cloudflare Pages デプロイ用トークン |
+| `CF_ACCOUNT_ID` | deploy-frontend | Cloudflare アカウント ID |
+| `API_BASE_URL` | deploy-frontend | 本番 API URL (例: `https://adm-pathfinder-api.fly.dev`) |
+| `SENTRY_DSN_PUBLIC` | deploy-frontend | Sentry の公開 DSN (フロント用) |
+| `BACKUP_DB_URL` | backup-db | Neon 接続文字列 (`postgresql://...`) |
+| `B2_ACCOUNT_ID` | backup-db / backup-storage | Backblaze B2 アカウント ID |
+| `B2_APP_KEY` | backup-db / backup-storage | Backblaze B2 アプリケーションキー |
+| `B2_BUCKET` | backup-db / backup-storage | B2 バケット名 |
+| `R2_ACCESS_KEY_ID` | backup-storage | Cloudflare R2 アクセスキー |
+| `R2_SECRET_ACCESS_KEY` | backup-storage | Cloudflare R2 シークレットキー |
+| `R2_ENDPOINT_URL` | backup-storage | R2 エンドポイント URL |
+| `R2_BUCKET` | backup-storage | R2 バケット名 |
+
+詳細: [MONITORING_SETUP.md](MONITORING_SETUP.md) §6 / [BACKUP_RESTORE.md](BACKUP_RESTORE.md)
+
+---
+
+### 3.3 Workflow の有効化 / 無効化
+
+公開を一時停止する場合や Secrets 未設定のまま cron が走るのを防ぐために、Workflow を無効化できる。
+
+#### 無効化 (Disable)
+
+1. GitHub → リポジトリ → **Actions** タブ
+2. 左サイドバーで対象 Workflow を選択
+3. 右上の **`...`** メニュー → **Disable workflow**
+
+> **4 本すべて無効化する手順**: `Backup Database (Daily)` → `Backup Storage (Daily)` → `Deploy Backend (Fly.io)` → `Deploy Frontend (Cloudflare Pages)` の順に繰り返す。
+
+#### 有効化 (Enable) — 公開再開時
+
+1. GitHub → **Actions** タブ
+2. 左サイドバーで対象 Workflow を選択
+3. 黄色バナー **"This workflow is disabled"** の右の **Enable workflow** をクリック
+
+> **再開時の推奨順序**:
+> 1. `Deploy Backend (Fly.io)` を Enable → `ADM_b/` に空コミット or 手動 Run で動作確認
+> 2. `Deploy Frontend (Cloudflare Pages)` を Enable → 同様に確認
+> 3. `Backup Database (Daily)` を Enable
+> 4. `Backup Storage (Daily)` を Enable
+
+#### 手動実行 (動作確認用)
+
+Workflow 画面の **Run workflow** ボタン (`workflow_dispatch` トリガー対応) で即時実行できる。
+バックアップ系 2 本のみ対応 (デプロイ系は push トリガーのみ)。
+
+### 3.4 環境分離 (最低 3 つ)
 
 - **local** — 開発、`init_db.sh` で構築
 - **staging** — 本番と同構成、独立 DB、自分の音源テスト場
@@ -187,7 +291,7 @@ GitHub (main push)
 
 > staging で常時検証する体制が無いと、本番デプロイのたびに緊張する。これは副業時間を一番削る。
 
-### 3.3 自動化必須項目
+### 3.5 自動化必須項目
 
 | 自動化 | 内容 | 副業に必須な理由 |
 |---|---|---|
