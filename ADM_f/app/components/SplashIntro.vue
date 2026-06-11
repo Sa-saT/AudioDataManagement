@@ -51,7 +51,6 @@ onBeforeUnmount(() => {
       <div class="splash-vignette" />
       <div class="splash-brand">
         <h1 class="splash-title">Pathfinder</h1>
-        <p class="splash-tagline">必要 &amp; やりたいコトを解りやすく導いてくれる</p>
       </div>
     </div>
   </Transition>
