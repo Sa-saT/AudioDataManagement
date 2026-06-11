@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pathfinder — Activate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top-nav" data-nav></header>
+
+<main>
+  <div class="activate-wrap">
+    <span class="logo-big"><span class="brand-mark"></span>Pathfinder</span>
+    <p class="tagline">
+      サウンドクリエイター向け 音響データ管理アプリ。
+    </p>
+
+    <!-- Role pick — demo shortcut -->
+    <div class="role-pick" style="margin-top:32px;">
+      <p class="section-label">▸ プレゼン用: 体験するロールを選択</p>
+      <div class="role-cards">
+        <a class="role-card creator card" href="dashboard.html" onclick="PF.setRole('creator')">
+          <span class="rc-badge">creator</span>
+          <h3>クリエイター</h3>
+          <p>音源を公開・編集。Commission を受注。お気に入り人数を確認。</p>
+        </a>
+        <a class="role-card licensee card" href="dashboard.html" onclick="PF.setRole('licensee')">
+          <span class="rc-badge">licensee</span>
+          <h3>利用者</h3>
+          <p>音源を視聴・DL（token 消費）。オリジナル音源を発注。</p>
+        </a>
+        <a class="role-card admin card" href="admin.html" onclick="PF.setRole('admin')">
+          <span class="rc-badge">admin</span>
+          <h3>運営</h3>
+          <p>ユーザ管理・ランク・payout 承認・Commission 仲介・ログ閲覧。</p>
+        </a>
+      </div>
+    </div>
+
+    <div class="callout" style="text-align:left;">
+      DEMO: ロールを選ぶと <span class="sw-turquoise">localStorage</span> に保存され、以降のページがそのロール視点で表示されます。<br>
+      右上の <strong>⏻</strong> でいつでもこの画面に戻り、別ロールに切替できます。
+    </div>
+  </div>
+</main>
+
+<footer data-footer></footer>
+<script src="app.js"></script>
+</body>
+</html>

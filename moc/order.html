@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pathfinder — Order #41</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top-nav" data-nav></header>
+
+<main>
+  <div class="page-head">
+    <a class="back-btn" href="commission.html" title="戻る">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </a>
+    <div>
+      <h1 style="display:flex;align-items:center;gap:10px;"><span class="serial">#41</span> ボス戦の緊張感あるループ BGM <span class="pill pill-reviewing">レビュー中</span></h1>
+      <p class="sub">発注者: Aoi Tanaka ・ 担当: Sa-saT ・ 2,400 tk ・ 締切 2026/06/20</p>
+    </div>
+  </div>
+  <div class="divider"></div>
+
+  <!-- Brief summary -->
+  <div class="card" style="padding:18px 20px;margin-bottom:20px;">
+    <p class="section-label">ブリーフ内容</p>
+    <dl class="brief-grid">
+      <dt>サウンドタイプ</dt><dd>BGM</dd>
+      <dt>用途</dt><dd>ゲーム (アクション RPG のボス戦)</dd>
+      <dt>長さ</dt><dd>90秒 (ループ ON)</dd>
+      <dt>シーン</dt><dd>ボス戦</dd>
+      <dt>狙う感情</dt><dd><span class="emo-pill">緊張感</span><span class="emo-pill">壮大さ/圧倒感</span><span class="emo-pill">疾走感</span></dd>
+      <dt>避けたい感情</dt><dd><span style="text-decoration:line-through;color:var(--muted);">安らぎ/安心</span></dd>
+      <dt>テクスチャ</dt><dd>電子寄り / リズム重視 / 冷たい / 重厚 / 動的</dd>
+      <dt>イメージ</dt><dd style="font-style:italic;color:var(--body);">「巨大な機械仕掛けの神が目覚める瞬間」</dd>
+      <dt>納品形式</dt><dd style="font-family:'JetBrains Mono',monospace;">48kHz / 24bit / stereo wav</dd>
+    </dl>
+  </div>
+
+  <div class="order-detail-grid">
+    <!-- Chat -->
+    <div class="card chat-panel">
+      <div class="chat-head">
+        <span style="font-size:13px;font-weight:600;">やりとり</span>
+        <span class="pill pill-reviewing" style="margin-left:auto;">レビュー中</span>
+      </div>
+      <div class="chat-scroll">
+        <div class="msg bot"><div class="bubble">🔔 #41 が「レビュー中」になりました。提出された v2 を確認してください。</div></div>
+        <div class="msg"><div class="bubble">初稿 (v1) アップしました。前半の緊張感、こんな方向性でいかがでしょう？</div><span class="msg-time">06/14 10:22</span></div>
+        <div class="msg mine"><div class="bubble">いい感じです！サビでもう一段盛り上がる展開がほしいです。</div><span class="msg-time">06/14 13:05</span></div>
+        <div class="msg"><div class="bubble">承知しました。ブラスを重ねて v2 として再提出します。</div><span class="msg-time">06/14 18:40</span></div>
+        <div class="msg bot"><div class="bubble">📎 submission_v2.wav (90s / 48k/24bit) が提出されました。</div></div>
+        <div class="msg mine"><div class="bubble">完璧です。これで確定でお願いします 🙏</div><span class="msg-time">06/15 09:12</span></div>
+      </div>
+      <form class="chat-input" data-chat-form>
+        <input type="text" placeholder="メッセージを入力…">
+        <button class="btn btn-turquoise" type="submit">送信</button>
+      </form>
+    </div>
+
+    <!-- Shared memos (admin / creator each 1) -->
+    <div class="memo-stack">
+      <div class="card memo-box">
+        <h4>Admin メモ</h4>
+        <p>予算は上限 2,400 tk で確定済み。納期はイベント告知に合わせ厳守。トーンは「機械仕掛けの神」の世界観で統一。</p>
+        <p class="memo-read">✓ creator 確認済 (06/13)</p>
+      </div>
+      <div class="card memo-box">
+        <h4>Creator メモ</h4>
+        <p>v2 でブラスセクション追加。ループ点は 1:30 でシームレス調整済み。低域は -6dB ヘッドルーム確保。</p>
+        <p class="memo-read" style="color:var(--muted);">— admin 未確認</p>
+      </div>
+      <div class="card memo-box" style="border-style:dashed;">
+        <h4>納品物</h4>
+        <div class="audio-card" style="grid-template-columns:36px 1fr;gap:10px;padding:10px;cursor:default;">
+          <button class="play-btn" style="width:32px;height:32px;">▶</button>
+          <div class="waveform" data-seed="55512" style="height:32px;"></div>
+        </div>
+        <p style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:8px;">submission_v2.wav · 1:30 · 48k/24bit</p>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer data-footer></footer>
+<script src="app.js"></script>
+</body>
+</html>

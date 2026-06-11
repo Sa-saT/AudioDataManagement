@@ -1,0 +1,37 @@
+# プレゼン用モック (moc/) を GitHub Pages に配信
+# Settings → Pages → Source を "GitHub Actions" にすれば有効化される
+name: Deploy mock to Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'moc/**'
+      - '.github/workflows/deploy-moc.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同時デプロイは1本に絞る (進行中はキャンセルしない)
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - name: Upload moc/ as Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./moc
+      - id: deployment
+        uses: actions/deploy-pages@v4

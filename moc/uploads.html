@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pathfinder — Uploads</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top-nav" data-nav></header>
+
+<main>
+  <div class="page-head">
+    <a class="back-btn" href="dashboard.html" title="戻る">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </a>
+    <div>
+      <h1>Uploads</h1>
+      <p class="sub">音源を公開する — 原本 wav をビットパーフェクトで配信</p>
+    </div>
+  </div>
+  <div class="divider"></div>
+
+  <div class="order-detail-grid" style="grid-template-columns:1fr 360px;">
+    <!-- form -->
+    <div>
+      <div class="card upload-zone" style="margin-bottom:18px;">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--muted);">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <span style="font-size:14px;">クリックして <span style="font-family:'JetBrains Mono',monospace;">.wav</span> を選択</span>
+        <span style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;">PCM 非圧縮 / 上限 48kHz / 24bit / stereo</span>
+      </div>
+
+      <div class="card" style="padding:20px;">
+        <div class="field"><label>タイトル</label><input type="text" value="Aurora Pulse"></div>
+        <div class="field"><label>イメージタグ (creator が選択)</label>
+          <div class="tag-picker">
+            <span class="tag tag-pick sel">warm</span><span class="tag tag-pick">ambient</span>
+            <span class="tag tag-pick sel">synth</span><span class="tag tag-pick">nature</span>
+            <span class="tag tag-pick">lo-fi</span><span class="tag tag-pick sel">bright</span>
+            <span class="tag tag-pick">drone</span><span class="tag tag-pick">organic</span>
+            <span class="tag tag-pick">cinematic</span><span class="tag tag-pick">glitch</span>
+          </div>
+        </div>
+        <div class="field"><label>公開設定</label><select><option>公開 (Dashboard に掲載)</option><option>非公開 (下書き)</option></select></div>
+        <button class="btn btn-primary" style="margin-top:6px;">公開する</button>
+      </div>
+    </div>
+
+    <!-- preview -->
+    <div>
+      <div class="card" style="padding:16px;margin-bottom:14px;">
+        <p class="section-label">プレビュー</p>
+        <div class="audio-card" style="grid-template-columns:40px 1fr;cursor:default;">
+          <button class="play-btn">▶</button>
+          <div class="waveform" data-seed="44441"></div>
+        </div>
+        <p style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:10px;">
+          Aurora Pulse · 3:18 · 48k/24bit/stereo · 198 tk
+        </p>
+        <div class="tags" style="margin-top:8px;"><span class="tag">warm</span><span class="tag">synth</span><span class="tag">bright</span></div>
+      </div>
+      <div class="card" style="padding:14px 16px;border-style:dashed;">
+        <p style="font-size:12px;color:var(--muted);line-height:1.7;font-family:'JetBrains Mono',monospace;">
+          peaks v2 <span style="color:var(--ink);">{n,max,min,rms}</span> を抽出し<br>
+          WebGL Fragment Shader で波形描画。<br>
+          アプリ側でのトランスコードは<span style="color:var(--tomato);">禁止</span>。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout">
+    DEMO: タグをクリックで選択/解除、▶ で波形が <span class="sw-turquoise">turquoise</span> に。アップロードのエラーは日本語ポップアップ (INVALID_CODEC 等) で表示されます。
+  </div>
+</main>
+
+<footer data-footer></footer>
+<script src="app.js"></script>
+</body>
+</html>

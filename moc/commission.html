@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pathfinder — Commission</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top-nav" data-nav></header>
+
+<main>
+  <div class="page-head" style="justify-content:space-between;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div>
+        <h1>Commission (発注)</h1>
+        <p class="sub">オリジナル音源の制作依頼</p>
+      </div>
+    </div>
+    <a class="btn btn-primary" href="#" data-role-only="licensee">＋ 新規発注</a>
+  </div>
+  <div class="divider"></div>
+
+  <!-- creator note -->
+  <p class="section-label" data-role-only="creator">▸ あなたへの依頼 / 受注可能な案件</p>
+
+  <!-- Draft section (licensee only) -->
+  <section data-role-only="licensee" style="margin-bottom:18px;">
+    <p class="section-label">一時保存中 (1)</p>
+    <a class="order-row card dashed" href="#">
+      <span class="pill pill-draft">Draft</span>
+      <div class="o-body">
+        <div class="o-title"><span class="serial">#42</span> 探索フィールド用の壮大な BGM</div>
+        <div class="o-meta"><span>1,800 tk</span><span class="dot"></span><span>締切 2026/07/10</span><span class="dot"></span><span>2026/06/09 更新</span></div>
+      </div>
+      <span class="btn btn-primary" style="padding:5px 12px;font-size:11px;">続きから入力</span>
+    </a>
+  </section>
+
+  <!-- Active orders -->
+  <section>
+    <div class="card-list">
+
+      <!-- reviewing: action required -->
+      <a class="order-row card" href="order.html">
+        <span class="action-dot"></span>
+        <span class="pill pill-reviewing">レビュー中</span>
+        <div class="o-body">
+          <div class="o-title"><span class="serial">#41</span> ボス戦の緊張感あるループ BGM</div>
+          <div class="o-meta"><span>Aoi Tanaka</span><span class="dot"></span><span>Sa-saT</span><span class="dot"></span><span>2,400 tk</span><span class="dot"></span><span>締切 2026/06/20</span></div>
+        </div>
+        <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <!-- assigned -->
+      <a class="order-row card" href="order.html">
+        <span class="pill pill-assigned">アサイン済</span>
+        <div class="o-body">
+          <div class="o-title"><span class="serial">#39</span> タイトル画面の神秘的なアンビエント</div>
+          <div class="o-meta"><span>Aoi Tanaka</span><span class="dot"></span><span>Komorebi Lab</span><span class="dot"></span><span>1,500 tk</span><span class="dot"></span><span>締切 2026/06/28</span></div>
+        </div>
+        <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <!-- recruiting -->
+      <a class="order-row card" href="order.html">
+        <span class="pill pill-recruiting">募集中</span>
+        <div class="o-body">
+          <div class="o-title"><span class="serial">#38</span> 達成感のあるファンファーレ SE ×3</div>
+          <div class="o-meta"><span>Hoshino Games</span><span class="dot"></span><span>900 tk</span><span class="dot"></span><span class="overdue">締切 2026/06/05</span></div>
+        </div>
+        <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+      <!-- done -->
+      <a class="order-row card" href="order.html" style="opacity:.62;">
+        <span class="pill pill-done">完了</span>
+        <div class="o-body">
+          <div class="o-title"><span class="serial">#35</span> メニュー UI のさりげない決定音 <span style="width:7px;height:7px;border-radius:50%;background:#2ecc71;display:inline-block;"></span></div>
+          <div class="o-meta"><span>Aoi Tanaka</span><span class="dot"></span><span>Tsuru Audio</span><span class="dot"></span><span>400 tk</span></div>
+        </div>
+        <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+
+    </div>
+  </section>
+
+  <div class="callout">
+    凡例 — <span style="color:#ffd700;">●</span> 金ドット = <strong>要対応</strong> (NOTIFICATION_SPEC Level 4: 自分の対応業務がある行)<br>
+    <span class="sw-turquoise">通知がない = 安心していい</span> を守る設計。ステータス pill で進行を一目で把握。
+  </div>
+</main>
+
+<footer data-footer></footer>
+<script src="app.js"></script>
+</body>
+</html>

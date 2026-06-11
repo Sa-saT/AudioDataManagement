@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pathfinder — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top-nav" data-nav></header>
+
+<main>
+  <div class="admin-head"><h1>Admin</h1></div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" data-tab="users">Users</button>
+    <button class="tab has-action" data-tab="payouts"><span class="count-badge">3</span>Payout</button>
+    <button class="tab" data-tab="tokens">Token付与</button>
+    <button class="tab" data-tab="licenses">lic発行</button>
+    <button class="tab has-action" data-tab="logs">ログ</button>
+    <button class="tab" data-tab="settings">設定</button>
+  </div>
+
+  <!-- USERS -->
+  <div class="tab-panel active" data-panel="users">
+    <div class="filter-row" data-btngroup>
+      <button class="filter-pill active">Creator</button>
+      <button class="filter-pill">Licensee</button>
+    </div>
+
+    <div class="card urow">
+      <span class="badge admin">admin</span>
+      <div class="u-name"><p>Sa-saT</p><small>LIC-9F2A-0001</small></div>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);">42UP · 18DL · 未払 ¥3,600</span>
+      <button class="mini-btn">DM</button>
+      <select><option>platinum</option><option>gold</option><option>silver</option><option>bronze</option></select>
+    </div>
+    <div class="card urow">
+      <span class="badge creator">creator</span><span class="badge rank">gold</span>
+      <div class="u-name"><p>Komorebi Lab</p><small>LIC-7C1B-0042</small></div>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);">15UP · 9DL · 累計 ¥7,200</span>
+      <button class="mini-btn">DM</button>
+      <select><option>gold</option><option>platinum</option><option>silver</option><option>bronze</option></select>
+    </div>
+    <div class="card urow">
+      <span class="badge creator">creator</span><span class="badge rank">silver</span>
+      <div class="u-name"><p>Tsuru Audio</p><small>LIC-3D9E-0088</small></div>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);">8UP · 4DL · 累計 ¥1,600</span>
+      <button class="mini-btn">DM</button>
+      <select><option>silver</option><option>gold</option><option>platinum</option><option>bronze</option></select>
+    </div>
+    <div class="card urow">
+      <span class="badge creator">creator</span><span class="badge rank">bronze</span>
+      <div class="u-name"><p>Aoi Sound</p><small>LIC-1A4F-0103</small></div>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);">3UP · 0DL · —</span>
+      <button class="mini-btn">DM</button>
+      <select><option>bronze</option><option>silver</option><option>gold</option><option>platinum</option></select>
+    </div>
+  </div>
+
+  <!-- PAYOUTS -->
+  <div class="tab-panel" data-panel="payouts">
+    <div class="filter-row" data-btngroup>
+      <button class="filter-pill active">未払いのみ</button>
+      <button class="filter-pill">すべて</button>
+    </div>
+    <div class="card urow">
+      <span class="badge creator">creator</span>
+      <div class="u-name"><p>Komorebi Lab <span style="color:var(--muted);font-weight:400;">gold ×3 DL</span></p><small>Midnight Reed ほか</small></div>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;color:var(--tomato);">¥1,200</span>
+      <button class="btn btn-turquoise" style="padding:6px 14px;font-size:12px;">支払済にする</button>
+    </div>
+    <div class="card urow">
+      <span class="badge creator">creator</span>
+      <div class="u-name"><p>Tsuru Audio <span style="color:var(--muted);font-weight:400;">silver ×2 DL</span></p><small>Kelp &amp; Static ほか</small></div>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;color:var(--tomato);">¥400</span>
+      <button class="btn btn-turquoise" style="padding:6px 14px;font-size:12px;">支払済にする</button>
+    </div>
+    <div class="card urow">
+      <span class="badge admin">admin</span>
+      <div class="u-name"><p>Sa-saT <span style="color:var(--muted);font-weight:400;">platinum ×... DL</span></p><small>Bansaka TD ほか</small></div>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;color:var(--tomato);">¥3,600</span>
+      <button class="btn btn-turquoise" style="padding:6px 14px;font-size:12px;">支払済にする</button>
+    </div>
+  </div>
+
+  <!-- TOKEN GRANT -->
+  <div class="tab-panel" data-panel="tokens">
+    <div class="card" style="padding:22px;max-width:480px;">
+      <p class="section-label">追加 token 付与 (当月末まで有効)</p>
+      <div class="field"><label>対象ユーザ</label><select><option>Aoi Tanaka (licensee)</option><option>Hoshino Games (licensee)</option></select></div>
+      <div class="field"><label>付与する token 数</label><input type="text" value="3600"></div>
+      <div class="field"><label>理由 (任意)</label><input type="text" placeholder="例: 月内に追加発注が発生したため"></div>
+      <button class="btn btn-primary">付与する</button>
+    </div>
+  </div>
+
+  <!-- LIC ISSUE -->
+  <div class="tab-panel" data-panel="licenses">
+    <div class="card" style="padding:22px;max-width:480px;">
+      <p class="section-label">.lic ファイル発行</p>
+      <div class="field"><label>ユーザ名</label><input type="text" placeholder="例: aoi_tanaka"></div>
+      <div class="field"><label>ロール</label><select><option>licensee</option><option>creator</option><option>admin</option></select></div>
+      <div class="field"><label>月間 token (licensee)</label><input type="text" value="18000"></div>
+      <div class="field"><label>グループ (任意)</label><input type="text" placeholder="例: Hoshino Games"></div>
+      <button class="btn btn-primary">↓ .lic を生成してダウンロード</button>
+      <p style="font-size:11px;color:var(--muted);margin-top:10px;font-family:'JetBrains Mono',monospace;">AES-256-GCM 暗号化バイナリ .lic として出力</p>
+    </div>
+  </div>
+
+  <!-- LOGS -->
+  <div class="tab-panel" data-panel="logs">
+    <div class="filter-row" data-btngroup>
+      <button class="filter-pill active">Creators</button>
+      <button class="filter-pill">Users</button>
+      <span style="margin-left:auto;"></span>
+      <button class="filter-pill active">30日</button>
+      <button class="filter-pill">7日</button>
+      <button class="filter-pill">90日</button>
+    </div>
+    <div class="kpi-row">
+      <div class="card kpi"><div class="num">12</div><div class="lbl">Total</div></div>
+      <div class="card kpi"><div class="num" style="color:#2ecc71;">8</div><div class="lbl">Active</div></div>
+      <div class="card kpi"><div class="num">71</div><div class="lbl">Avg Score</div></div>
+      <div class="card kpi"><div class="num alert">2</div><div class="lbl">Alert</div></div>
+    </div>
+    <div class="card urow">
+      <span class="signal-dot" style="background:#2ecc71;"></span>
+      <span class="badge creator">creator</span><span class="badge rank">gold</span>
+      <div class="u-name"><p>Komorebi Lab</p><small>最終アクティブ: 今日</small></div>
+      <div class="bar-track" style="max-width:140px;"><div class="bar-fill" style="width:84%;"></div></div>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;">84</span>
+    </div>
+    <div class="card urow">
+      <span class="signal-dot" style="background:#f0a840;"></span>
+      <span class="badge creator">creator</span><span class="badge rank">silver</span>
+      <div class="u-name"><p>Tsuru Audio</p><small>最終アクティブ: 5日前</small></div>
+      <div class="bar-track" style="max-width:140px;"><div class="bar-fill" style="width:52%;background:#f0a840;"></div></div>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;">52</span>
+    </div>
+    <div class="card urow">
+      <span class="signal-dot" style="background:#e74c3c;"></span>
+      <span class="badge creator">creator</span><span class="badge rank">bronze</span>
+      <div class="u-name"><p>Aoi Sound</p><small>最終アクティブ: 23日前</small></div>
+      <div class="bar-track" style="max-width:140px;"><div class="bar-fill" style="width:21%;background:#e74c3c;"></div></div>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;">21</span>
+    </div>
+    <p style="font-size:11px;color:var(--muted);margin-top:12px;font-family:'JetBrains Mono',monospace;">
+      行クリックで Heatmap / Sparkline / RadarChart (自前 SVG) を展開 — 本番のみ
+    </p>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="tab-panel" data-panel="settings">
+    <div class="card" style="overflow:hidden;">
+      <div class="set-row">
+        <div style="flex:1;"><div class="set-key">commission_enabled</div><div class="set-desc">Commission (発注) 機能の有効/無効</div></div>
+        <span style="font-size:11px;color:var(--success);font-family:'JetBrains Mono',monospace;">有効</span>
+        <button class="toggle on"></button>
+      </div>
+      <div class="set-row">
+        <div style="flex:1;"><div class="set-key">image_tag_presets</div><div class="set-desc">アップロード時に選べるイメージタグ</div></div>
+        <span style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;">12 件</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--muted);"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+      <div class="set-row">
+        <div style="flex:1;"><div class="set-key">commission_item_visibility</div><div class="set-desc">発注ウィザードの項目 表示/非表示</div></div>
+        <span style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;">3 項目 非表示</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--muted);"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout">
+    Admin タブの <span style="color:#ffa500;font-weight:600;">●3</span> = 要対応件数 (NOTIFICATION_SPEC Level 3)。Payout 承認待ち・要確認のログがある時のみ点灯します。
+  </div>
+</main>
+
+<footer data-footer></footer>
+<script src="app.js"></script>
+</body>
+</html>

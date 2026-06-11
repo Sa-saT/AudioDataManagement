@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pathfinder — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top-nav" data-nav></header>
+
+<main>
+  <div class="dash-head">
+    <div class="dash-title">
+      <h1>Dashboard</h1>
+      <p>1件 - 5件 / 全128件</p>
+    </div>
+    <div class="dash-status">
+      <!-- licensee: token gauge prominent -->
+      <div class="token-gauge" data-role-only="licensee">
+        <div class="token-gauge-label"><span>TOKENS</span><span>4,310 / 18,000</span></div>
+        <div class="token-gauge-bar"><div class="token-gauge-fill" style="width:24%"></div></div>
+      </div>
+      <!-- creator: token gauge (creates / commission) -->
+      <div class="token-gauge" data-role-only="creator">
+        <div class="token-gauge-label"><span>TOKENS</span><span>17,562 / 30,000</span></div>
+        <div class="token-gauge-bar"><div class="token-gauge-fill" style="width:58%"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="control-group" data-btngroup>
+      <span>表示順:</span>
+      <button class="control-btn active">オススメ順</button>
+      <button class="control-btn">新着順</button>
+    </div>
+    <div class="control-group" data-btngroup>
+      <span>表示件数:</span>
+      <button class="control-btn active">25</button>
+      <button class="control-btn">50</button>
+      <button class="control-btn">100</button>
+      <button class="control-btn">200</button>
+    </div>
+    <div class="pager">
+      <button class="pager-arrow">‹</button><span>1 / 6</span><button class="pager-arrow">›</button>
+    </div>
+  </div>
+
+  <!-- Cards -->
+  <div class="card-list">
+
+    <!-- Card 1: playing -->
+    <div class="audio-card playing">
+      <button class="play-btn">⏸</button>
+      <div class="waveform" data-seed="12345"></div>
+      <div class="meta">
+        <div class="meta-title">Bansaka TD</div>
+        <div class="meta-sub"><span class="meta-creator">Sa-saT</span><span class="dot"></span><span>44.1k / 24bit / stereo</span></div>
+        <div class="tags"><span class="tag">warm</span><span class="tag">ambient</span><span class="tag">organic</span></div>
+      </div>
+      <div class="right">
+        <div class="duration playing">0:42 / 2:16</div>
+        <div class="tokens">136 tk</div>
+        <button class="heart-btn fav" data-role-only="creator admin">
+          <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg><span>24</span>
+        </button>
+        <button class="dl-btn" data-role-only="licensee" title="136 token 消費して DL">↓ DL</button>
+      </div>
+    </div>
+
+    <!-- Card 2: NEW -->
+    <div class="audio-card">
+      <button class="play-btn">▶</button>
+      <div class="waveform" data-seed="67890"></div>
+      <div class="meta">
+        <div class="meta-title">Forest Drip <span class="badge-new">NEW</span></div>
+        <div class="meta-sub"><span class="meta-creator">Sa-saT</span><span class="dot"></span><span>48k / 24bit / stereo</span></div>
+        <div class="tags"><span class="tag">nature</span><span class="tag">rain</span><span class="tag">lo-fi</span></div>
+      </div>
+      <div class="right">
+        <div class="duration">3:42</div>
+        <div class="tokens">222 tk</div>
+        <button class="heart-btn" data-role-only="creator admin">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg><span>7</span>
+        </button>
+        <button class="dl-btn" data-role-only="licensee">↓ DL</button>
+      </div>
+    </div>
+
+    <!-- Card 3 -->
+    <div class="audio-card">
+      <button class="play-btn">▶</button>
+      <div class="waveform" data-seed="24680"></div>
+      <div class="meta">
+        <div class="meta-title">Midnight Reed</div>
+        <div class="meta-sub"><span class="meta-creator">Komorebi Lab</span><span class="dot"></span><span>44.1k / 24bit / stereo</span></div>
+        <div class="tags"><span class="tag">jazzy</span><span class="tag">mellow</span><span class="tag">late-night</span></div>
+      </div>
+      <div class="right">
+        <div class="duration">5:08</div>
+        <div class="tokens">308 tk</div>
+        <button class="heart-btn fav" data-role-only="creator admin">
+          <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg><span>52</span>
+        </button>
+        <button class="dl-btn" data-role-only="licensee">↓ DL</button>
+      </div>
+    </div>
+
+    <!-- Card 4 -->
+    <div class="audio-card">
+      <button class="play-btn">▶</button>
+      <div class="waveform" data-seed="13579"></div>
+      <div class="meta">
+        <div class="meta-title">Glass Garden</div>
+        <div class="meta-sub"><span class="meta-creator">Aoi Sound</span><span class="dot"></span><span>48k / 24bit / stereo</span></div>
+        <div class="tags"><span class="tag">crystal</span><span class="tag">bright</span><span class="tag">synth</span></div>
+      </div>
+      <div class="right">
+        <div class="duration">4:21</div>
+        <div class="tokens">261 tk</div>
+        <button class="heart-btn" data-role-only="creator admin">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg><span>3</span>
+        </button>
+        <button class="dl-btn" data-role-only="licensee">↓ DL</button>
+      </div>
+    </div>
+
+    <!-- Card 5 -->
+    <div class="audio-card">
+      <button class="play-btn">▶</button>
+      <div class="waveform" data-seed="98765"></div>
+      <div class="meta">
+        <div class="meta-title">Kelp &amp; Static</div>
+        <div class="meta-sub"><span class="meta-creator">Tsuru Audio</span><span class="dot"></span><span>44.1k / 16bit / stereo</span></div>
+        <div class="tags"><span class="tag">aquatic</span><span class="tag">texture</span><span class="tag">drone</span></div>
+      </div>
+      <div class="right">
+        <div class="duration">2:58</div>
+        <div class="tokens">178 tk</div>
+        <button class="heart-btn" data-role-only="creator admin">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg><span>11</span>
+        </button>
+        <button class="dl-btn" data-role-only="licensee">↓ DL</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Legend differs by role -->
+  <div class="callout" data-role-only="creator admin">
+    凡例 / creator 視点 — お気に入り押下<span class="sw-tomato">人数</span>を可視化<br>
+    <strong>♥ 数</strong> = この音源を何人が気に入っているか / <span class="sw-tomato">NEW</span> = 新着 / 再生中は波形が <span class="sw-turquoise">turquoise</span> に
+  </div>
+  <div class="callout" data-role-only="licensee">
+    凡例 / licensee 視点 — 視聴は無料、<strong>↓ DL</strong> で token を消費して原本 wav を取得<br>
+    単発販売: 各音源はシステム全体で1人のみ DL 可。DL 後は全員の一覧から消えます。
+  </div>
+</main>
+
+<footer data-footer></footer>
+<script src="app.js"></script>
+</body>
+</html>
