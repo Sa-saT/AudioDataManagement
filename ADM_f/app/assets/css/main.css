@@ -38,11 +38,20 @@
 .overflow-y-auto::-webkit-scrollbar { display: none; }
 
 @layer components {
+  /* 主要アクション: ink ベース → hover で primary に点灯 (Pathfinder の primary CTA)。
+     md=デフォルト / sm / xs の 3 サイズ。実 UI の最頻パターンを標準化したもの。 */
   .btn-primary {
-    @apply inline-flex items-center justify-center bg-primary text-white font-medium text-sm rounded-md h-10 px-[18px] transition-colors;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md bg-ink px-4 py-1.5 text-[12px] font-medium text-canvas transition-colors hover:bg-primary hover:text-white disabled:opacity-50;
   }
-  .btn-primary:hover {
-    @apply bg-primary-active;
+  .btn-primary-sm {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md bg-ink px-3 py-1.5 text-[12px] font-medium text-canvas transition-colors hover:bg-primary hover:text-white disabled:opacity-50;
+  }
+  .btn-primary-xs {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md bg-ink px-3 py-1 text-[11px] font-medium text-canvas transition-colors hover:bg-primary hover:text-white disabled:opacity-50;
+  }
+  /* 強調アクション: 単色 turquoise → hover で deep green。標準 (ink→turquoise) と対の関係 */
+  .btn-emphasis {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-primary-active hover:text-white disabled:opacity-50;
   }
   .btn-secondary {
     @apply inline-flex items-center justify-center bg-surface-card text-ink font-medium text-sm rounded-md h-10 px-[18px] border border-hairline-strong;

@@ -186,7 +186,7 @@ async function save() {
               @click="close"
             >キャンセル</button>
             <button
-              class="flex items-center gap-1.5 rounded-md bg-ink px-4 py-1.5 text-[12px] font-medium text-canvas hover:bg-primary disabled:opacity-50"
+              class="btn-primary"
               :disabled="!title.trim() || loading"
               @click="save"
             >

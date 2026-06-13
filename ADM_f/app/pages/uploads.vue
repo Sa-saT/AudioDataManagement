@@ -180,7 +180,7 @@ function formatBytes(bytes: number): string {
     <div v-if="succeeded" class="card p-10 text-center">
       <div class="mb-4 flex justify-center">
         <div class="flex h-14 w-14 items-center justify-center rounded-full bg-primary/15">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#40e0d0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#66cdaa" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M20 6 9 17l-5-5"/>
           </svg>
         </div>
@@ -211,7 +211,7 @@ function formatBytes(bytes: number): string {
       >
         <!-- File selected -->
         <div v-if="file" class="flex items-center gap-3 px-5 py-4">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#40e0d0" stroke-width="1.8" stroke-linecap="round">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#66cdaa" stroke-width="1.8" stroke-linecap="round">
             <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
           </svg>
           <div class="flex-1 min-w-0">

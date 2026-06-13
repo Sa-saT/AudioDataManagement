@@ -180,6 +180,25 @@ async function fetchUsers() {
 // ─── User list role filter ───────────────────────────────────────────────────
 type RoleFilter = 'creator' | 'licensee'
 const roleFilter = ref<RoleFilter>('creator')
+
+// ロール識別色 (DESIGN.md「ロール識別色」)。Tailwind は動的クラス名を出せないため静的マップで保持。
+// Users タブの role フィルタ (選択時=塗り pill)
+const ROLE_FILTER_CLASS: Record<RoleFilter, { on: string; off: string }> = {
+  creator:  { on: 'bg-seagreen text-white',  off: 'border border-hairline-strong text-seagreen-deep hover:border-seagreen' },
+  licensee: { on: 'bg-licensee text-ink',    off: 'border border-hairline-strong text-licensee-deep hover:border-licensee' },
+}
+// lic 発行の role セレクタ (選択時=淡色 tint)
+const LIC_ROLE_CLASS: Record<'licensee' | 'creator' | 'admin', { on: string; off: string }> = {
+  admin:    { on: 'border-admin bg-admin/15 text-admin-deep',          off: 'border-hairline text-admin-deep/70 hover:text-admin-deep' },
+  creator:  { on: 'border-seagreen bg-seagreen/15 text-seagreen-deep', off: 'border-hairline text-seagreen-deep/70 hover:text-seagreen-deep' },
+  licensee: { on: 'border-licensee bg-licensee/25 text-licensee-deep', off: 'border-hairline text-licensee-deep/70 hover:text-licensee-deep' },
+}
+// ロール名 → 識別テキスト色 (バッジ/ログ行の role 表記用)
+function roleTextClass(role: string): string {
+  return role === 'admin' ? 'text-admin-deep'
+    : role === 'creator' ? 'text-seagreen-deep'
+    : 'text-licensee-deep'
+}
 const groupFilter = ref<string>('all')
 
 const creatorList = computed(() => users.value.filter(u => u.role === 'creator' || u.role === 'admin'))
@@ -520,7 +539,7 @@ const ORDER_STATUS_CLASS: Record<string, string> = {
   draft: 'bg-hairline-soft text-body',
   open: 'bg-primary/15 text-primary-active',
   recruiting: 'bg-primary/20 text-primary-active',
-  assigned: 'bg-[#20b2aa22] text-[#0e7a74]',
+  assigned: 'bg-seagreen/15 text-seagreen-deep',
   reviewing: 'bg-[#f0a84022] text-[#b07000]',
   done: 'bg-[#2ecc7122] text-[#1a9950]',
   cancelled: 'bg-accent/15 text-accent',
@@ -594,6 +613,26 @@ async function confirmRemoveImageTag() {
 const expandedSettingKey = ref<string | null>(null)
 function toggleSettingPanel(key: string) {
   expandedSettingKey.value = expandedSettingKey.value === key ? null : key
+}
+// commission 項目一覧の step 単位ゼブラ用ヘルパー
+function stepNum(step: string): number {
+  return Number(step.replace(/\D/g, '')) || 0
+}
+function isStepHead(idx: number): boolean {
+  return COMMISSION_ITEM_LABELS[idx]?.step !== COMMISSION_ITEM_LABELS[idx - 1]?.step
+}
+// image_tag チップ: タグ名から決定的に淡色を割当てて識別性を上げる (tag パレット = 例外色)
+const TAG_CHIP_PALETTE = [
+  'bg-seagreen/15 text-seagreen-deep border-seagreen/35',
+  'bg-admin/15 text-admin-deep border-admin/35',
+  'bg-licensee/30 text-licensee-deep border-licensee/50',
+  'bg-primary/15 text-primary-active border-primary/35',
+  'bg-accent/12 text-accent border-accent/30',
+]
+function tagChipClass(tag: string): string {
+  let h = 0
+  for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) >>> 0
+  return TAG_CHIP_PALETTE[h % TAG_CHIP_PALETTE.length]!
 }
 // Commission 項目で OFF (非表示) になっている数
 const commissionHiddenCount = computed(() => {
@@ -715,6 +754,11 @@ interface CreatorDetail {
 }
 
 const logSub = ref<LogSub>('creators')
+// ログ サブタブ (Creator / Licensee) を Users の role フィルタと同じロール色に
+const LOG_SUB_CLASS: Record<LogSub, { on: string; off: string }> = {
+  creators: { on: 'bg-seagreen text-white', off: 'border border-hairline-strong text-seagreen-deep hover:border-seagreen' },
+  users:    { on: 'bg-licensee text-ink',   off: 'border border-hairline-strong text-licensee-deep hover:border-licensee' },
+}
 const logDays = ref<LogDays>(30)
 const userLogs = ref<UserLogRow[]>([])
 const creatorLogs = ref<CreatorLogRow[]>([])
@@ -835,7 +879,7 @@ watch(tab, (t) => {
 
     <!-- Header -->
     <div class="flex shrink-0 items-center gap-3 py-5">
-      <h1 class="font-mono text-[13px] font-bold uppercase tracking-widest text-ink">Admin</h1>
+      <h1 class="font-mono text-[13px] font-bold uppercase tracking-widest text-admin-deep">Admin</h1>
     </div>
 
     <!-- Tabs -->
@@ -846,7 +890,7 @@ watch(tab, (t) => {
         class="relative pb-2 text-[14px] font-semibold transition-all"
         :class="[
           tab === t[0] ? 'filter-active' : 'opacity-40 hover:opacity-70',
-          tabArea(t[0]).action > 0 || tabArea(t[0]).info ? 'text-[#ffa500]' : 'text-ink',
+          tabArea(t[0]).action > 0 || tabArea(t[0]).info ? 'text-notify' : 'text-ink',
         ]"
         @click="t[0] === 'orders' ? router.push('/orders') : (tab = t[0])"
       >
@@ -879,9 +923,7 @@ watch(tab, (t) => {
               v-for="r in (['creator','licensee'] as RoleFilter[])"
               :key="r"
               class="rounded-full px-3 py-1 text-[11px] font-semibold transition-colors"
-              :class="roleFilter === r
-                ? 'bg-ink text-canvas'
-                : 'border border-hairline-strong text-body hover:border-primary hover:text-ink'"
+              :class="ROLE_FILTER_CLASS[r][roleFilter === r ? 'on' : 'off']"
               @click="roleFilter = r"
             >{{ r === 'creator' ? 'Creator' : 'Licensee' }}</button>
           </div>
@@ -923,10 +965,12 @@ watch(tab, (t) => {
 
                 <!-- role + rank badge -->
                 <span
-                  class="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase"
-                  :style="u.role === 'admin'
-                    ? 'background:#ff634722;color:#c0392b;border:1px solid #ff634755'
-                    : 'background:#20b2aa22;color:#0e7a74;border:1px solid #20b2aa55'"
+                  class="shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase"
+                  :class="u.role === 'admin'
+                    ? 'bg-admin/15 text-admin-deep border-admin/35'
+                    : u.role === 'creator'
+                      ? 'bg-seagreen/15 text-seagreen-deep border-seagreen/35'
+                      : 'bg-licensee/25 text-licensee-deep border-licensee/40'"
                 >{{ u.role }}</span>
                 <span v-if="u.rank" class="shrink-0 rounded border border-hairline-strong bg-surface-strong/80 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-body-strong">{{ u.rank }}</span>
 
@@ -1054,8 +1098,7 @@ watch(tab, (t) => {
             class="card flex items-center gap-3 px-4 py-3"
           >
             <!-- role badge -->
-            <span class="shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase"
-              style="background:#26251e18;color:#26251e;border-color:#26251e30">licensee</span>
+            <span class="shrink-0 rounded border border-licensee/40 bg-licensee/25 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase text-licensee-deep">licensee</span>
 
             <!-- name / license / token -->
             <div class="min-w-0 flex-1">
@@ -1236,7 +1279,7 @@ watch(tab, (t) => {
           <div class="flex gap-2">
             <button class="rounded-md border border-hairline bg-white/60 px-4 py-2 text-[12px] text-body hover:text-ink disabled:opacity-40" :disabled="grantLoading" @click="resetGrant">キャンセル</button>
             <button
-              class="flex items-center gap-1.5 rounded-md bg-ink px-4 py-2 text-[12px] font-medium text-canvas transition-colors hover:bg-primary disabled:opacity-50"
+              class="btn-primary"
               :disabled="!grantUserId || grantTokens <= 0 || grantLoading"
               @click="submitGrant"
             >
@@ -1262,7 +1305,7 @@ watch(tab, (t) => {
               <button
                 v-for="r in ['licensee','creator','admin'] as const" :key="r" type="button"
                 class="rounded-full border px-3 py-1 text-[11px] font-medium transition-colors"
-                :class="licRole === r ? 'border-primary bg-primary/10 text-primary-active' : 'border-hairline text-muted hover:text-ink'"
+                :class="LIC_ROLE_CLASS[r][licRole === r ? 'on' : 'off']"
                 @click="licRole = r"
               >{{ r }}</button>
             </div>
@@ -1294,7 +1337,7 @@ watch(tab, (t) => {
           <div class="flex gap-2">
             <button class="rounded-md border border-hairline bg-white/60 px-4 py-2 text-[12px] text-body hover:text-ink disabled:opacity-40" :disabled="licLoading" @click="resetLic">キャンセル</button>
             <button
-              class="flex items-center gap-1.5 rounded-md bg-ink px-4 py-2 text-[12px] font-medium text-canvas transition-colors hover:bg-primary disabled:opacity-50"
+              class="btn-primary"
               :disabled="!licUsername.trim() || licLoading"
               @click="issueLic"
             >
@@ -1431,9 +1474,7 @@ watch(tab, (t) => {
               v-for="opt in ([['creators','Creator'],['users','Licensee']] as [LogSub, string][])"
               :key="opt[0]"
               class="rounded-full px-3 py-1 text-[11px] font-semibold transition-colors"
-              :class="logSub === opt[0]
-                ? 'bg-ink text-canvas'
-                : 'border border-hairline-strong text-body hover:border-primary hover:text-ink'"
+              :class="LOG_SUB_CLASS[opt[0]][logSub === opt[0] ? 'on' : 'off']"
               @click="logSub = opt[0]"
             >{{ opt[1] }}</button>
           </div>
@@ -1574,7 +1615,7 @@ watch(tab, (t) => {
               <div class="min-w-0 flex-1">
                 <div class="flex items-baseline gap-2">
                   <span class="text-[13px] font-semibold text-ink">@{{ row.username }}</span>
-                  <span class="font-mono text-[10px] uppercase tracking-widest text-muted">{{ row.role }}</span>
+                  <span class="font-mono text-[10px] uppercase tracking-widest" :class="roleTextClass(row.role)">{{ row.role }}</span>
                 </div>
                 <div class="mt-0.5 flex items-center gap-3 font-mono text-[10px] text-muted">
                   <span>DL <span class="text-ink">{{ row.metrics.download_count }}</span></span>
@@ -1623,10 +1664,9 @@ watch(tab, (t) => {
                   <p class="mb-1 text-[10px] uppercase tracking-widest text-muted">Token 月間残量</p>
                   <div class="h-2 overflow-hidden rounded-full bg-hairline-soft">
                     <div
-                      class="h-full rounded-full"
+                      class="h-full rounded-full bg-seagreen"
                       :style="{
                         width: ((expandedDetails.get(row.user_id) as UserDetail).metrics.monthly_quota === 0 ? 0 : Math.min(100, ((expandedDetails.get(row.user_id) as UserDetail).metrics.tokens_used / (expandedDetails.get(row.user_id) as UserDetail).metrics.monthly_quota) * 100)) + '%',
-                        background: '#20b2aa',
                       }"
                     />
                   </div>
@@ -1715,11 +1755,12 @@ watch(tab, (t) => {
                 <span
                   v-for="tag in parsedJsonSetting<string[]>('image_tag_presets', [])"
                   :key="tag"
-                  class="inline-flex items-center gap-1 rounded-full border border-[#1e3a8a] bg-[#1e40af] px-3 py-1 text-[11px] font-semibold text-white shadow-sm"
+                  class="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-semibold shadow-sm"
+                  :class="tagChipClass(tag)"
                 >
                   {{ tag }}
                   <button
-                    class="ml-0.5 -mr-0.5 flex h-4 w-4 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/15 hover:text-white"
+                    class="ml-0.5 -mr-0.5 flex h-4 w-4 items-center justify-center rounded-full opacity-50 transition-all hover:bg-black/10 hover:opacity-100"
                     title="削除"
                     :disabled="settingSaving['image_tag_presets']"
                     @click="askRemoveImageTag(tag)"
@@ -1772,9 +1813,15 @@ watch(tab, (t) => {
                 v-for="(item, idx) in COMMISSION_ITEM_LABELS"
                 :key="item.key"
                 class="flex items-center gap-4 px-4 py-2.5"
-                :class="idx > 0 ? 'border-t border-hairline-soft/60' : ''"
+                :class="[
+                  stepNum(item.step) % 2 === 0 ? 'bg-surface-strong/30' : 'bg-white/50',
+                  isStepHead(idx) && idx > 0 ? 'border-t border-hairline-strong' : '',
+                ]"
               >
-                <span class="shrink-0 font-mono text-[10px] text-muted w-12">{{ item.step }}</span>
+                <span
+                  class="shrink-0 font-mono text-[10px] w-12"
+                  :class="isStepHead(idx) ? 'font-bold text-seagreen-deep' : 'text-transparent'"
+                >{{ item.step }}</span>
                 <div class="min-w-0 flex-1">
                   <p class="text-[12px] text-ink">{{ item.label }}</p>
                   <p class="mt-0.5 font-mono text-[10px] text-muted">{{ item.key }}</p>
@@ -1855,16 +1902,16 @@ watch(tab, (t) => {
                 >
                   <div
                     class="grid h-7 w-7 shrink-0 place-items-center rounded-full font-mono text-[11px] font-bold"
-                    :class="dmIsMine(m) ? 'bg-accent text-white' : 'bg-primary text-white'"
+                    :class="dmIsMine(m) ? 'bg-admin text-white' : 'bg-primary text-white'"
                   >{{ dmIsMine(m) ? 'A' : 'C' }}</div>
                   <div class="max-w-[75%]" :class="dmIsMine(m) ? 'text-right' : 'text-left'">
                     <p class="mb-0.5 flex items-center gap-1.5 px-1 text-[10px]" :class="dmIsMine(m) ? 'justify-end' : 'justify-start'">
-                      <span class="font-medium text-body-strong">{{ dmIsMine(m) ? `${m.sender_name ?? 'Admin'} (Admin)` : (m.sender_name ?? 'Creator') }}</span>
+                      <span class="font-medium" :class="dmIsMine(m) ? 'text-admin-deep' : 'text-seagreen-deep'">{{ dmIsMine(m) ? `${m.sender_name ?? 'Admin'} (Admin)` : (m.sender_name ?? 'Creator') }}</span>
                       <span class="text-muted">{{ dmFormatTime(m.created_at) }}</span>
                     </p>
                     <div
                       class="inline-block rounded-2xl px-3.5 py-2 text-left text-[13px] leading-relaxed whitespace-pre-wrap break-words shadow-sm"
-                      :class="dmIsMine(m) ? 'bg-accent text-white' : 'bg-surface-strong/60 text-ink'"
+                      :class="dmIsMine(m) ? 'bg-admin/25 text-ink' : 'bg-surface-strong/60 text-ink'"
                     >{{ m.content }}</div>
                   </div>
                 </div>
@@ -1882,7 +1929,7 @@ watch(tab, (t) => {
               <div class="mt-1.5 flex items-center justify-between">
                 <span class="font-mono text-[10px] text-muted">{{ dmDraft.length }} / 4000</span>
                 <button
-                  class="rounded-md bg-ink px-3 py-1 text-[11px] font-medium text-canvas hover:bg-primary disabled:opacity-50"
+                  class="btn-primary-xs"
                   :disabled="dmSending || !dmDraft.trim()"
                   @click="sendDm"
                 >{{ dmSending ? '…' : '送信' }}</button>

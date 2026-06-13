@@ -104,7 +104,7 @@ function formatTime(iso: string): string {
       <div v-else-if="fetchError" class="card mx-auto mt-6 max-w-[420px] p-6 text-center text-[13px]">
         <p class="font-medium text-accent">読み込みに失敗しました</p>
         <p class="mt-1 text-muted">{{ fetchError }}</p>
-        <button class="mt-4 rounded-md bg-ink px-4 py-1.5 text-[12px] text-canvas hover:bg-primary" @click="fetchMessages">再試行</button>
+        <button class="btn-primary mt-4" @click="fetchMessages">再試行</button>
       </div>
       <div v-else-if="messages.length === 0" class="py-16 text-center text-[13px] text-muted">
         メッセージはまだありません。
@@ -118,11 +118,11 @@ function formatTime(iso: string): string {
         >
           <div
             class="grid h-7 w-7 shrink-0 place-items-center rounded-full font-mono text-[11px] font-bold"
-            :class="isMine(m) ? 'bg-primary text-white' : 'bg-accent text-white'"
+            :class="isMine(m) ? 'bg-primary text-white' : 'bg-admin text-white'"
           >{{ isMine(m) ? 'C' : 'A' }}</div>
           <div class="max-w-[70%]" :class="isMine(m) ? 'items-end text-right' : 'items-start text-left'">
             <p class="mb-0.5 flex items-center gap-1.5 px-1 text-[10px]" :class="isMine(m) ? 'justify-end' : 'justify-start'">
-              <span class="font-medium text-body-strong">{{ isMine(m) ? 'あなた' : (m.sender_name ?? 'Admin') + ' (Admin)' }}</span>
+              <span class="font-medium" :class="isMine(m) ? 'text-body-strong' : 'text-admin-deep'">{{ isMine(m) ? 'あなた' : (m.sender_name ?? 'Admin') + ' (Admin)' }}</span>
               <span class="text-muted">{{ formatTime(m.created_at) }}</span>
             </p>
             <div
@@ -147,7 +147,7 @@ function formatTime(iso: string): string {
       <div class="mt-1.5 flex items-center justify-between">
         <span class="font-mono text-[10px] text-muted">{{ draft.length }} / 4000</span>
         <button
-          class="rounded-md bg-ink px-3 py-1 text-[11px] font-medium text-canvas hover:bg-primary disabled:opacity-50"
+          class="btn-primary-xs"
           :disabled="sending || !draft.trim()"
           @click="send"
         >{{ sending ? '…' : '送信' }}</button>

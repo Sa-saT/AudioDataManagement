@@ -281,9 +281,9 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
     <!-- Progress bar -->
     <div class="flex items-center gap-2 mb-5">
       <span class="text-[11px] text-ink/40 tabular-nums whitespace-nowrap">Step {{ step }} / {{ TOTAL_STEPS }}</span>
-      <div class="flex-1 h-[3px] rounded-full bg-surface-2 overflow-hidden">
+      <div class="flex-1 h-[3px] rounded-full bg-hairline-soft overflow-hidden">
         <div
-          class="h-full rounded-full bg-accent transition-all duration-300"
+          class="h-full rounded-full bg-primary transition-all duration-300"
           :style="{ width: progressPercent + '%' }"
         />
       </div>
@@ -308,8 +308,8 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
             type="button"
             class="flex-1 py-2 rounded-lg text-[12px] font-medium border transition-colors"
             :class="brief.sound_type === opt.v
-              ? 'bg-accent text-white border-accent'
-              : 'bg-surface-2 text-ink/60 border-white/10 hover:border-accent/50'"
+              ? 'bg-primary text-white border-primary'
+              : 'bg-white/85 text-ink/60 border-hairline hover:border-primary/50'"
             @click="brief.sound_type = opt.v as typeof brief.sound_type"
           >{{ opt.l }}</button>
         </div>
@@ -326,8 +326,8 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
             type="button"
             class="px-4 py-1.5 rounded-full text-[12px] border transition-colors"
             :class="brief.purpose === opt.v
-              ? 'bg-accent text-white border-accent'
-              : 'bg-surface-2 text-ink/60 border-white/10 hover:border-accent/50'"
+              ? 'bg-primary text-white border-primary'
+              : 'bg-white/85 text-ink/60 border-hairline hover:border-primary/50'"
             @click="brief.purpose = opt.v as typeof brief.purpose"
           >{{ opt.l }}</button>
         </div>
@@ -336,7 +336,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
           v-model="brief.purpose_note"
           type="text"
           placeholder="具体的な用途を入力"
-          class="mt-2 w-full bg-surface-2 border border-white/10 rounded-lg px-3 py-2 text-[13px] text-ink placeholder:text-ink/30 focus:outline-none focus:ring-1 focus:ring-accent"
+          class="mt-2 w-full bg-white/85 border border-hairline rounded-lg px-3 py-2 text-[13px] text-ink placeholder:text-ink/30 focus:outline-none focus:ring-1 focus:ring-primary"
         />
         <p v-if="errors.purpose" class="mt-1 text-[11px] text-accent">{{ errors.purpose }}</p>
       </div>
@@ -356,7 +356,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
             :min="LENGTH_MIN"
             :max="LENGTH_MAX"
             step="1"
-            class="flex-1 accent-accent"
+            class="flex-1 accent-primary"
           />
           <div class="flex items-center gap-1 shrink-0">
             <input
@@ -364,7 +364,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
               type="number"
               :min="LENGTH_MIN"
               :max="LENGTH_MAX"
-              class="w-20 bg-surface-2 border border-white/10 rounded-lg px-2 py-1.5 text-[13px] text-ink text-right focus:outline-none focus:ring-1 focus:ring-accent"
+              class="w-20 bg-white/85 border border-hairline rounded-lg px-2 py-1.5 text-[13px] text-ink text-right focus:outline-none focus:ring-1 focus:ring-primary"
             />
             <span class="text-[12px] text-ink/40">秒</span>
           </div>
@@ -379,7 +379,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
         <input
           v-model="desired_deadline"
           type="date"
-          class="bg-surface-2 border border-white/10 rounded-lg px-3 py-2 text-[13px] text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+          class="bg-white/85 border border-hairline rounded-lg px-3 py-2 text-[13px] text-ink focus:outline-none focus:ring-1 focus:ring-primary"
         />
         <p class="mt-1 text-[10px] text-ink/30">デフォルトは作成日から7日後。後から変更も可能です。</p>
         <p v-if="errors.deadline" class="mt-1 text-[11px] text-accent">{{ errors.deadline }}</p>
@@ -408,8 +408,8 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
                 type="button"
                 class="px-3 py-1.5 rounded-full text-[12px] border transition-colors"
                 :class="brief.bgm_scenes.includes(s.v)
-                  ? 'bg-accent text-white border-accent'
-                  : 'bg-surface-2 text-ink/60 border-white/10 hover:border-accent/50'"
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-white/85 text-ink/60 border-hairline hover:border-primary/50'"
                 @click="toggleArr(brief.bgm_scenes, s.v)"
               >{{ s.l }}</button>
             </div>
@@ -421,7 +421,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
             <button
               type="button"
               class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors"
-              :class="brief.bgm_loop ? 'bg-accent' : 'bg-surface-2 border border-white/20'"
+              :class="brief.bgm_loop ? 'bg-primary' : 'bg-white/85 border border-hairline'"
               @click="brief.bgm_loop = !brief.bgm_loop"
             >
               <span
@@ -440,7 +440,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
               v-model="brief.bgm_note"
               rows="2"
               placeholder="例: バトル開始から30秒は緊張感を維持、その後サビへ。他シーンとの接続はフェードアウト。"
-              class="w-full bg-surface-2 border border-white/10 rounded-lg px-3 py-2 text-[13px] text-ink placeholder:text-ink/30 focus:outline-none focus:ring-1 focus:ring-accent resize-none"
+              class="w-full bg-white/85 border border-hairline rounded-lg px-3 py-2 text-[13px] text-ink placeholder:text-ink/30 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
             />
           </div>
         </div>
@@ -456,7 +456,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
               v-model="brief.se_trigger"
               type="text"
               placeholder="例: アイテムを拾ったとき / ボタンを押したとき / 敵を倒したとき"
-              class="w-full bg-surface-2 border border-white/10 rounded-lg px-3 py-2 text-[13px] text-ink placeholder:text-ink/30 focus:outline-none focus:ring-1 focus:ring-accent"
+              class="w-full bg-white/85 border border-hairline rounded-lg px-3 py-2 text-[13px] text-ink placeholder:text-ink/30 focus:outline-none focus:ring-1 focus:ring-primary"
             />
             <p v-if="errors.se_trigger" class="mt-1 text-[11px] text-accent">{{ errors.se_trigger }}</p>
           </div>
@@ -471,8 +471,8 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
                 type="button"
                 class="px-3 py-1.5 rounded-full text-[12px] border transition-colors"
                 :class="brief.se_functions.includes(f.v)
-                  ? 'bg-accent text-white border-accent'
-                  : 'bg-surface-2 text-ink/60 border-white/10 hover:border-accent/50'"
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-white/85 text-ink/60 border-hairline hover:border-primary/50'"
                 @click="toggleArr(brief.se_functions, f.v)"
               >{{ f.l }}</button>
             </div>
@@ -488,8 +488,8 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
                 type="button"
                 class="w-9 h-9 rounded-lg text-[13px] font-medium border transition-colors"
                 :class="brief.se_slots === n
-                  ? 'bg-accent text-white border-accent'
-                  : 'bg-surface-2 text-ink/60 border-white/10 hover:border-accent/50'"
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-white/85 text-ink/60 border-hairline hover:border-primary/50'"
                 @click="brief.se_slots = n"
               >{{ n }}</button>
               <span class="text-[11px] text-ink/40 ml-1">パターン</span>
@@ -521,10 +521,10 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
             type="button"
             class="px-3 py-1.5 rounded-full text-[12px] border transition-colors"
             :class="brief.emotions_target.includes(e.v)
-              ? 'bg-accent text-white border-accent'
+              ? 'bg-primary text-white border-primary'
               : brief.emotions_avoid.includes(e.v)
-                ? 'opacity-30 cursor-not-allowed bg-surface-2 border-white/10'
-                : 'bg-surface-2 text-ink/60 border-white/10 hover:border-accent/50'"
+                ? 'opacity-30 cursor-not-allowed bg-white/85 border-hairline'
+                : 'bg-white/85 text-ink/60 border-hairline hover:border-primary/50'"
             :disabled="brief.emotions_avoid.includes(e.v)"
             @click="toggleArr(brief.emotions_target, e.v)"
           >{{ e.l }}</button>
@@ -547,8 +547,8 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
             :class="brief.emotions_avoid.includes(e.v)
               ? 'bg-ink/60 text-white border-ink/60'
               : brief.emotions_target.includes(e.v)
-                ? 'opacity-30 cursor-not-allowed bg-surface-2 border-white/10'
-                : 'bg-surface-2 text-ink/60 border-white/10 hover:border-ink/30'"
+                ? 'opacity-30 cursor-not-allowed bg-white/85 border-hairline'
+                : 'bg-white/85 text-ink/60 border-hairline hover:border-ink/30'"
             :disabled="brief.emotions_target.includes(e.v)"
             @click="toggleArr(brief.emotions_avoid, e.v)"
           >{{ e.l }}</button>
@@ -566,7 +566,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
           v-model="brief.memory_impression"
           rows="3"
           placeholder="例: 「勝てる気がしない圧倒的な巨大感」「息を呑む静寂のあと一気に解放される感じ」「霧の中に光が差し込む希望」"
-          class="w-full bg-surface-2 border border-white/10 rounded-lg px-3 py-2 text-[13px] text-ink placeholder:text-ink/30 focus:outline-none focus:ring-1 focus:ring-accent resize-none"
+          class="w-full bg-white/85 border border-hairline rounded-lg px-3 py-2 text-[13px] text-ink placeholder:text-ink/30 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
         />
       </div>
     </div>
@@ -586,29 +586,29 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
             <span class="text-[12px] text-ink/50">{{ axis.a }}</span>
             <span class="text-[12px] text-ink/50">{{ axis.b }}</span>
           </div>
-          <div class="grid grid-cols-3 rounded-xl overflow-hidden border border-white/10 text-[11px]">
+          <div class="grid grid-cols-3 rounded-xl overflow-hidden border border-hairline text-[11px]">
             <button
               type="button"
               class="py-2 text-center transition-colors"
               :class="(brief[axis.key] as string) === axis.aVal
-                ? 'bg-accent text-white font-medium'
-                : 'bg-surface-2 text-ink/50 hover:bg-surface-2/80'"
+                ? 'bg-primary text-white font-medium'
+                : 'bg-white/85 text-ink/50 hover:bg-white/85/80'"
               @click="setTx(axis.key, axis.aVal)"
             >{{ axis.a.split(' / ')[0] }}</button>
             <button
               type="button"
-              class="py-2 text-center border-x border-white/10 transition-colors"
+              class="py-2 text-center border-x border-hairline transition-colors"
               :class="(brief[axis.key] as string) === 'mid'
-                ? 'bg-accent/30 text-ink font-medium'
-                : 'bg-surface-2/50 text-ink/30 hover:bg-surface-2/70'"
+                ? 'bg-primary/30 text-ink font-medium'
+                : 'bg-white/85/50 text-ink/30 hover:bg-white/85/70'"
               @click="setTx(axis.key, 'mid')"
             >{{ axis.mid }}</button>
             <button
               type="button"
               class="py-2 text-center transition-colors"
               :class="(brief[axis.key] as string) === axis.bVal
-                ? 'bg-accent text-white font-medium'
-                : 'bg-surface-2 text-ink/50 hover:bg-surface-2/80'"
+                ? 'bg-primary text-white font-medium'
+                : 'bg-white/85 text-ink/50 hover:bg-white/85/80'"
               @click="setTx(axis.key, axis.bVal)"
             >{{ axis.b.split(' / ')[0] }}</button>
           </div>
@@ -632,7 +632,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
           v-model="brief.reference_urls"
           rows="3"
           placeholder="YouTube / SoundCloud / Spotify 等のURL"
-          class="w-full bg-surface-2 border border-white/10 rounded-lg px-3 py-2 text-[13px] text-ink placeholder:text-ink/30 focus:outline-none focus:ring-1 focus:ring-accent resize-none"
+          class="w-full bg-white/85 border border-hairline rounded-lg px-3 py-2 text-[13px] text-ink placeholder:text-ink/30 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
         />
       </div>
 
@@ -646,8 +646,8 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
             type="button"
             class="px-3 py-1.5 rounded-full text-[12px] border transition-colors"
             :class="brief.reference_elements.includes(r.v)
-              ? 'bg-accent text-white border-accent'
-              : 'bg-surface-2 text-ink/60 border-white/10 hover:border-accent/50'"
+              ? 'bg-primary text-white border-primary'
+              : 'bg-white/85 text-ink/60 border-hairline hover:border-primary/50'"
             @click="toggleArr(brief.reference_elements, r.v)"
           >{{ r.l }}</button>
         </div>
@@ -660,7 +660,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
           v-model="brief.reference_avoid"
           rows="2"
           placeholder="例: 明るいメジャー調は避けたい / ドラムは使わないでほしい / ボーカルなし"
-          class="w-full bg-surface-2 border border-white/10 rounded-lg px-3 py-2 text-[13px] text-ink placeholder:text-ink/30 focus:outline-none focus:ring-1 focus:ring-accent resize-none"
+          class="w-full bg-white/85 border border-hairline rounded-lg px-3 py-2 text-[13px] text-ink placeholder:text-ink/30 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
         />
       </div>
     </div>
@@ -684,8 +684,8 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
             type="button"
             class="px-3 py-1.5 rounded-full text-[12px] border transition-colors"
             :class="brief.delivery_format === opt.v
-              ? 'bg-accent text-white border-accent'
-              : 'bg-surface-2 text-ink/60 border-white/10 hover:border-accent/50'"
+              ? 'bg-primary text-white border-primary'
+              : 'bg-white/85 text-ink/60 border-hairline hover:border-primary/50'"
             @click="brief.delivery_format = brief.delivery_format === opt.v ? '' : opt.v as typeof brief.delivery_format"
           >{{ opt.l }}</button>
         </div>
@@ -698,12 +698,12 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
           v-model="brief.note"
           rows="3"
           placeholder="クリエイターへの補足、こだわり、禁止事項、ゲームエンジン (Unity/Unreal) など"
-          class="w-full bg-surface-2 border border-white/10 rounded-lg px-3 py-2 text-[13px] text-ink placeholder:text-ink/30 focus:outline-none focus:ring-1 focus:ring-accent resize-none"
+          class="w-full bg-white/85 border border-hairline rounded-lg px-3 py-2 text-[13px] text-ink placeholder:text-ink/30 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
         />
       </div>
 
       <!-- Summary -->
-      <div class="rounded-xl border border-white/10 bg-surface-2/40 px-4 py-3 space-y-1.5 text-[12px]">
+      <div class="rounded-xl border border-hairline bg-white/85/40 px-4 py-3 space-y-1.5 text-[12px]">
         <p class="text-[11px] font-semibold text-ink/40 tracking-widest uppercase mb-2">確認</p>
         <p><span class="text-ink/40 w-20 inline-block">タイプ</span><span class="text-ink">{{ SOUND_TYPE_L[brief.sound_type] }} / {{ PURPOSE_L[brief.purpose] }}{{ brief.purpose_note ? ` (${brief.purpose_note})` : '' }}</span></p>
         <p><span class="text-ink/40 w-20 inline-block">長さ</span><span class="text-ink">{{ brief.length_sec }}秒 <span class="text-ink/40">(= {{ tokenCost }} tk)</span></span></p>
@@ -723,7 +723,7 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
     </div>
 
     <!-- ─── Navigation ─────────────────────────────────── -->
-    <div class="flex items-center justify-between mt-6 pt-4 border-t border-white/10">
+    <div class="flex items-center justify-between mt-6 pt-4 border-t border-hairline">
       <button
         v-if="step > 1"
         type="button"
@@ -756,13 +756,13 @@ function refElemLabel(v: string) { return REFERENCE_ELEMENTS.find(r => r.v === v
         <button
           v-if="step < TOTAL_STEPS"
           type="button"
-          class="px-5 py-2 bg-accent hover:bg-accent/80 text-white text-[13px] rounded-lg font-medium transition-colors"
+          class="px-5 py-2 bg-primary hover:bg-primary-active text-white text-[13px] rounded-lg font-medium transition-colors"
           @click="next"
         >次へ →</button>
         <button
           v-else
           type="button"
-          class="px-5 py-2 bg-accent hover:bg-accent/80 text-white text-[13px] rounded-lg font-medium transition-colors"
+          class="px-5 py-2 bg-primary hover:bg-primary-active text-white text-[13px] rounded-lg font-medium transition-colors"
           @click="handleSubmit"
         >発注</button>
       </div>

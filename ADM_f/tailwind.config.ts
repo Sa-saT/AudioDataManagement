@@ -15,8 +15,27 @@ export default <Partial<Config>>{
           DEFAULT: '#66cdaa',
           active: '#006400',
         },
-        // Scarce accent: NEW badge / token warning / error only
-        accent: '#ff6347',
+        // Scarce accent (警戒色): NEW badge / token warning / error only
+        accent: '#dc143c',
+        // Secondary interactive teal: creator / Commission / active states
+        seagreen: {
+          DEFAULT: '#20b2aa',
+          deep: '#0e7a74',
+        },
+        // Role identity colors (creator=seagreen 上記 / guest=ink)
+        admin: {
+          DEFAULT: '#ff7f50',
+          deep: '#c0451f',
+        },
+        licensee: {
+          DEFAULT: '#b0c4de',
+          deep: '#5a6e8c',
+        },
+        // Notification (NOTIFICATION_SPEC §7): action/info 共通=橙 base / 金ドット
+        notify: {
+          DEFAULT: '#ffa500',
+          dot: '#ffd700',
+        },
         // Surface
         canvas: {
           DEFAULT: '#f7f7f4',

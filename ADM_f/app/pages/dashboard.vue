@@ -111,8 +111,8 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
 
     <!-- ① Status row: activation warning / token info のみ (件数は controls 行へ統合) -->
     <div class="flex shrink-0 flex-wrap items-center justify-between gap-4 pb-3 pt-5 min-h-[28px]">
-      <div v-if="!auth.isActivated" class="w-full rounded-lg border border-[#20b2aa]/50 bg-[#afeeee]/40 px-4 py-2.5">
-        <p class="text-[15px] font-bold text-[#0e6060]">アクティベートされていません。ダウンロードは不可。</p>
+      <div v-if="!auth.isActivated" class="w-full rounded-lg border border-seagreen/50 bg-seagreen/10 px-4 py-2.5">
+        <p class="text-[15px] font-bold text-seagreen-deep">アクティベートされていません。ダウンロードは不可。</p>
       </div>
       <span v-else />
 
@@ -308,7 +308,7 @@ function onNext() { audios.stepPerPage(1); scrollByItems(5) }
         <p class="text-accent font-medium">API への接続に失敗しました</p>
         <p class="mt-1 text-muted">{{ audios.error }}</p>
         <button
-          class="mt-4 rounded-md bg-ink px-4 py-1.5 text-[12px] font-medium text-canvas hover:bg-primary"
+          class="btn-primary mt-4"
           @click="audios.fetch()"
         >再試行</button>
       </div>

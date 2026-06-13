@@ -230,7 +230,7 @@ async function executeDownload() {
 
       <!-- 編集・削除ボタン (最右、自分の音源のみ) -->
       <div v-if="isOwnAudio" class="flex shrink-0 items-center gap-1.5 pt-0.5">
-        <button class="btn-edit flex items-center justify-center rounded-md border p-1.5" aria-label="編集" @click.stop="editOpen = true">
+        <button class="flex items-center justify-center rounded-md border border-seagreen/35 bg-seagreen/5 p-1.5 text-seagreen transition-colors hover:bg-seagreen/15" aria-label="編集" @click.stop="editOpen = true">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4Z"/>
@@ -295,8 +295,6 @@ async function executeDownload() {
 </template>
 
 <style scoped>
-.btn-edit  { border-color:#20b2aa55; background:#20b2aa10; color:#20b2aa; transition:background 150ms; }
-.btn-edit:hover  { background:#20b2aa22; }
 .btn-delete { border-color:#ff69b455; background:#ff69b410; color:#ff69b4; transition:background 150ms; }
 .btn-delete:hover { background:#ff69b422; }
 

@@ -173,7 +173,7 @@ function formatDuration(sec: number): string {
         <p class="font-medium text-accent">読み込みに失敗しました</p>
         <p class="mt-1 text-muted">{{ error }}</p>
         <button
-          class="mt-4 rounded-md bg-ink px-4 py-1.5 text-[12px] font-medium text-canvas hover:bg-primary"
+          class="btn-primary mt-4"
           @click="fetchDownloads"
         >再試行</button>
       </div>

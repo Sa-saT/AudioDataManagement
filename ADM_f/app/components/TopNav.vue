@@ -170,7 +170,7 @@ const isHighlighted = computed(() => hasAction.value || system.totals.has_info)
       <div ref="menuRef" class="relative">
         <button
           class="relative flex items-center gap-2 px-1 py-1.5 text-[12px]"
-          :class="isHighlighted ? 'text-[#ffa500]' : 'text-ink'"
+          :class="isHighlighted ? 'text-notify' : 'text-ink'"
           style="text-shadow:0 1px 3px rgba(255,255,255,0.8);"
           aria-label="メニュー"
           @click.stop="toggleMenu"
@@ -181,14 +181,14 @@ const isHighlighted = computed(() => hasAction.value || system.totals.has_info)
             class="absolute -left-0.5 -top-0.5 h-2 w-2 rounded-full"
             style="background:#ffd700;box-shadow:0 0 4px #ffd700cc;"
           />
-          <span v-if="auth.isActivated" class="rounded px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-widest"
-            :style="auth.role === 'admin'
-              ? 'background:#ff634722;color:#c0392b;border:1px solid #ff634755'
+          <span v-if="auth.isActivated" class="rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-widest"
+            :class="auth.role === 'admin'
+              ? 'bg-admin/15 text-admin-deep border-admin/35'
               : auth.role === 'creator'
-                ? 'background:#20b2aa22;color:#0e7a74;border:1px solid #20b2aa55'
-                : 'background:#26251e18;color:#26251e;border:1px solid #26251e30'"
+                ? 'bg-seagreen/15 text-seagreen-deep border-seagreen/35'
+                : 'bg-licensee/25 text-licensee-deep border-licensee/40'"
           >{{ auth.role }}</span>
-          <span v-if="auth.isActivated" class="text-[12px] font-medium" :class="isHighlighted ? 'text-[#ffa500]' : 'text-ink'">{{ auth.displayName }}</span>
+          <span v-if="auth.isActivated" class="text-[12px] font-medium" :class="isHighlighted ? 'text-notify' : 'text-ink'">{{ auth.displayName }}</span>
           <span class="hamburger" :class="{ open: menuOpen }">
             <span class="line line-top"></span>
             <span class="line line-bot"></span>
@@ -215,7 +215,7 @@ const isHighlighted = computed(() => hasAction.value || system.totals.has_info)
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                 </svg>
                 <span class="flex-1 text-[13px] font-medium"
-                  :class="adminIsHighlighted ? 'text-[#ffa500]' : 'text-ink'"
+                  :class="adminIsHighlighted ? 'text-notify' : 'text-ink'"
                 >Admin</span>
                 <!-- 要対応: 件数バッジ -->
                 <span
@@ -230,7 +230,7 @@ const isHighlighted = computed(() => hasAction.value || system.totals.has_info)
                   style="background:#ffa500;"
                   title="確認が必要な情報があります"
                 />
-                <span v-else class="mr-1 rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[9px] text-accent">admin</span>
+                <span v-else class="mr-1 rounded bg-admin/15 px-1.5 py-0.5 font-mono text-[9px] text-admin-deep">admin</span>
                 <button
                   class="no-press group rounded-full p-0.5 transition-opacity"
                   :class="infoOpen === 'admin' ? 'text-ink' : ''"
@@ -259,7 +259,7 @@ const isHighlighted = computed(() => hasAction.value || system.totals.has_info)
                   <rect x="9" y="3" width="6" height="4" rx="1"/>
                   <line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>
                 </svg>
-                <span class="flex-1 text-[13px] font-medium" :class="isHighlighted ? 'text-[#ffa500]' : 'text-ink'">Commission</span>
+                <span class="flex-1 text-[13px] font-medium" :class="isHighlighted ? 'text-notify' : 'text-ink'">Commission</span>
                 <!-- 要対応: 件数バッジ -->
                 <span
                   v-if="hasAction"
@@ -304,7 +304,7 @@ const isHighlighted = computed(() => hasAction.value || system.totals.has_info)
                   <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
                 </svg>
                 <span class="flex-1 text-[13px] font-medium"
-                  :class="dmIsHighlighted ? 'text-[#ffa500]' : 'text-ink'"
+                  :class="dmIsHighlighted ? 'text-notify' : 'text-ink'"
                 >DM ToAdmin</span>
                 <span
                   v-if="dmHasAction"

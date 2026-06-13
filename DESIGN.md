@@ -254,9 +254,22 @@ Cursor リファレンスから以下の点のみ差し替え。他のトーク�
 
 | Token | Cursor 値 | Pathfinder 値 |
 |---|---|---|
-| `{colors.primary}` | Cursor Orange `#f54e00` | Turquoise `#40e0d0` |
+| `{colors.primary}` | Cursor Orange `#f54e00` | MediumAquamarine `#66cdaa` |
 | `{colors.primary-active}` | `#d04200` | `#006400` |
-| `{colors.accent}` | (なし) | Tomato `#ff6347` — NEW バッジ / token 残量 ≤10% / error 限定 |
+| `{colors.accent}` | (なし) | Crimson `#dc143c`（警戒色）— NEW バッジ / token 残量 ≤10% / error 限定 |
+| `{colors.seagreen}` | (なし) | LightSeaGreen `#20b2aa` — 副次 interactive teal |
+| `{colors.seagreen.deep}` | (なし) | `#0e7a74` — seagreen 上のテキスト/濃淡 |
+| `{colors.admin}` | (なし) | Coral `#ff7f50` — admin ロール識別 (`.deep` `#c0451f` = テキスト) |
+| `{colors.licensee}` | (なし) | LightSteelBlue `#b0c4de` — licensee ロール識別 (`.deep` `#5a6e8c` = テキスト) |
+| `{colors.notify}` | (なし) | 橙 `#ffa500` 通知ベース / `.dot` 金 `#ffd700`（NOTIFICATION_SPEC §7） |
+
+> **seagreen の用途** (primary とは別系統の「副次的な相互作用色」):
+> - ✅ creator / Commission 文脈の識別 (creator ロールバッジ、DM creator バブル、受諾/指名ボタン)
+> - ✅ Order ステータス `assigned`、候補 `accepted`
+> - ✅ AudioCard の編集ボタン、Admin token 使用率ゲージ、guest 未アクティベート バナー
+> - ✅ チャート系 (BarChart / Heatmap / RadarChart) のデフォルト色
+> - ❌ primary (CTA / アクティブページ下線) の代替として使わない — 役割を混ぜない
+> - 透過は Tailwind opacity 修飾子を使う (`bg-seagreen/15` 等)。生 hex 直書き禁止 (チャートの JS prop と canvas 演出のみ例外)
 
 ### Canvas (背景)
 - Cursor: warm cream `{colors.canvas}` (#f7f7f4)
@@ -270,22 +283,39 @@ Cursor リファレンスから以下の点のみ差し替え。他のトーク�
 ### Header
 - 高さ: **48px** (Cursor 64px から縮小)
 - 背景: 透明 — washi がそのまま透ける
-- Active page indicator: ロゴ下 2px turquoise (#40e0d0) 下線
+- Active page indicator: ロゴ下 2px primary `#66cdaa` 下線 (`bg-primary`)
 - 表示: ロゴ (Pathfinder) + nav リンクのみ。role / token 等の status は Dashboard ページ側に表示
 
 ### Footer
-- 高さ: **64px**
+- 高さ: **44px** (`h-11`)
 - 背景: 透明
-- 上辺: 1px turquoise (#40e0d0) hairline
+- 上辺: hairline なし (現状の実装は透明・ボーダーなし)
 - 内容: `© YYYY Pathfinder` + バージョン番号、中央揃え
 
+### Buttons (Pathfinder)
+
+Cursor の単色 CTA を上書き。Pathfinder の主要アクションは **ink ベース → hover で primary に点灯**。
+クラスは `app/assets/css/main.css` の `@layer components` に定義。**生 hex / inline 配色でボタンを作らない** (この体系を使う)。
+
+| クラス | 用途 | 配色 | サイズ (px / text) |
+|---|---|---|---|
+| `.btn-primary` | 主要アクション (デフォルト) | `bg-ink text-canvas` → hover `bg-primary text-white` | px-4 py-1.5 / 12px |
+| `.btn-primary-sm` | 同上・小 | 同上 | px-3 py-1.5 / 12px |
+| `.btn-primary-xs` | 同上・密なリスト/Commission | 同上 | px-3 py-1 / 11px |
+| `.btn-emphasis` | 強調アクション (例: 提出) | `bg-primary text-ink` → hover `bg-primary-active text-white` | px-3 py-1.5 / 12px |
+| `.btn-secondary` | 副次 (白ピル) | `bg-surface-card text-ink` + hairline-strong border | h-10 px-[18px] |
+| `.btn-ink` | 単色 ink CTA (hover 変化なし) | `bg-ink text-canvas` | h-11 px-5 |
+
+- `disabled:opacity-50` は全クラス内蔵。`w-full` / `mt-*` 等のレイアウトは併用クラスで付与。
+- **例外 (クラス化しない意図的特殊):** `ConfirmModal` の confirm (danger=accent 兼用) / Admin 設定の追加ボタン (成功フラッシュ `bg-primary scale-95`) / group-hover で点灯するラベル span。
+
 ### Card hover
-- `transform: translateY(-1px)` + border-color → turquoise (200ms)
+- `transform: translateY(-1px)` + border-color → primary `#66cdaa` (200ms)
 
 ### Waveform
 - Idle (未再生): DarkGray `#a9a9a9` (専用色、`muted` トークンとは独立)
 - Playing progress (再生後): MediumAquamarine `#66cdaa`
-- Cursor: turquoise
+- Cursor: primary `#66cdaa`
 
 ### Navigation Conventions
 
@@ -323,11 +353,22 @@ Cursor リファレンスから以下の点のみ差し替え。他のトーク�
 - meta: title / creator / tags (イメージタグ pill)
 - right: token 数 + ♥ heart (user: toggle only / creator: ♥ + 人数)
 
-### Accent (Tomato) usage rules
+### Accent (Crimson 警戒色) usage rules
 - ✅ NEW バッジ
 - ✅ token 残量 ≤10% のゲージ
 - ✅ error / validation
-- ❌ それ以外での使用禁止 — turquoise と同様に scarce に保つ
+- ❌ それ以外での使用禁止 — primary と同様に scarce に保つ
+- ※ admin ロール識別は accent ではなく専用 `admin` (Coral) を使う (警戒色と混同させない)
+
+### ロール識別色 (role identity)
+役割を色で一目で判別させる。バッジ・DM/チャットのアバター&バブルで使用。
+
+| ロール | 色 | バッジ (washi 上) | バブル |
+|---|---|---|---|
+| **admin** | `admin` Coral `#ff7f50` | `bg-admin/15 text-admin-deep border-admin/35` | `bg-admin text-white` |
+| **creator** | `seagreen` `#20b2aa` | `bg-seagreen/15 text-seagreen-deep border-seagreen/35` | `bg-seagreen text-white` |
+| **licensee** | `licensee` LightSteelBlue `#b0c4de` | `bg-licensee/25 text-licensee-deep border-licensee/40` | `bg-licensee text-ink` (淡色のため ink 文字) |
+| guest | `ink` | (未アクティベートはバッジ無し) | — |
 
 ---
 

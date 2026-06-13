@@ -603,11 +603,10 @@ function avatarLetter(m: Message): string {
 }
 function avatarClass(m: Message): string {
   if (!m.sender_id) return 'bg-hairline-soft text-muted'  // system
-  if (isMyMessage(m)) return 'bg-primary text-white'
-  // 発注者(user) / creator / admin を識別
-  if (m.sender_id === order.value?.user_id) return 'bg-[#2f4f4f] text-white'  // licensee
-  if (m.sender_id === order.value?.assigned_creator_id) return 'bg-[#20b2aa] text-white'  // creator
-  return 'bg-accent text-white'  // admin など
+  // アイコンは送信者ロール基準で色分け (自分の発言でもロール色を維持)
+  if (m.sender_id === order.value?.user_id) return 'bg-licensee text-ink'  // licensee
+  if (m.sender_id === order.value?.assigned_creator_id) return 'bg-seagreen text-white'  // creator
+  return 'bg-admin text-white'  // admin など
 }
 function senderLabel(m: Message): string {
   if (m.kind === 'brief_edit') return 'System (Brief Bot)'
@@ -615,6 +614,13 @@ function senderLabel(m: Message): string {
   if (m.sender_id === order.value?.user_id) return `${m.sender_name} (発注者)`
   if (m.sender_id === order.value?.assigned_creator_id) return `${m.sender_name} (creator)`
   return m.sender_name
+}
+// 送信者ラベルのロール識別色 (licensee=発注者 / creator / admin)
+function senderLabelClass(m: Message): string {
+  if (m.kind === 'brief_edit' || !m.sender_name) return 'text-body-strong'
+  if (m.sender_id === order.value?.user_id) return 'text-licensee-deep'
+  if (m.sender_id === order.value?.assigned_creator_id) return 'text-seagreen-deep'
+  return 'text-admin-deep'
 }
 function bubbleClass(m: Message): string {
   if (isMyMessage(m)) return 'bg-primary text-white shadow-sm'
@@ -872,7 +878,7 @@ const STATUS_CLASS: Record<string, string> = {
   draft: 'bg-hairline-soft text-body',
   open: 'bg-primary/15 text-primary-active',
   recruiting: 'bg-primary/20 text-primary-active',
-  assigned: 'bg-[#20b2aa22] text-[#0e7a74]',
+  assigned: 'bg-seagreen/15 text-seagreen-deep',
   reviewing: 'bg-[#f0a84022] text-[#b07000]',
   done: 'bg-[#2ecc7122] text-[#1a9950]',
   cancelled: 'bg-accent/15 text-accent',
@@ -885,7 +891,7 @@ function formatDate(iso: string) {
 const RESPONSE_LABEL: Record<string, string> = { pending: '未回答', accepted: '受諾', declined: '辞退' }
 const RESPONSE_CLASS: Record<string, string> = {
   pending: 'text-muted',
-  accepted: 'text-[#0e7a74]',
+  accepted: 'text-seagreen-deep',
   declined: 'text-accent',
 }
 
@@ -979,7 +985,7 @@ const myCandidate = computed(() =>
     <!-- Error -->
     <div v-else-if="fetchError" class="flex flex-1 flex-col items-center justify-center gap-3">
       <p class="text-[13px] text-accent">{{ fetchError }}</p>
-      <button class="rounded-md bg-ink px-4 py-1.5 text-[12px] text-canvas hover:bg-primary" @click="fetchOrder">再試行</button>
+      <button class="btn-primary" @click="fetchOrder">再試行</button>
     </div>
 
     <!-- Content -->
@@ -1072,7 +1078,7 @@ const myCandidate = computed(() =>
                 <span
                   v-for="s in order.brief.bgm_scenes"
                   :key="s"
-                  class="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-body border border-white/10"
+                  class="rounded-full bg-surface-strong/60 px-2 py-0.5 text-[11px] text-body border border-hairline"
                 >{{ { battle: 'バトル/戦闘', boss: 'ボス戦', explore: '探索/フィールド', menu: 'メニュー/UI', title: 'タイトル', event: 'イベント/ムービー', ending: 'エンディング', ambient: 'アンビエント', other: 'その他' }[s] ?? s }}</span>
               </div>
               <p v-if="order.brief.memory_impression" class="rounded-md border-l-2 border-primary/40 bg-primary/5 pl-2.5 py-1.5 text-[12px] italic text-body whitespace-pre-wrap">「{{ order.brief.memory_impression }}」</p>
@@ -1086,7 +1092,7 @@ const myCandidate = computed(() =>
                 <span
                   v-for="f in order.brief.se_functions"
                   :key="f"
-                  class="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-body border border-white/10"
+                  class="rounded-full bg-surface-strong/60 px-2 py-0.5 text-[11px] text-body border border-hairline"
                 >{{ { success: '成功/達成', danger: '危険/警告', ui: 'UI操作', operation: '操作の手応え', immersion: '没入/演出', character: 'キャラ感情' }[f] ?? f }}</span>
               </div>
             </div>
@@ -1100,7 +1106,7 @@ const myCandidate = computed(() =>
                 <span
                   v-for="r in order.brief.reference_elements"
                   :key="r"
-                  class="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-body border border-white/10"
+                  class="rounded-full bg-surface-strong/60 px-2 py-0.5 text-[11px] text-body border border-hairline"
                 >{{ { atmosphere: '空気感/雰囲気', bass: '低音/ベース感', progression: '展開/構成', tempo: 'テンポ/グルーヴ', timbre: '音色/サウンドデザイン', melody: 'メロディライン', rhythm: 'リズムパターン', density: '音の密度/空間感' }[r] ?? r }}</span>
               </div>
               <p v-if="order.brief.reference_avoid" class="text-[11px]"><span class="text-muted">避けたい:</span> <span class="text-accent">{{ order.brief.reference_avoid }}</span></p>
@@ -1170,7 +1176,7 @@ const myCandidate = computed(() =>
               <span
                 v-for="s in order.brief.bgm_scenes"
                 :key="s"
-                class="rounded-full bg-surface-2 px-2.5 py-0.5 text-[11px] text-body border border-white/10"
+                class="rounded-full bg-surface-strong/60 px-2.5 py-0.5 text-[11px] text-body border border-hairline"
               >{{ { battle: 'バトル/戦闘', boss: 'ボス戦', explore: '探索/フィールド', menu: 'メニュー/UI', title: 'タイトル', event: 'イベント/ムービー', ending: 'エンディング', ambient: 'アンビエント', other: 'その他' }[s] ?? s }}</span>
             </div>
             <p v-if="order.brief.bgm_loop !== undefined" class="text-muted mt-1">ループ: <span class="text-body">{{ order.brief.bgm_loop ? '必要' : '不要' }}</span></p>
@@ -1185,7 +1191,7 @@ const myCandidate = computed(() =>
               <span
                 v-for="f in order.brief.se_functions"
                 :key="f"
-                class="rounded-full bg-surface-2 px-2.5 py-0.5 text-[11px] text-body border border-white/10"
+                class="rounded-full bg-surface-strong/60 px-2.5 py-0.5 text-[11px] text-body border border-hairline"
               >{{ { success: '成功/達成', danger: '危険/警告', ui: 'UI操作', operation: '操作の手応え', immersion: '没入/演出', character: 'キャラクター感情' }[f] ?? f }}</span>
             </div>
           </div>
@@ -1209,11 +1215,11 @@ const myCandidate = computed(() =>
                 <span
                   v-for="e in order.brief.emotions_avoid"
                   :key="e"
-                  class="rounded-full bg-surface-2 px-2.5 py-0.5 text-[11px] text-muted border border-white/10 line-through"
+                  class="rounded-full bg-surface-strong/60 px-2.5 py-0.5 text-[11px] text-muted border border-hairline line-through"
                 >{{ { excitement: '高揚感/興奮', tension: '緊張感', fear: '恐怖/不安', relief: '安らぎ/安心', loneliness: '孤独感', grandeur: '壮大さ/圧倒感', speed: '疾走感', sadness: '哀愁/切なさ', mystery: '神秘/異世界感', achievement: '達成感', heaviness: '重厚感/威圧感', comfort: '心地よさ', euphoria: '爽快感', dread: 'じわじわとした恐怖', wonder: '驚き/発見の喜び' }[e] ?? e }}</span>
               </div>
             </div>
-            <p v-if="order.brief.memory_impression" class="mt-2 rounded-lg bg-surface-2/60 border border-white/10 px-3 py-2 text-[12px] text-body italic whitespace-pre-wrap" :class="fieldHighlightClass('memory_impression')">「{{ order.brief.memory_impression }}」</p>
+            <p v-if="order.brief.memory_impression" class="mt-2 rounded-lg bg-surface-strong/40 border border-hairline px-3 py-2 text-[12px] text-body italic whitespace-pre-wrap" :class="fieldHighlightClass('memory_impression')">「{{ order.brief.memory_impression }}」</p>
           </div>
 
           <!-- テクスチャ -->
@@ -1252,7 +1258,7 @@ const myCandidate = computed(() =>
               <span
                 v-for="r in order.brief.reference_elements"
                 :key="r"
-                class="rounded-full bg-surface-2 px-2.5 py-0.5 text-[11px] text-body border border-white/10"
+                class="rounded-full bg-surface-strong/60 px-2.5 py-0.5 text-[11px] text-body border border-hairline"
               >{{ { atmosphere: '空気感/雰囲気', bass: '低音/ベース感', progression: '展開/構成', tempo: 'テンポ/グルーヴ', timbre: '音色/サウンドデザイン', melody: 'メロディライン', rhythm: 'リズムパターン', density: '音の密度/空間感' }[r] ?? r }}</span>
             </div>
             <p v-if="order.brief.reference_avoid" class="text-muted">避けたい要素: <span class="text-body">{{ order.brief.reference_avoid }}</span></p>
@@ -1287,7 +1293,7 @@ const myCandidate = computed(() =>
             <!-- Admin 枠 -->
             <div class="rounded-md border border-hairline-soft bg-white/40 p-2">
               <div class="mb-1 flex items-center justify-between">
-                <span class="text-[10px] font-semibold uppercase tracking-widest text-accent">📝 Admin</span>
+                <span class="text-[10px] font-semibold uppercase tracking-widest text-admin-deep">📝 Admin</span>
                 <button
                   v-if="memosState.can_edit_admin"
                   class="rounded border border-hairline px-2 py-0.5 text-[10px] text-body transition-colors hover:border-accent hover:text-accent"
@@ -1302,17 +1308,17 @@ const myCandidate = computed(() =>
               <!-- 9-A13: creator が admin メモを既読かどうか -->
               <p
                 v-if="memosState.admin?.updated_at && memosState.creator_last_view_at && new Date(memosState.creator_last_view_at) >= new Date(memosState.admin.updated_at)"
-                class="mt-0.5 text-[9px] text-[#0e7a74]"
+                class="mt-0.5 text-[9px] text-seagreen-deep"
               >✓ creator 確認済</p>
               <p v-else-if="memosState.admin?.content" class="mt-0.5 text-[9px] text-muted">— 未確認</p>
             </div>
             <!-- Creator 枠 -->
             <div class="rounded-md border border-hairline-soft bg-white/40 p-2">
               <div class="mb-1 flex items-center justify-between">
-                <span class="text-[10px] font-semibold uppercase tracking-widest text-[#0e7a74]">📝 Creator</span>
+                <span class="text-[10px] font-semibold uppercase tracking-widest text-seagreen-deep">📝 Creator</span>
                 <button
                   v-if="memosState.can_edit_creator"
-                  class="rounded border border-hairline px-2 py-0.5 text-[10px] text-body transition-colors hover:border-[#0e7a74] hover:text-[#0e7a74]"
+                  class="rounded border border-hairline px-2 py-0.5 text-[10px] text-body transition-colors hover:border-seagreen-deep hover:text-seagreen-deep"
                   @click="openMemoEdit('creator')"
                 >メモ</button>
               </div>
@@ -1346,7 +1352,7 @@ const myCandidate = computed(() =>
             </div>
             <button
               v-if="canReceive"
-              class="shrink-0 rounded-md bg-ink px-3 py-1.5 text-[12px] font-medium text-canvas transition-colors hover:bg-primary disabled:opacity-50"
+              class="btn-emphasis shrink-0"
               :disabled="closeLoading"
               @click="receiveAndClose"
             >{{ closeLoading ? '…' : '受け取る' }}</button>
@@ -1437,7 +1443,7 @@ const myCandidate = computed(() =>
                 class="mb-0.5 flex items-center gap-1.5 px-1 text-[10px]"
                 :class="isMyMessage(msg) ? 'flex-row-reverse' : 'flex-row'"
               >
-                <span class="font-medium text-body-strong">{{ senderLabel(msg) }}</span>
+                <span class="font-medium" :class="senderLabelClass(msg)">{{ senderLabel(msg) }}</span>
                 <span class="text-muted">{{ formatTime(msg.created_at) }}</span>
               </div>
 
@@ -1519,7 +1525,7 @@ const myCandidate = computed(() =>
               />
             </div>
             <button
-              class="rounded-md bg-ink px-3 py-1 text-[11px] font-medium text-canvas transition-colors hover:bg-primary disabled:opacity-50"
+              class="btn-primary-xs"
               :disabled="msgLoading || attachLoading || (!msgContent.trim() && !attachedFile)"
               @click="sendChat"
             >{{ attachLoading ? '提出中…' : (attachedFile ? '提出' : (msgLoading ? '…' : '送信')) }}</button>
@@ -1537,7 +1543,7 @@ const myCandidate = computed(() =>
           <!-- Submit (draft → open) -->
           <button
             v-if="order.status === 'draft'"
-            class="w-full rounded-md bg-ink px-3 py-1.5 text-[12px] font-medium text-canvas hover:bg-primary disabled:opacity-50"
+            class="btn-emphasis w-full"
             :disabled="submitLoading"
             @click="submitOrder"
           >{{ submitLoading ? '…' : '発注する' }}</button>
@@ -1545,7 +1551,7 @@ const myCandidate = computed(() =>
           <!-- Download done file -->
           <button
             v-if="order.status === 'done'"
-            class="w-full rounded-md bg-[#2ecc71] px-3 py-1.5 text-[12px] font-medium text-white hover:opacity-90 disabled:opacity-50"
+            class="btn-emphasis w-full"
             :disabled="dlLoading"
             @click="downloadDoneFile"
           >{{ dlLoading ? '…' : '音源をDL' }}</button>
@@ -1553,7 +1559,7 @@ const myCandidate = computed(() =>
           <!-- Cancel -->
           <button
             v-if="!['done','cancelled'].includes(order.status)"
-            class="w-full rounded-md border border-hairline-strong px-3 py-1.5 text-[12px] text-muted hover:border-accent hover:text-accent disabled:opacity-50"
+            class="w-full rounded-md border border-accent/40 px-3 py-1.5 text-[12px] font-medium text-accent hover:bg-accent/10 disabled:opacity-50"
             :disabled="cancelLoading"
             @click="cancelOrder"
           >{{ cancelLoading ? '…' : 'キャンセル' }}</button>
@@ -1570,7 +1576,7 @@ const myCandidate = computed(() =>
           </p>
           <template v-if="myCandidate.response_status === 'pending'">
             <button
-              class="w-full rounded-md bg-[#20b2aa] px-3 py-1.5 text-[12px] font-medium text-white hover:opacity-90 disabled:opacity-50"
+              class="btn-emphasis w-full"
               :disabled="respondLoading"
               @click="respond('accepted')"
             >受諾</button>
@@ -1586,7 +1592,7 @@ const myCandidate = computed(() =>
         <div v-if="(isCreator && !isAdmin && isAssignedCreator && order.status === 'assigned') || (isAdmin && order.status === 'assigned')" class="card px-4 py-3 space-y-2">
           <p class="text-[11px] font-semibold uppercase tracking-widest text-muted">音源提出</p>
           <button
-            class="w-full rounded-md bg-primary px-3 py-1.5 text-[12px] font-medium text-black hover:opacity-90"
+            class="btn-emphasis w-full"
             @click="onShowSubmitFile"
           >ファイルを提出</button>
         </div>
@@ -1597,13 +1603,13 @@ const myCandidate = computed(() =>
 
           <button
             v-if="['open','recruiting'].includes(order.status)"
-            class="w-full rounded-md bg-ink px-3 py-1.5 text-[12px] font-medium text-canvas hover:bg-primary"
+            class="btn-emphasis w-full"
             @click="openNominateModal"
           >クリエイター指名</button>
 
           <button
             v-if="['open','recruiting'].includes(order.status)"
-            class="w-full rounded-md border border-[#20b2aa55] px-3 py-1.5 text-[12px] font-medium text-[#0e7a74] hover:bg-[#20b2aa15] disabled:opacity-40"
+            class="w-full rounded-md border border-seagreen/35 px-3 py-1.5 text-[12px] font-medium text-seagreen-deep hover:bg-seagreen/10 disabled:opacity-40"
             :disabled="candidatesForAssign.length === 0"
             :title="candidatesForAssign.length === 0 ? '候補がいません。先に指名してください' : ''"
             @click="openAssignModal"
@@ -1611,7 +1617,7 @@ const myCandidate = computed(() =>
 
           <button
             v-if="order.status === 'reviewing'"
-            class="w-full rounded-md bg-[#2ecc71] px-3 py-1.5 text-[12px] font-medium text-white hover:opacity-90 disabled:opacity-50"
+            class="btn-emphasis w-full"
             :disabled="doneLoading"
             @click="markDone"
           >{{ doneLoading ? '…' : '完了にする' }}</button>
@@ -1624,7 +1630,7 @@ const myCandidate = computed(() =>
 
           <button
             v-if="!['done','cancelled'].includes(order.status)"
-            class="w-full rounded-md border border-hairline-strong px-3 py-1.5 text-[12px] text-muted hover:border-accent hover:text-accent disabled:opacity-50"
+            class="w-full rounded-md border border-accent/40 px-3 py-1.5 text-[12px] font-medium text-accent hover:bg-accent/10 disabled:opacity-50"
             :disabled="cancelLoading"
             @click="cancelOrder"
           >キャンセル</button>
@@ -1681,7 +1687,7 @@ const myCandidate = computed(() =>
             <p v-if="submitFileError" class="mt-2 text-[12px] text-accent">{{ submitFileError }}</p>
             <div class="mt-4 flex justify-end gap-2">
               <button class="rounded-md border border-hairline-strong px-4 py-1.5 text-[12px] text-body-strong hover:text-ink" @click="showSubmitFile = false">やめる</button>
-              <button class="rounded-md bg-ink px-4 py-1.5 text-[12px] font-medium text-canvas hover:bg-primary disabled:opacity-50" :disabled="submitFileLoading" @click="executeSubmitFile">
+              <button class="btn-primary" :disabled="submitFileLoading" @click="executeSubmitFile">
                 {{ submitFileLoading ? '提出中…' : '提出する' }}
               </button>
             </div>
@@ -1744,7 +1750,7 @@ const myCandidate = computed(() =>
             <div class="mt-4 flex justify-end gap-2">
               <button class="rounded-md border border-hairline-strong px-4 py-1.5 text-[12px] text-body-strong hover:text-ink" @click="showNominate = false">やめる</button>
               <button
-                class="rounded-md bg-ink px-4 py-1.5 text-[12px] font-medium text-canvas transition-colors hover:bg-primary disabled:opacity-50"
+                class="btn-emphasis"
                 :disabled="nominateLoading || nominateSelected.size === 0"
                 @click="executeNominate"
               >{{ nominateLoading ? '…' : `指名する (${nominateSelected.size})` }}</button>
@@ -1777,7 +1783,7 @@ const myCandidate = computed(() =>
                 <span class="flex-1 truncate font-medium text-ink">{{ c.creator_name }}</span>
                 <span
                   class="rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
-                  :class="c.response_status === 'accepted' ? 'bg-[#20b2aa22] text-[#0e7a74]' : 'bg-hairline-soft text-muted'"
+                  :class="c.response_status === 'accepted' ? 'bg-seagreen/15 text-seagreen-deep' : 'bg-hairline-soft text-muted'"
                 >{{ RESPONSE_LABEL[c.response_status] }}</span>
               </label>
             </div>
@@ -1797,7 +1803,7 @@ const myCandidate = computed(() =>
             <div class="mt-4 flex justify-end gap-2">
               <button class="rounded-md border border-hairline-strong px-4 py-1.5 text-[12px] text-body-strong hover:text-ink" @click="showAssign = false">やめる</button>
               <button
-                class="rounded-md bg-[#20b2aa] px-4 py-1.5 text-[12px] font-medium text-white hover:opacity-90 disabled:opacity-50"
+                class="btn-emphasis"
                 :disabled="assignLoading || !assignCreatorId"
                 @click="executeAssign"
               >{{ assignLoading ? '…' : 'アサイン確定' }}</button>
@@ -1930,7 +1936,7 @@ const myCandidate = computed(() =>
                 @click="closeMemoEdit"
               >キャンセル</button>
               <button
-                class="rounded-md bg-ink px-3 py-1.5 text-[12px] font-medium text-canvas hover:bg-primary disabled:opacity-50"
+                class="btn-primary-sm"
                 :disabled="memoSaving"
                 @click="saveMemo"
               >{{ memoSaving ? '…' : '保存' }}</button>

@@ -166,7 +166,7 @@ const STATUS_CLASS: Record<string, string> = {
   draft: 'bg-hairline-soft text-body',
   open: 'bg-primary/15 text-primary-active',
   recruiting: 'bg-primary/20 text-primary-active',
-  assigned: 'bg-[#20b2aa22] text-[#0e7a74]',
+  assigned: 'bg-seagreen/15 text-seagreen-deep',
   reviewing: 'bg-[#f0a84022] text-[#b07000]',
   done: 'bg-[#2ecc7122] text-[#1a9950]',
   cancelled: 'bg-accent/15 text-accent',
@@ -286,7 +286,7 @@ const BGM_SCENE_L: Record<string, string> = {
       </div>
       <button
         v-if="auth.isActivated && system.commissionEnabled && isLicensee"
-        class="flex items-center gap-1.5 rounded-md bg-ink px-3 py-1.5 text-[12px] font-medium text-canvas transition-colors hover:bg-primary"
+        class="btn-primary-sm"
         @click="openCreate"
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -320,7 +320,7 @@ const BGM_SCENE_L: Record<string, string> = {
         <p class="font-medium text-accent">読み込みに失敗しました</p>
         <p class="mt-1 text-muted">{{ fetchError }}</p>
         <button
-          class="mt-4 rounded-md bg-ink px-4 py-1.5 text-[12px] font-medium text-canvas hover:bg-primary"
+          class="btn-primary mt-4"
           @click="fetchOrders"
         >再試行</button>
       </div>
@@ -369,7 +369,7 @@ const BGM_SCENE_L: Record<string, string> = {
               <!-- Admin: [表示] [キャンセル(戻る)] -->
               <template v-if="isAdmin">
                 <button
-                  class="shrink-0 rounded-md bg-ink px-3 py-1 text-[11px] font-medium text-canvas hover:bg-primary"
+                  class="btn-primary-xs shrink-0"
                   @click.stop="openAdminView(draft.id)"
                 >表示</button>
                 <button
@@ -381,7 +381,7 @@ const BGM_SCENE_L: Record<string, string> = {
               <!-- User / その他: [続きから入力] -->
               <button
                 v-else
-                class="shrink-0 rounded-md bg-ink px-3 py-1 text-[11px] font-medium text-canvas hover:bg-primary"
+                class="btn-primary-xs shrink-0"
                 @click.stop="openResume(draft.id)"
               >続きから入力</button>
             </div>
@@ -624,7 +624,7 @@ const BGM_SCENE_L: Record<string, string> = {
                   title="user の brief を代理編集 (ミス防止のため確認あり)"
                 >編集</button>
                 <button
-                  class="flex items-center gap-2 rounded-md bg-ink px-4 py-1.5 text-[12px] font-medium text-canvas transition-colors hover:bg-primary hover:text-white disabled:opacity-50"
+                  class="btn-primary"
                   :disabled="adminSubmitLoading"
                   @click="adminSubmit"
                 >

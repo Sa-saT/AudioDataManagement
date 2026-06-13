@@ -67,7 +67,7 @@ function close() {
           </div>
           <div class="flex justify-end">
             <button
-              class="rounded-md bg-ink px-4 py-1.5 text-[13px] font-medium text-canvas transition-colors hover:bg-primary hover:text-white"
+              class="btn-primary"
               @click="close"
             >閉じる</button>
           </div>
