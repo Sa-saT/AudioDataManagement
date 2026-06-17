@@ -1,10 +1,19 @@
 # pnpm 11 以降、各種設定は package.json の "pnpm" フィールドではなくここで読まれる。
 
-# esbuild: vite が 0.27.7 をピンするが GHSA-gv7w-rqvm-qjhr (high) 回避のため 0.28.1+ を強制。
-# vite: GHSA-fx2h-pf6j-xcff (server.fs.deny バイパス, high) 回避のため 7.3.5+ を強制。
+# 脆弱性の「修正版ピン」。最新追従ではなく塞ぐ最小バージョンに固定する (上限なし override だと
+# 最新メジャーを掴むため exact 指定)。
+# esbuild 0.28.1: GHSA-gv7w-rqvm-qjhr (high) の修正版。
+# vite 7.3.5: GHSA-fx2h-pf6j-xcff (server.fs.deny バイパス, high) の修正版。
 overrides:
-  esbuild@<0.28.1: '>=0.28.1'
-  vite@<7.3.5: '>=7.3.5'
+  esbuild: 0.28.1
+  vite: 7.3.5
+
+# 上で固定した security 修正版は公開直後で global cooldown (7日) に引っかかる。
+# 意図的にレビュー済みの版なので cooldown から除外する (dev/install のポリシー検査を通す)。
+minimumReleaseAgeExclude:
+  - esbuild
+  - '@esbuild/*'
+  - vite
 
 # 依存の postinstall ビルドスクリプトは既定でブロック。実行を許可する物だけ true で明示。
 # 両者とも未許可でも build/test は通る (esbuild は platform 専用 optional dep がバイナリを提供、
