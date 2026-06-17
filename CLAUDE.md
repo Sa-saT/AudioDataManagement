@@ -148,6 +148,12 @@ uvicorn app.main:app --reload         # http://localhost:8000/
 - 認可は JWT のカスタムクレーム `role` でチェック (`security/deps.py:require_role`)。
 - DB アクセスは SQLAlchemy + Alembic。
 
+### パッケージインストール (Claude 厳守)
+- **最新版を自動で入れない。** `pip install -U` / `--upgrade` / 無印 latest 取得は禁止。
+- 脆弱性修正・追加は **修正版を `pkg==X.Y.Z` でピン指定**して提案し、**ユーザの確認を得てから** install する (install 前確認はユーザが行う)。
+- 修正版選定は「脆弱性を塞ぐ最小バージョン」を基準にし、不要な major/最新追従はしない。
+- frontend(pnpm)は global cooldown `minimumReleaseAge` で公開7日未満を自動拒否済 (詳細は memory `supply-chain-policy`)。
+
 ### 共通
 - コメントは **WHY のみ** (HOW は名前で語る)。1行で済むなら 1行。
 - 過剰防衛コード禁止 (内部不変を信じる、境界のみ検証)。

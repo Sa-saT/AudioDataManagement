@@ -3,7 +3,7 @@ uvicorn[standard]>=0.32
 sqlalchemy>=2.0
 alembic>=1.13
 psycopg2-binary>=2.9
-python-multipart>=0.0.9
+python-multipart>=0.0.31
 python-jose[cryptography]>=3.3
 pydantic>=2.9
 pydantic-settings>=2.6
@@ -13,3 +13,7 @@ uuid-utils>=0.10
 boto3>=1.34
 sentry-sdk[fastapi]>=2.0
 python-json-logger>=2.0
+
+# transitive 依存の security floor (直接 import しないが脆弱性修正版を下限固定)
+starlette>=1.3.1        # via fastapi  — CVE-2026-54282/54283
+cryptography>=48.0.1    # via python-jose[cryptography] — GHSA-537c-gmf6-5ccf
