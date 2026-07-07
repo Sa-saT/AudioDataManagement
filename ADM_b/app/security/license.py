@@ -182,6 +182,10 @@ def parse_lic_text(text: str) -> dict[str, Any]:
             raise LicenseError("MALFORMED_LICENSE", f"invalid json: {exc}") from exc
         if not isinstance(data, dict):
             raise LicenseError("MALFORMED_LICENSE", "license must be an object")
+        # schemaVersion>=2 は AEAD 復号を通った証。平文で自称されても信用しない
+        # (さもないと HMAC 検証を素通りさせ、任意ロールを偽造できてしまう)。
+        # pop で除去 → HMAC 署名の canonical bytes を変えないため正規の署名済み lic に無影響。
+        data.pop("schemaVersion", None)
         return data
 
     # Fallback: KV (key=value per line)
@@ -199,6 +203,7 @@ def parse_lic_text(text: str) -> dict[str, Any]:
             data["monthlyQuotaTokens"] = int(data["monthlyQuotaTokens"])
         except ValueError as exc:
             raise LicenseError("MALFORMED_LICENSE", "monthlyQuotaTokens must be integer") from exc
+    data.pop("schemaVersion", None)
     return data
 
 

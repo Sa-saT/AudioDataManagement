@@ -144,6 +144,14 @@ Bob    /activate ─→ DB.sid = S2 に上書き, JWT2.sid = S2
 
 `schemaVersion` フィールドでフォーマット世代を判別し、移行期間中は複数世代を受け入れる。
 
+> **セキュリティ不変条件 (2026-07-07 修正 — 厳守):**
+> `schemaVersion >= 2` は「HMAC 署名を省略してよい」ことを意味する (改ざん検知を AEAD の GCM tag が肩代わりする)。
+> **この特権は AEAD で復号された payload — Phase B (JWE) / Phase C (バイナリ) — のみが名乗れる。**
+> 平文の Phase A (JSON / KV) 経路は `schemaVersion` を**無視 (`parse_lic_text` が除去)** し、常に有効な HMAC 署名を要求する。
+>
+> これを守らないと、攻撃者が平文 `.lic` に `"schemaVersion": 2` と任意の `role` を書くだけで署名検証を素通りし、admin ロールを偽造できる (実際に 2026-07-07 に発見・修正した脆弱性)。
+> `schemaVersion` は「復号経路」の証明であって、payload の自己申告を信用してはならない。
+
 ### 7.2 Phase B — JWE 形式
 
 ファイルの内容はコンパクト JWE トークン 1行:

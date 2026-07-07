@@ -46,17 +46,27 @@ const filteredTags = computed(() => {
   return allTags.value.filter(([tag]) => tag.toLowerCase().includes(q))
 })
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+// tag は creator が自由入力するため、v-html に渡す前に必ずエスケープする (stored XSS 防止)
 function highlight(tag: string): string {
   const q = searchInput.value.trim()
-  if (!q) return tag
+  if (!q) return escapeHtml(tag)
   const idx = tag.toLowerCase().indexOf(q.toLowerCase())
-  if (idx < 0) return tag
+  if (idx < 0) return escapeHtml(tag)
   return (
-    tag.slice(0, idx) +
+    escapeHtml(tag.slice(0, idx)) +
     `<mark class="bg-transparent text-primary-active font-semibold">` +
-    tag.slice(idx, idx + q.length) +
+    escapeHtml(tag.slice(idx, idx + q.length)) +
     `</mark>` +
-    tag.slice(idx + q.length)
+    escapeHtml(tag.slice(idx + q.length))
   )
 }
 

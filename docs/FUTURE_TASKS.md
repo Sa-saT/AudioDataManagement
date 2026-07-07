@@ -117,6 +117,13 @@ Sentry ダッシュボードで手動設定。推奨値:
 |---|---|---|---|
 | **SEC-1** | アップロード上限 (DoS 対策) | `audios.py` の upload で `shutil.copyfileobj` がサイズ無制限にディスク書き出し。`Content-Length` 検証 + ストリーミング上限を設けて超過時 413 を返す。対応する pytest (サイズ超過→413) も追加 | **調整中** (上限値・拒否方式を検討中)。認証済み creator/admin のみ起こせる availability リスク |
 
+#### 修正済みの脆弱性 (2026-07-07 セキュリティ監査)
+
+| # | 深刻度 | 内容 | 修正 |
+|---|---|---|---|
+| **SEC-FIX-1** | Critical | **`.lic` 署名バイパスによるロール偽造。** 平文 JSON/KV の lic に `"schemaVersion": 2` と `"role": "admin"` を書くだけで `verify_signature` の HMAC 検証を素通りし、`/auth/activate` から誰でも admin + 無制限 token を取得できた | `parse_lic_text` が平文経路の `schemaVersion` を除去し HMAC 署名を必須化。`schemaVersion >= 2` は AEAD 復号を通った payload のみ有効に。回帰テスト追加。詳細: `LICENSE_FILE_SPEC.md §7.1` の不変条件 |
+| **SEC-FIX-2** | Medium | **タグ経由の格納型 XSS。** creator が入力するタグ名を `dashboard.vue` の `highlight()` が `v-html` に生挿入。`<img onerror=...>` 等のタグを付けた音源を閲覧した全ユーザでスクリプト実行 | `highlight()` でタグ文字列を HTML エスケープしてから `<mark>` を組むよう修正 |
+
 ---
 
 ## 3. 各タスクのコスト感

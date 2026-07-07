@@ -159,11 +159,22 @@ class TestVerifySignature:
         verify_signature(payload, require=False)  # no raise
 
     def test_schema_version_2_skips_hmac(self):
-        """Phase B (JWE) は schemaVersion=2 で HMAC 検証をスキップする。"""
+        """AEAD を通った payload (schemaVersion>=2) は HMAC をスキップする。
+        verify_signature は「復号済みで schemaVersion が付いた payload」だけを受け取る前提。"""
         data = {**VALID_DATA, "schemaVersion": 2}  # 署名なし
         payload = validate_payload(data)
-        # schemaVersion が raw に含まれていれば verify_signature は素通り
         verify_signature(payload)  # no raise
+
+    def test_plaintext_json_cannot_forge_schema_version(self):
+        """回帰: 平文 JSON が schemaVersion=2 を自称しても HMAC を素通りできない。
+        parse_lic_text が schemaVersion を 1 に強制上書きするため、署名なしは拒否される。"""
+        forged = {**VALID_DATA, "role": "admin", "schemaVersion": 2}  # 署名なし・平文
+        parsed = parse_lic_text(json.dumps(forged))
+        assert "schemaVersion" not in parsed
+        payload = validate_payload(parsed)
+        with pytest.raises(LicenseError) as exc:
+            verify_signature(payload, require=True)
+        assert exc.value.code == "INVALID_LICENSE_SIGNATURE"
 
 
 # ─── check_validity ───────────────────────────────────────────────────────────
